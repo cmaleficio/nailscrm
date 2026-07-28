@@ -1,7 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lt, sql } from "drizzle-orm";
+
+export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const date = searchParams.get("date");
+
+  if (!date) {
+    return NextResponse.json({ error: "date is required" }, { status: 400 });
+  }
+
+  const dateObj = new Date(date + "T00:00:00-04:00");
+  const dayStart = Math.floor(dateObj.getTime() / 1000);
+  const dayEnd = dayStart + 24 * 3600;
+
+  const appointments = db
+    .select({
+      id: schema.appointments.id,
+      startTime: schema.appointments.startTime,
+      endTime: schema.appointments.endTime,
+      status: schema.appointments.status,
+      referencePhotoUrl: schema.appointments.referencePhotoUrl,
+      clientName: schema.users.name,
+      clientId: schema.users.id,
+      clientPhone: schema.users.phone,
+      serviceName: schema.services.name,
+      serviceId: schema.services.id,
+    })
+    .from(schema.appointments)
+    .innerJoin(schema.users, eq(schema.appointments.clientId, schema.users.id))
+    .innerJoin(
+      schema.services,
+      eq(schema.appointments.serviceId, schema.services.id)
+    )
+    .where(
+      and(
+        gte(schema.appointments.startTime, dayStart),
+        lt(schema.appointments.startTime, dayEnd)
+      )
+    )
+    .orderBy(sql`${schema.appointments.startTime} ASC`)
+    .all();
+
+  return NextResponse.json(appointments);
+}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -44,19 +92,6 @@ export async function POST(req: NextRequest) {
   };
 
   db.insert(schema.appointments).values(appointment).run();
-
-  const existingUser = db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.id, session.user.id))
-    .get();
-
-  if (existingUser) {
-    db.update(schema.users)
-      .set({ totalVisits: (existingUser.totalVisits ?? 0) + 1 })
-      .where(eq(schema.users.id, session.user.id))
-      .run();
-  }
 
   return NextResponse.json({ id: appointment.id });
 }
