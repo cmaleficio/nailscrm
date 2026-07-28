@@ -37,10 +37,10 @@ yarn-error.log*
 dev.db
 dev.db-wal
 dev.db-shm
-drizzle/
 
-# uploads
+# uploads (track .gitkeep, ignore files)
 public/uploads/*
+!public/uploads/.gitkeep
 
 # vercel
 .vercel
