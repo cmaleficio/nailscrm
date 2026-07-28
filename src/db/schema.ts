@@ -1,9 +1,11 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").unique().notNull(),
+  emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
+  image: text("image"),
   phone: text("phone"),
   googleId: text("google_id"),
   techNotes: text("tech_notes"),
@@ -11,6 +13,36 @@ export const users = sqliteTable("users", {
   totalRevenue: real("total_revenue").default(0),
   createdAt: integer("created_at"),
 });
+
+export const accounts = sqliteTable("account", {
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").$type<"oauth" | "oidc" | "email">().notNull(),
+  provider: text("provider").notNull(),
+  providerAccountId: text("providerAccountId").notNull(),
+  refresh_token: text("refresh_token"),
+  access_token: text("access_token"),
+  expires_at: integer("expires_at"),
+  token_type: text("token_type"),
+  scope: text("scope"),
+  id_token: text("id_token"),
+  session_state: text("session_state"),
+}, (account) => ({
+  compositePk: primaryKey({ columns: [account.provider, account.providerAccountId] }),
+}));
+
+export const sessions = sqliteTable("session", {
+  sessionToken: text("sessionToken").primaryKey(),
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const verificationTokens = sqliteTable("verificationToken", {
+  identifier: text("identifier").notNull(),
+  token: text("token").notNull(),
+  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+}, (vt) => ({
+  compositePk: primaryKey({ columns: [vt.identifier, vt.token] }),
+}));
 
 export const services = sqliteTable("services", {
   id: text("id").primaryKey(),
