@@ -20,6 +20,12 @@ type Slot = {
   available: boolean;
 };
 
+type GalleryItem = {
+  id: string;
+  url: string;
+  serviceName: string;
+};
+
 const WEEKDAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MONTHS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -40,6 +46,8 @@ export function BookingWizard() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [referencePreviews, setReferencePreviews] = useState<string[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -67,11 +75,20 @@ export function BookingWizard() {
         setStep(2);
       }
     }
+    const referencePhotoUrl = searchParams.get("referencePhotoUrl");
+    if (referencePhotoUrl) {
+      setSelectedModels((prev) =>
+        prev.includes(referencePhotoUrl) ? prev : [...prev, referencePhotoUrl]
+      );
+    }
   }
 
   useEffect(() => {
-    fetch("/api/gallery?limit=100")
+    fetch("/api/gallery?limit=50")
       .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.items)) setGallery(data.items);
+      })
       .catch(() => {});
     void fetchServices();
     void preselectedService();
@@ -101,6 +118,12 @@ export function BookingWizard() {
     setSelectedSlot(timestamp);
   }
 
+  function toggleModel(url: string) {
+    setSelectedModels((prev) =>
+      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
+    );
+  }
+
   async function handleConfirm() {
     if (!selectedService || !selectedSlot || status !== "authenticated") return;
 
@@ -124,14 +147,16 @@ export function BookingWizard() {
         referencePhotoUrls.push(uploadData.url);
       }
 
+      const urlsToSend = [...referencePhotoUrls, ...selectedModels];
+
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           serviceId: selectedService.id,
           startTime: selectedSlot,
-          referencePhotoUrl: referencePhotoUrls[0] || "",
-          referencePhotoUrls,
+          referencePhotoUrl: urlsToSend[0] || "",
+          referencePhotoUrls: urlsToSend,
         }),
       });
 
@@ -501,6 +526,63 @@ export function BookingWizard() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Modelos de inspiración */}
+          <div className="mt-6">
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Elige modelos del muro de inspiración (opcional)
+            </label>
+            {gallery.length === 0 ? (
+              <p className="text-sm text-gray-400">
+                Aún no hay modelos en el muro de inspiración
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {gallery.map((g) => {
+                  const selected = selectedModels.includes(g.url);
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => toggleModel(g.url)}
+                      className={`relative overflow-hidden rounded-xl border-2 transition-all ${
+                        selected ? "border-pink-main" : "border-transparent"
+                      }`}
+                    >
+                      <img src={g.url} alt={g.serviceName} className="aspect-square w-full object-cover" />
+                      {selected && (
+                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-pink-main text-xs font-bold text-gray-900">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {selectedModels.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-2 text-sm text-gray-500">
+                  {selectedModels.length} modelo{selectedModels.length > 1 ? "s" : ""} seleccionado
+                  {selectedModels.length > 1 ? "s" : ""}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedModels.map((url) => (
+                    <div key={url} className="relative">
+                      <img src={url} alt="Modelo" className="h-16 w-16 rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => toggleModel(url)}
+                        className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-xs text-white"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
