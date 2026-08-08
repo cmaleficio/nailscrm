@@ -125,10 +125,10 @@ Seed inicial: Lun–Sáb abiertos 09:00–18:00, Dom cerrado. Si no existe fila 
 - Usada por `POST /api/appointments` (validación servidor) y por `/api/slots` (misma fuente de verdad).
 
 ### Nuevo `src/lib/bcv.ts`
-- `fetchBcvRate(): Promise<number | null>`: obtiene la tasa oficial del BCV scrapeando la página web:
+- `fetchBcvRate(): Promise<number | null>`: obtiene la tasa oficial del BCV scrapeando **directamente la página de bcv.org.ve** (la única fuente; NO usar APIs JSON de terceros como dolarapi/otros):
   1. `fetch("https://www.bcv.org.ve/tasas-informativas-sistema-bancario")` con `Accept-Language: es` y `User-Agent` de navegador (el BCV puede rechazar peticiones sin UA). `timeout` corto (p.ej. 10s).
   2. Guarda el HTML recibido en un `.txt` en `os.tmpdir()` (p.ej. `bcv-tasa-<YYYY-MM-DD>.txt`) con `node:fs/promises`. Sobrescribe el del día si ya existe.
-  3. Lee ese `.txt` y scrapea la tasa con regex (la tabla usa formato venezolano: miles con `.` y decimales con `,`, p.ej. `36,55`). Se busca el bloque `USD` del "Tasa de Cambio Referencial". Ej. patrón de referencia: `USD\s*\|?\s*([\d.,]+)` dentro del `div/tbody` de la tabla.
+  3. Lee ese `.txt` y scrapea la tasa con regex (la tabla usa formato venezolano: miles con `.` y decimales con `,`, p.ej. `36,55`). Se busca el bloque `USD` del "Tasa de Cambio Referencial" dentro del HTML de la tabla. Ej. patrón de referencia: `USD\s*\|?\s*([\d.,]+)`.
   4. Normaliza a número (`"36,55" → 36.55`, eliminando separadores de miles) y lo devuelve. Si no encuentra la tasa o falla el fetch → `null`.
 - `getTodayRate(): { date, rate, source }`: filtra por caché de `exchange_rates` de hoy; si no, intenta `fetchBcvRate()` y guarda (`source='bcv'`); si falla, devuelve `rate: null`.
 
