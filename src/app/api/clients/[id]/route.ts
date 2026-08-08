@@ -15,12 +15,14 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
+  const update: Partial<typeof schema.users.$inferSelect> = {};
+  if (body.name !== undefined) update.name = body.name;
+  if (body.phone !== undefined) update.phone = body.phone;
+  if (body.address !== undefined) update.address = body.address;
+  if (body.techNotes !== undefined) update.techNotes = body.techNotes;
 
-  if (body.techNotes !== undefined) {
-    db.update(schema.users)
-      .set({ techNotes: body.techNotes })
-      .where(eq(schema.users.id, id))
-      .run();
+  if (Object.keys(update).length > 0) {
+    db.update(schema.users).set(update).where(eq(schema.users.id, id)).run();
   }
 
   return NextResponse.json({ success: true });
