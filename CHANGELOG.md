@@ -23,6 +23,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Página `/complete-registration` que pide el teléfono tras registrarse con Google.
 - Fotos de servicios: tabla `service_photos`, gestor en `/dashboard/services` y carrusel en las tarjetas del home.
 - Muro de inspiración: clic en una foto para agendar un servicio similar con ese modelo.
+- Citas creadas por el admin para clientes no registrados (walk-ins) desde la agenda, con validación de disponibilidad en el servidor.
+- Bloques "no disponible" gestionables desde el dashboard (crear y eliminar).
+- Horario de trabajo configurable por día de la semana en `/dashboard/settings`.
+- Cuentas por cobrar: sección `/dashboard/balances` con total adeudado, historial de pagos y registro/borrado de pagos.
+- Pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria.
+- Saldo de cada cliente visible en el panel CRM con registro de pagos.
 
 ### Corregido
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.

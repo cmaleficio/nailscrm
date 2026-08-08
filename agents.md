@@ -113,6 +113,36 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - end_time: integer (timestamp)
 - reason: text
 
+### Tabla: working_hours (horario de trabajo por día de la semana)
+- day_of_week: integer, primary key (0=Domingo … 6=Sábado)
+- is_open: integer (boolean), default 1
+- start_time: text, default "09:00" ("HH:MM")
+- end_time: text, default "18:00" ("HH:MM")
+- Si falta una fila se usa el default (Lun–Sáb 09:00–18:00, Dom cerrado).
+
+### Tabla: payments (cuentas por cobrar)
+- id: text, primary key
+- user_id: text, foreign key → users.id
+- appointment_id: text, foreign key → appointments.id (on delete set null)
+- amount_usd: real, not null (equiv. en USD; para VES se calcula `amount_ves / rate`)
+- currency: text, default 'USD' (USD | VES)
+- amount_ves: real
+- rate: real (tasa Bs/US$ usada para pagos en Bs)
+- reference: text, not null (obligatorio)
+- paid_at: integer (timestamp)
+- notes: text
+- created_by: text, foreign key → users.id
+- created_at: integer (timestamp)
+- El saldo se calcula en vivo: `Σ service_purchases.service_price de citas completed − Σ payments.amount_usd`.
+
+### Tabla: exchange_rates (tasa del día)
+- id: text, primary key
+- date: text, unique, not null ("YYYY-MM-DD")
+- rate: real, not null
+- source: text, default 'bcv' (bcv | manual)
+- created_at: integer (timestamp)
+- La tasa se obtiene SOLO de bcv.org.ve (fetch HTML → .txt en tmp → regex) y se cachea por día.
+
 ## 🗺️ Estructura de Rutas
 
 ### Públicas
@@ -124,6 +154,8 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 ### Protegidas (requieren auth)
 - `/dashboard` → Panel admin (agenda del día)
 - `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
+- `/dashboard/balances` → Cuentas por cobrar (total adeudado, pagos por cliente)
+- `/dashboard/settings` → Configuración (horario de trabajo por día de la semana)
 - `/dashboard/services` → Gestión de servicios (+ fotos del servicio)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
 - `/profile` → Portal de cliente (pasaporte de uñas + historial)
@@ -134,13 +166,17 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - AppointmentCard: card de cita con hora, cliente, servicio, foto referencia
 - ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables
 - PhotoCarousel: carrusel de fotos de referencia al abrir una cita en la agenda
-- CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro)
+- CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro) y registrar pago del momento ($/Bs con tasa del día).
 - GalleryGrid: grid masonry/pinterest para muro de inspiración con clic → agendar similar
 - FilterPills: pills horizontales para filtrar galería (Todas, Acrílicas, Gel, etc)
 - BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro)
 - CompleteRegistrationForm: formulario para pedir teléfono tras registrarse con Google
 - StatsBanner: banner con total_visits y total_revenue del cliente
 - LoginForm: formulario de login/registro por correo y contraseña
+- NewAppointmentDialog: crea citas para walk-ins (clientes no registrados) desde la agenda
+- BlockoutDialog: crea bloques "no disponible" desde la agenda
+- RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
+- SettingsContent: editor del horario de trabajo por día de la semana
 
 ## 🚀 Comandos
 - `npm run dev` → desarrollo
@@ -151,7 +187,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `npx tsc --noEmit` → typecheck
 
 ## 🧪 Datos Demo
-- Cliente: `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` lo crea/actualiza con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas, snapshots de compra y fotos de servicios para el home. Re-ejecutable (borra y regenera las citas del demo).
+- Cliente: `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` lo crea/actualiza con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas, snapshots de compra, fotos de servicios para el home, horario de trabajo por defecto (si vacío) y pagos demo (PAGO-001 $35, PAGO-002 $10). Re-ejecutable (borra y regenera las citas del demo).
 - Admin: el `ADMIN_EMAIL` configurado en `.env` se promueve a superadmin al iniciar sesión.
 
 ## 🚫 Fuera del Alcance (MVP)
