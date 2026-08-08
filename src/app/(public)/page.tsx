@@ -10,6 +10,14 @@ export default async function HomePage() {
     .where(eq(schema.services.isActive, 1))
     .all();
 
+  const allPhotos = db.select().from(schema.servicePhotos).all();
+  const byService = new Map<string, { id: string; url: string }[]>();
+  for (const p of allPhotos) {
+    const list = byService.get(p.serviceId) ?? [];
+    list.push({ id: p.id, url: p.url });
+    byService.set(p.serviceId, list);
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <section className="mb-16">
@@ -24,7 +32,7 @@ export default async function HomePage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((s) => (
-            <ServiceCard key={s.id} {...s} />
+            <ServiceCard key={s.id} {...s} photos={byService.get(s.id) ?? []} />
           ))}
         </div>
       </section>
