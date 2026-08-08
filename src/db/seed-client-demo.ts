@@ -90,10 +90,33 @@ db.update(schema.users)
   .where(eq(schema.users.id, userId!))
   .run();
 
+const existingHours = db.select().from(schema.workingHours).all();
+if (existingHours.length === 0) {
+  const hours = Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isOpen: dayOfWeek !== 0 ? 1 : 0,
+    startTime: "09:00",
+    endTime: "18:00",
+  }));
+  db.insert(schema.workingHours).values(hours).run();
+  console.log("✅ Working hours seeded");
+}
+
+const existingPayments = db
+  .select({ id: schema.payments.id })
+  .from(schema.payments)
+  .where(eq(schema.payments.userId, userId!))
+  .all();
+for (const p of existingPayments) {
+  db.delete(schema.payments).where(eq(schema.payments.id, p.id)).run();
+}
+
 const pickService = (fallbackName: string) => {
   const match = serviceId(fallbackName);
   return services.find((s) => s.id === match) ?? services[0];
 };
+
+const createdAppointmentIds: string[] = [];
 
 const appointments = [
   {
@@ -135,6 +158,7 @@ for (const a of appointments) {
   const startTime = now + a.daysFromNow * DAY + a.hour * 3600;
   const endTime = startTime + a.service.durationMins * 60;
   const id = crypto.randomUUID();
+  createdAppointmentIds.push(id);
 
   db.insert(schema.appointments)
     .values({
@@ -194,6 +218,40 @@ for (const a of appointments) {
 }
 
 console.log(`✅ ${appointments.length} citas creadas con snapshots y fotos`);
+
+const demoPayments = [
+  {
+    amountUsd: 35,
+    currency: "USD" as const,
+    reference: "PAGO-001",
+    paidAt: now - 14 * DAY + 11 * 3600,
+  },
+  {
+    amountUsd: 10,
+    currency: "USD" as const,
+    reference: "PAGO-002",
+    paidAt: now - 35 * DAY + 16 * 3600,
+  },
+];
+
+const completedAppts = appointments.filter((a) => a.status === "completed");
+for (let i = 0; i < demoPayments.length && i < completedAppts.length; i++) {
+  const appointmentIdx = appointments.indexOf(completedAppts[i]);
+  db.insert(schema.payments)
+    .values({
+      id: crypto.randomUUID(),
+      userId: userId!,
+      appointmentId: createdAppointmentIds[appointmentIdx] ?? null,
+      amountUsd: demoPayments[i].amountUsd,
+      currency: demoPayments[i].currency,
+      reference: demoPayments[i].reference,
+      paidAt: demoPayments[i].paidAt,
+      createdBy: userId!,
+      createdAt: now,
+    })
+    .run();
+}
+console.log(`✅ ${demoPayments.length} pagos demo registrados`);
 
 const existingServicePhotos = db.select().from(schema.servicePhotos).all();
 if (existingServicePhotos.length === 0) {

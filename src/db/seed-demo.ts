@@ -238,4 +238,16 @@ if (existingBlockouts.length === 0) {
   console.log("✅ Blockouts created");
 }
 
+const existingHours = db.select().from(schema.workingHours).all();
+if (existingHours.length === 0) {
+  const hours = Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isOpen: dayOfWeek !== 0 ? 1 : 0,
+    startTime: "09:00",
+    endTime: "18:00",
+  }));
+  db.insert(schema.workingHours).values(hours).run();
+  console.log("✅ Working hours seeded");
+}
+
 console.log("✨ Demo data complete!");
