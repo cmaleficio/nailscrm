@@ -16,6 +16,13 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Sincronización con Google Calendar: al crear una cita se crean eventos en el calendario del cliente y del admin (`google_event_id_client` / `google_event_id_admin`) con refresh de token.
 - Vista de semana y botón "Reprogramar" (con `ReschedulePicker`) en el dashboard; el PATCH de citas re-sincroniza los eventos en Google Calendar.
 - Sección "Próximas citas" en /profile.
+- Completar una cita con subida de varias fotos finales que se publican automáticamente en el muro de inspiración (`appointment_photos.kind = 'final'`).
+- Selección de modelos del muro de inspiración al confirmar una reserva (fotos de referencia junto a las subidas).
+- Carrusel de modelos de referencia al abrir una cita en la agenda (vista día y semana).
+- CRM de clientes en `/dashboard/clients`: listado con búsqueda, alta manual, edición de teléfono/dirección/notas y stats de visitas/ingresos.
+- Página `/complete-registration` que pide el teléfono tras registrarse con Google.
+- Fotos de servicios: tabla `service_photos`, gestor en `/dashboard/services` y carrusel en las tarjetas del home.
+- Muro de inspiración: clic en una foto para agendar un servicio similar con ese modelo.
 
 ### Corregido
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.

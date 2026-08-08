@@ -80,6 +80,14 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - appointment_id: text, foreign key → appointments.id (on delete cascade)
 - url: text, not null
 - position: integer, default 0
+- kind: text, default 'reference' ('reference' | 'final'): las fotos 'final' alimentan el muro de inspiración
+- created_at: integer (timestamp)
+
+### Tabla: service_photos
+- id: text, primary key
+- service_id: text, foreign key → services.id (on delete cascade)
+- url: text, not null
+- position: integer, default 0
 - created_at: integer (timestamp)
 
 ### Tabla: service_purchases (snapshot del servicio al comprar, inmutable)
@@ -115,18 +123,22 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 
 ### Protegidas (requieren auth)
 - `/dashboard` → Panel admin (agenda del día)
-- `/dashboard/clients` → CRM de clientes
-- `/dashboard/services` → Gestión de servicios
+- `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
+- `/dashboard/services` → Gestión de servicios (+ fotos del servicio)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
 - `/profile` → Portal de cliente (pasaporte de uñas + historial)
+- `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
 
 ## 🎨 Componentes UI Clave
-- ServiceCard: card de servicio con nombre, duración, precio, botón "Agendar"
+- ServiceCard: card de servicio con carrusel de fotos, nombre, duración, precio, botón "Agendar"
 - AppointmentCard: card de cita con hora, cliente, servicio, foto referencia
-- ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp
-- GalleryGrid: grid masonry/pinterest para muro de inspiración
+- ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables
+- PhotoCarousel: carrusel de fotos de referencia al abrir una cita en la agenda
+- CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro)
+- GalleryGrid: grid masonry/pinterest para muro de inspiración con clic → agendar similar
 - FilterPills: pills horizontales para filtrar galería (Todas, Acrílicas, Gel, etc)
-- BookingWizard: wizard de 3 pasos para reserva
+- BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro)
+- CompleteRegistrationForm: formulario para pedir teléfono tras registrarse con Google
 - StatsBanner: banner con total_visits y total_revenue del cliente
 - LoginForm: formulario de login/registro por correo y contraseña
 
@@ -139,7 +151,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `npx tsc --noEmit` → typecheck
 
 ## 🧪 Datos Demo
-- Cliente: `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` lo crea/actualiza con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas y snapshots de compra. Re-ejecutable (borra y regenera las citas del demo).
+- Cliente: `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` lo crea/actualiza con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas, snapshots de compra y fotos de servicios para el home. Re-ejecutable (borra y regenera las citas del demo).
 - Admin: el `ADMIN_EMAIL` configurado en `.env` se promueve a superadmin al iniciar sesión.
 
 ## 🚫 Fuera del Alcance (MVP)

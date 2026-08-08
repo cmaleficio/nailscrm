@@ -59,8 +59,17 @@ npx tsc --noEmit      # typecheck
 
 ## Datos demo
 
-- **Cliente:** `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` crea o actualiza este usuario con dirección, notas técnicas y citas de ejemplo (próxima con foto de referencia + completadas con foto final y reseñas). Es re-ejecutable: borra y regenera las citas del demo.
+- **Cliente:** `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` crea o actualiza este usuario con dirección, notas técnicas, citas de ejemplo (próxima con foto de referencia + completadas con foto final, reseñas y snapshots de compra) y fotos de servicios para el home. Es re-ejecutable: borra y regenera las citas del demo.
 - **Admin:** el `ADMIN_EMAIL` configurado se promueve automáticamente a superadmin al iniciar sesión con Google.
+
+## Funcionalidades principales
+
+- **Reserva en 3 pasos:** elige servicio, horario y confirmas. En el último paso puedes subir fotos de referencia o elegir modelos del muro de inspiración.
+- **Muro de inspiración:** fotos finales de citas compartidas, filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo.
+- **Dashboard admin:** agenda día/semana con carrusel de modelos de referencia al abrir una cita, y botón "Completar" que sube varias fotos finales que se publican automáticamente en el muro.
+- **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección, stats de visitas e ingresos y botón de WhatsApp.
+- **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home.
+- **Teléfono post-Google:** tras registrarse con Google se pide el teléfono en `/complete-registration`.
 
 ## Estructura
 
@@ -68,15 +77,15 @@ npx tsc --noEmit      # typecheck
 src/
   app/                 # rutas (public, (client), (admin))
     api/               # API routes (auth, appointments, admins, gallery, services, slots, upload…)
-  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, …)
+  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, GalleryGrid, PhotoCarousel, …)
   db/                  # conexión SQLite + schema Drizzle
   lib/                 # auth, auth.config, authz, calendar, slots, upload
 ```
 
 ## Roles
 
-- **Cliente:** reserva, sus próximas citas y pasaporte en `/profile`.
-- **Admin:** agenda día/semana, reprogramar (re-sincroniza Google Calendar), CRM, servicios.
+- **Cliente:** reserva, próximas citas y pasaporte en `/profile`.
+- **Admin:** agenda día/semana, completar citas con fotos, reprogramar (re-sincroniza Google Calendar), CRM, servicios.
 - **Superadmin (`ADMIN_EMAIL`):** gestión de admins en `/dashboard/admin-users`.
 
 ## Mantenimiento

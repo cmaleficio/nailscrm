@@ -133,6 +133,21 @@ if (existingAppts.length === 0) {
 
   db.insert(schema.appointments).values(appointments).run();
   console.log(`✅ ${appointments.length} appointments created`);
+
+  for (const a of appointments) {
+    if (a.finalPhotoUrl) {
+      db.insert(schema.appointmentPhotos)
+        .values({
+          id: crypto.randomUUID(),
+          appointmentId: a.id,
+          url: a.finalPhotoUrl,
+          position: 0,
+          createdAt: a.startTime + 3600,
+          kind: "final",
+        })
+        .run();
+    }
+  }
 }
 
 // ── Gallery entries (extra for the muro) ──
@@ -184,6 +199,21 @@ if (existingGallery.length <= 2) {
 
   db.insert(schema.appointments).values(galleryEntries).run();
   console.log(`✅ ${galleryEntries.length} gallery entries created`);
+
+  for (const g of galleryEntries) {
+    if (g.finalPhotoUrl) {
+      db.insert(schema.appointmentPhotos)
+        .values({
+          id: crypto.randomUUID(),
+          appointmentId: g.id,
+          url: g.finalPhotoUrl,
+          position: 0,
+          createdAt: g.startTime + 3600,
+          kind: "final",
+        })
+        .run();
+    }
+  }
 }
 
 // ── Blockouts ──

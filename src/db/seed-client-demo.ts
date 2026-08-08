@@ -165,6 +165,19 @@ for (const a of appointments) {
       .run();
   });
 
+  if (a.finalUrl) {
+    db.insert(schema.appointmentPhotos)
+      .values({
+        id: crypto.randomUUID(),
+        appointmentId: id,
+        url: a.finalUrl,
+        position: 0,
+        createdAt: startTime + a.service.durationMins * 60,
+        kind: "final",
+      })
+      .run();
+  }
+
   db.insert(schema.servicePurchases)
     .values({
       id: crypto.randomUUID(),
@@ -181,6 +194,30 @@ for (const a of appointments) {
 }
 
 console.log(`✅ ${appointments.length} citas creadas con snapshots y fotos`);
+
+const existingServicePhotos = db.select().from(schema.servicePhotos).all();
+if (existingServicePhotos.length === 0) {
+  const photoSeeds: { url: string; position: number }[] = [
+    { url: "https://picsum.photos/seed/svc-acrilicas/500/400", position: 0 },
+    { url: "https://picsum.photos/seed/svc-gel/500/400", position: 1 },
+    { url: "https://picsum.photos/seed/svc-clasico/500/400", position: 2 },
+  ];
+  const svcList = db.select().from(schema.services).all();
+  svcList.forEach((svc, i) => {
+    const seed = photoSeeds[i % photoSeeds.length];
+    db.insert(schema.servicePhotos)
+      .values({
+        id: crypto.randomUUID(),
+        serviceId: svc.id,
+        url: seed.url,
+        position: seed.position,
+        createdAt: now,
+      })
+      .run();
+  });
+  console.log("✅ Fotos de servicios sembradas");
+}
+
 console.log("✨ Demo client seed complete!");
 }
 
