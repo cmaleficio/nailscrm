@@ -4,6 +4,20 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 
+function withPhotos<T extends { id: string }>(rows: T[]) {
+  const photos = db.select().from(schema.servicePhotos).all();
+  const byService = new Map<string, { id: string; url: string; position: number }[]>();
+  for (const p of photos) {
+    const list = byService.get(p.serviceId) ?? [];
+    list.push({ id: p.id, url: p.url, position: p.position });
+    byService.set(p.serviceId, list);
+  }
+  return rows.map((r) => ({
+    ...r,
+    photos: (byService.get(r.id) ?? []).sort((a, b) => a.position - b.position),
+  }));
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -18,7 +32,7 @@ export async function GET(req: NextRequest) {
     if (!service) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json(service);
+    return NextResponse.json(withPhotos([service])[0]);
   }
 
   if (includeInactive) {
@@ -27,7 +41,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
     return NextResponse.json(
-      db.select().from(schema.services).orderBy(schema.services.name).all()
+      withPhotos(db.select().from(schema.services).orderBy(schema.services.name).all())
     );
   }
 
@@ -36,7 +50,7 @@ export async function GET(req: NextRequest) {
     .from(schema.services)
     .where(eq(schema.services.isActive, 1))
     .all();
-  return NextResponse.json(services);
+  return NextResponse.json(withPhotos(services));
 }
 
 export async function POST(req: NextRequest) {
