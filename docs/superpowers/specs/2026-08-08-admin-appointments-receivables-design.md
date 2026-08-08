@@ -25,7 +25,7 @@ El MVP permite reservas solo por clientes autenticados (el `clientId` se fuerza 
 - `start_time`: text, "HH:MM" (24h), default "09:00".
 - `end_time`: text, "HH:MM", default "18:00".
 
-Seed inicial: Lun–Sáb abiertos 09:00–18:00, Dom cerrado. Si no existe fila para un día, se interpreta como cerrado (para no regalar slots si la tabla está vacía).
+Seed inicial: Lun–Sáb abiertos 09:00–18:00, Dom cerrado. Si no existe fila para un día, se usa el default (Lun–Sáb abierto 09:00–18:00, Dom cerrado), para no romper la disponibilidad actual mientras no se ejecute el seed.
 
 ### Nueva tabla `payments`
 - `id`: text, primary key.
