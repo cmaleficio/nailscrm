@@ -128,8 +128,21 @@ Seed inicial: Lun–Sáb abiertos 09:00–18:00, Dom cerrado. Si no existe fila 
 - `fetchBcvRate(): Promise<number | null>`: obtiene la tasa oficial del BCV scrapeando **directamente la página de bcv.org.ve** (la única fuente; NO usar APIs JSON de terceros como dolarapi/otros):
   1. `fetch("https://www.bcv.org.ve/tasas-informativas-sistema-bancario")` con `Accept-Language: es` y `User-Agent` de navegador (el BCV puede rechazar peticiones sin UA). `timeout` corto (p.ej. 10s).
   2. Guarda el HTML recibido en un `.txt` en `os.tmpdir()` (p.ej. `bcv-tasa-<YYYY-MM-DD>.txt`) con `node:fs/promises`. Sobrescribe el del día si ya existe.
-  3. Lee ese `.txt` y scrapea la tasa con regex (la tabla usa formato venezolano: miles con `.` y decimales con `,`, p.ej. `36,55`). Se busca el bloque `USD` del "Tasa de Cambio Referencial" dentro del HTML de la tabla. Ej. patrón de referencia: `USD\s*\|?\s*([\d.,]+)`.
-  4. Normaliza a número (`"36,55" → 36.55`, eliminando separadores de miles) y lo devuelve. Si no encuentra la tasa o falla el fetch → `null`.
+  3. Lee ese `.txt` y scrapea la tasa. La página estructura cada moneda así:
+     ```html
+     <div class="row recuadrotsmc">
+       <div class="col-sm-6 col-xs-6">
+         <img src="/sites/default/files/dollar-04_2.png" class="icono_bss_blanco1">
+         <span> USD</span>  </div>
+       <div class="col-sm-6 col-xs-6 centrado textp"> <strong class="strong-tb">757,54060000</strong> </div>
+     </div>
+     ```
+     Regex a usar: buscar el bloque `recuadrotsmc` que contenga `USD` y capturar el valor dentro del `<strong class="strong-tb">`:
+     ```ts
+     const m = html.match(/recuadrotsmc[\s\S]*?USD[\s\S]*?<strong class="strong-tb">([\d.,]+)<\/strong>/i);
+     ```
+     La tasa viene con formato venezolano: coma decimal y hasta 8 decimales (p.ej. `757,54060000`), con posibles separadores de miles con punto (p.ej. `1.000,00`).
+  4. Normaliza a número: `s.replace(/\./g, "").replace(",", ".")` → `"757,54060000" → 757.5406`, `"1.000,00" → 1000.00`. Si no encuentra la tasa o falla el fetch → `null`.
 - `getTodayRate(): { date, rate, source }`: filtra por caché de `exchange_rates` de hoy; si no, intenta `fetchBcvRate()` y guarda (`source='bcv'`); si falla, devuelve `rate: null`.
 
 ## 4. UI / Flujos
