@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 
 export async function PATCH(
@@ -49,5 +49,40 @@ export async function GET(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  return NextResponse.json(client);
+  const dueRow = db
+    .select({
+      due: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)`,
+    })
+    .from(schema.servicePurchases)
+    .innerJoin(
+      schema.appointments,
+      eq(schema.appointments.id, schema.servicePurchases.appointmentId)
+    )
+    .where(
+      and(
+        eq(schema.appointments.status, "completed"),
+        eq(schema.servicePurchases.userId, id)
+      )
+    )
+    .get();
+
+  const paidRow = db
+    .select({ paid: sql<number>`coalesce(sum(${schema.payments.amountUsd}), 0)` })
+    .from(schema.payments)
+    .where(eq(schema.payments.userId, id))
+    .get();
+
+  const payments = db
+    .select()
+    .from(schema.payments)
+    .where(eq(schema.payments.userId, id))
+    .orderBy(sql`${schema.payments.paidAt} DESC`)
+    .limit(10)
+    .all();
+
+  return NextResponse.json({
+    ...client,
+    balanceUsd: Math.round(((dueRow?.due ?? 0) - (paidRow?.paid ?? 0)) * 100) / 100,
+    payments,
+  });
 }
