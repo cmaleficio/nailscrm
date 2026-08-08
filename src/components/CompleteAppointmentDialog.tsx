@@ -1,19 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { todayStr } from "@/lib/time";
 
 type Props = {
   appointmentId: string;
+  clientId: string;
   clientName: string;
   serviceName: string;
+  servicePrice: number;
   onClose: () => void;
   onCompleted: () => void;
 };
 
+type Rate = { rate: number | null; source: string | null };
+
+const inputCls =
+  "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-main focus:outline-none";
+
 export function CompleteAppointmentDialog({
   appointmentId,
+  clientId,
   clientName,
   serviceName,
+  servicePrice,
   onClose,
   onCompleted,
 }: Props) {
@@ -21,6 +31,21 @@ export function CompleteAppointmentDialog({
   const [previews, setPreviews] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [paid, setPaid] = useState(false);
+  const [currency, setCurrency] = useState<"USD" | "VES">("USD");
+  const [amountUsd, setAmountUsd] = useState(String(servicePrice));
+  const [amountVes, setAmountVes] = useState("");
+  const [rate, setRate] = useState<Rate>({ rate: null, source: null });
+  const [manualRate, setManualRate] = useState("");
+  const [reference, setReference] = useState("");
+  const [paidDate, setPaidDate] = useState(todayStr());
+
+  useEffect(() => {
+    fetch("/api/exchange-rate")
+      .then((r) => r.json())
+      .then((data) => setRate(data))
+      .catch(() => {});
+  }, []);
 
   function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
@@ -57,6 +82,36 @@ export function CompleteAppointmentDialog({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "No se pudo completar la cita");
       }
+
+      if (paid) {
+        const effectiveRate = currency === "VES" ? parseFloat(manualRate || String(rate.rate || "")) : null;
+        if (currency === "VES" && (!effectiveRate || effectiveRate <= 0)) {
+          throw new Error("Escribe la tasa del día");
+        }
+        const body: Record<string, unknown> = {
+          userId: clientId,
+          appointmentId,
+          currency,
+          reference,
+          paidAt: Math.floor(
+            new Date(`${paidDate}T00:00:00-04:00`).getTime() / 1000
+          ),
+        };
+        if (currency === "USD") body.amountUsd = parseFloat(amountUsd) || 0;
+        else {
+          body.amountVes = parseFloat(amountVes) || 0;
+          body.rate = effectiveRate;
+        }
+        const payRes = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!payRes.ok) {
+          const data = await payRes.json().catch(() => ({}));
+          throw new Error(data.error || "No se pudo registrar el pago");
+        }
+      }
       onCompleted();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
@@ -67,10 +122,10 @@ export function CompleteAppointmentDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <h3 className="text-lg font-semibold text-gray-900">Completar cita</h3>
         <p className="mt-1 text-sm text-gray-500">
-          {clientName} · {serviceName}
+          {clientName} · {serviceName} · ${servicePrice.toFixed(2)}
         </p>
 
         <div className="mt-5">
@@ -104,6 +159,95 @@ export function CompleteAppointmentDialog({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 rounded-xl border border-gray-200 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={paid}
+              onChange={(e) => setPaid(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-pink-main focus:ring-pink-main"
+            />
+            ¿Pagó en el momento?
+          </label>
+          {paid && (
+            <div className="mt-4 space-y-3">
+              <div className="flex gap-2">
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as "USD" | "VES")}
+                  className={inputCls}
+                >
+                  <option value="USD">$</option>
+                  <option value="VES">Bs</option>
+                </select>
+                {currency === "USD" ? (
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={amountUsd}
+                    onChange={(e) => setAmountUsd(e.target.value)}
+                    className={inputCls}
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={amountVes}
+                    onChange={(e) => setAmountVes(e.target.value)}
+                    placeholder="Monto en Bs"
+                    className={inputCls}
+                  />
+                )}
+              </div>
+              {currency === "VES" && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Tasa del día</label>
+                  {rate.rate ? (
+                    <p className="mb-1 text-xs text-gray-500">
+                      Tasa BCV: {rate.rate.toFixed(2)} Bs/US$ (puedes corregirla)
+                    </p>
+                  ) : (
+                    <p className="mb-1 text-xs text-amber-600">
+                      No se pudo obtener la tasa automática. Escribe la tasa manualmente.
+                    </p>
+                  )}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={manualRate}
+                    onChange={(e) => setManualRate(e.target.value)}
+                    placeholder={String(rate.rate ?? "Tasa Bs/US$")}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Número de referencia *
+                </label>
+                <input
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="Ej: 00012345"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Fecha del pago</label>
+                <input
+                  type="date"
+                  value={paidDate}
+                  onChange={(e) => setPaidDate(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
             </div>
           )}
         </div>

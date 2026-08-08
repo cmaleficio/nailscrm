@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       clientId: schema.users.id,
       clientPhone: schema.users.phone,
       serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
+      servicePrice: schema.servicePurchases.servicePrice,
       serviceId: schema.services.id,
     })
     .from(schema.appointments)

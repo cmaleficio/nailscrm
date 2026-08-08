@@ -5,6 +5,9 @@ import { AppointmentCard } from "@/components/AppointmentCard";
 import { ClientCRMPanel } from "@/components/ClientCRMPanel";
 import { ReschedulePicker } from "@/components/ReschedulePicker";
 import { CompleteAppointmentDialog } from "@/components/CompleteAppointmentDialog";
+import { NewAppointmentDialog } from "@/components/NewAppointmentDialog";
+import { BlockoutDialog } from "@/components/BlockoutDialog";
+import { dateToDayStartTs } from "@/lib/time";
 
 type Appointment = {
   id: string;
@@ -17,7 +20,10 @@ type Appointment = {
   clientPhone: string | null;
   serviceName: string;
   serviceId: string;
+  servicePrice: number | null;
 };
+
+type Blockout = { id: string; startTime: number; endTime: number; reason: string | null };
 
 type Props = {
   today: string;
@@ -54,6 +60,10 @@ export function DashboardContent({ today }: Props) {
   const [weekData, setWeekData] = useState<Record<string, Appointment[]>>({});
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [completing, setCompleting] = useState<Appointment | null>(null);
+  const [showNewAppointment, setShowNewAppointment] = useState(false);
+  const [showBlockout, setShowBlockout] = useState(false);
+  const [blockouts, setBlockouts] = useState<Blockout[]>([]);
+  const [weekBlockouts, setWeekBlockouts] = useState<Record<string, Blockout[]>>({});
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -61,19 +71,33 @@ export function DashboardContent({ today }: Props) {
     setAppointments(data);
   }, [today]);
 
+  const fetchBlockouts = useCallback(async () => {
+    const from = dateToDayStartTs(today);
+    const res = await fetch(`/api/blockouts?from=${from}&to=${from + 86400}`);
+    const data = await res.json();
+    setBlockouts(Array.isArray(data) ? data : []);
+  }, [today]);
+
   useEffect(() => {
     fetchAppointments();
-  }, [fetchAppointments]);
+    fetchBlockouts();
+  }, [fetchAppointments, fetchBlockouts]);
 
   const fetchWeek = useCallback(async (dates: Date[]) => {
     const entries: Record<string, Appointment[]> = {};
+    const blockEntries: Record<string, Blockout[]> = {};
     for (const d of dates) {
       const date = fmtDate(d);
       const res = await fetch(`/api/appointments?date=${date}`);
       const data = await res.json();
       entries[date] = data;
+      const from = dateToDayStartTs(date);
+      const resB = await fetch(`/api/blockouts?from=${from}&to=${from + 86400}`);
+      const dataB = await resB.json();
+      blockEntries[date] = Array.isArray(dataB) ? dataB : [];
     }
     setWeekData(entries);
+    setWeekBlockouts(blockEntries);
   }, []);
 
   useEffect(() => {
@@ -102,6 +126,7 @@ export function DashboardContent({ today }: Props) {
 
   function refreshAll() {
     fetchAppointments();
+    fetchBlockouts();
     if (view === "week") fetchWeek(weekDates);
   }
 
@@ -134,6 +159,21 @@ export function DashboardContent({ today }: Props) {
         </p>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => setShowNewAppointment(true)}
+          className="rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light transition-colors"
+        >
+          + Nueva cita
+        </button>
+        <button
+          onClick={() => setShowBlockout(true)}
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          ⛔ Bloquear tiempo
+        </button>
+      </div>
+
       <div className="mb-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
         {(["day", "week"] as const).map((v) => (
           <button
@@ -158,6 +198,32 @@ export function DashboardContent({ today }: Props) {
               timeZone: "America/Caracas",
             }).format(new Date())}
           </h2>
+          {blockouts.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {blockouts.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between rounded-xl border border-dashed border-gray-300 bg-gray-100 px-4 py-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">
+                      ⛔ {timeStr(b.startTime)} — {timeStr(b.endTime)}
+                    </p>
+                    {b.reason && <p className="text-xs text-gray-500">{b.reason}</p>}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await fetch(`/api/blockouts/${b.id}`, { method: "DELETE" });
+                      refreshAll();
+                    }}
+                    className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {appointments.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
               <p className="text-gray-400">No hay citas para hoy</p>
@@ -226,6 +292,11 @@ export function DashboardContent({ today }: Props) {
                     {isToday && (
                       <span className="ml-1 rounded bg-pink-main px-1 py-0.5 text-[10px] font-medium text-white">
                         Hoy
+                      </span>
+                    )}
+                    {(weekBlockouts[date] ?? []).length > 0 && (
+                      <span className="ml-1 rounded bg-gray-200 px-1 py-0.5 text-[10px] font-medium text-gray-500">
+                        ⛔
                       </span>
                     )}
                   </p>
@@ -299,11 +370,33 @@ export function DashboardContent({ today }: Props) {
       {completing && (
         <CompleteAppointmentDialog
           appointmentId={completing.id}
+          clientId={completing.clientId}
           clientName={completing.clientName}
           serviceName={completing.serviceName}
+          servicePrice={completing.servicePrice ?? 0}
           onClose={() => setCompleting(null)}
           onCompleted={() => {
             setCompleting(null);
+            refreshAll();
+          }}
+        />
+      )}
+
+      {showNewAppointment && (
+        <NewAppointmentDialog
+          onClose={() => setShowNewAppointment(false)}
+          onCreated={() => {
+            setShowNewAppointment(false);
+            refreshAll();
+          }}
+        />
+      )}
+
+      {showBlockout && (
+        <BlockoutDialog
+          onClose={() => setShowBlockout(false)}
+          onCreated={() => {
+            setShowBlockout(false);
             refreshAll();
           }}
         />
