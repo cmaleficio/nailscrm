@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AppointmentCard } from "@/components/AppointmentCard";
 import { ClientCRMPanel } from "@/components/ClientCRMPanel";
 import { ReschedulePicker } from "@/components/ReschedulePicker";
+import { CompleteAppointmentDialog } from "@/components/CompleteAppointmentDialog";
 
 type Appointment = {
   id: string;
@@ -52,6 +53,7 @@ export function DashboardContent({ today }: Props) {
   );
   const [weekData, setWeekData] = useState<Record<string, Appointment[]>>({});
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
+  const [completing, setCompleting] = useState<Appointment | null>(null);
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -85,13 +87,8 @@ export function DashboardContent({ today }: Props) {
     setWeekDates(next);
   }
 
-  async function handleComplete(id: string) {
-    await fetch(`/api/appointments/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "completed" }),
-    });
-    refreshAll();
+  function handleComplete(appt: Appointment) {
+    setCompleting(appt);
   }
 
   async function handleCancel(id: string) {
@@ -179,7 +176,7 @@ export function DashboardContent({ today }: Props) {
                   status={appt.status}
                   appointmentDate={dateStr(appt.startTime)}
                   appointmentTime={timeStr(appt.startTime)}
-                  onComplete={handleComplete}
+                  onComplete={() => handleComplete(appt)}
                   onCancel={handleCancel}
                   onSelect={() => handleSelectAppointment(appt)}
                   onReschedule={() => setRescheduling(appt)}
@@ -295,6 +292,19 @@ export function DashboardContent({ today }: Props) {
           onClose={() => {
             setSelectedClientId(null);
             setSelectedAppointment(null);
+          }}
+        />
+      )}
+
+      {completing && (
+        <CompleteAppointmentDialog
+          appointmentId={completing.id}
+          clientName={completing.clientName}
+          serviceName={completing.serviceName}
+          onClose={() => setCompleting(null)}
+          onCompleted={() => {
+            setCompleting(null);
+            refreshAll();
           }}
         />
       )}
