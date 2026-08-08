@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
+import { validateSlot } from "@/lib/availability";
 import { createAppointmentClientEvent, createAppointmentAdminEvent } from "@/lib/calendar";
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -63,13 +64,38 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { serviceId, startTime, referencePhotoUrl, referencePhotoUrls } = body;
+  const {
+    serviceId,
+    startTime,
+    referencePhotoUrl,
+    referencePhotoUrls,
+    clientId,
+  } = body;
 
-  if (!serviceId || !startTime) {
+  if (!serviceId || typeof startTime !== "number") {
     return NextResponse.json(
       { error: "serviceId and startTime are required" },
       { status: 400 }
     );
+  }
+
+  const targetClientId: string = clientId
+    ? clientId
+    : session.user.id;
+
+  if (clientId && !(await isAdmin(session))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (clientId) {
+    const target = db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.id, targetClientId))
+      .get();
+    if (!target) {
+      return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    }
   }
 
   const urls: string[] = referencePhotoUrls?.length
@@ -91,9 +117,14 @@ export async function POST(req: NextRequest) {
   const endTime = startTime + service.durationMins * 60;
   const now = Math.floor(Date.now() / 1000);
 
+  const availabilityError = validateSlot(startTime, endTime);
+  if (availabilityError) {
+    return NextResponse.json({ error: availabilityError }, { status: 409 });
+  }
+
   const appointment = {
     id: crypto.randomUUID(),
-    clientId: session.user.id,
+    clientId: targetClientId,
     serviceId,
     startTime,
     endTime,
@@ -119,7 +150,7 @@ export async function POST(req: NextRequest) {
   db.insert(schema.servicePurchases)
     .values({
       id: crypto.randomUUID(),
-      userId: session.user.id,
+      userId: targetClientId,
       appointmentId: appointment.id,
       serviceId: service.id,
       serviceName: service.name,
