@@ -62,11 +62,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user?.id) {
         token.sub = user.id;
         const row = db
-          .select({ role: schema.users.role })
+          .select({ role: schema.users.role, phone: schema.users.phone })
           .from(schema.users)
           .where(eq(schema.users.id, user.id))
           .get();
         token.role = row?.role ?? "client";
+        token.phone = row?.phone ?? null;
       }
       return token;
     },
@@ -74,6 +75,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.sub as string;
         session.user.role = (token.role as string) ?? "client";
+        session.user.phone = (token.phone as string | null) ?? null;
       }
       return session;
     },

@@ -21,6 +21,10 @@ export default async function ProfilePage() {
     redirect("/");
   }
 
+  if (!user.phone) {
+    redirect("/complete-registration");
+  }
+
   const upcomingAppointments = db
     .select({
       id: schema.appointments.id,

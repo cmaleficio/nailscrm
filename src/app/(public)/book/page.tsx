@@ -1,7 +1,18 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { db, schema } from "@/db/index";
+import { eq } from "drizzle-orm";
 import { BookingWizard } from "@/components/BookingWizard";
 
-export default function BookPage() {
+export default async function BookPage() {
+  const session = await auth();
+  if (session?.user?.id) {
+    const user = db.select({ phone: schema.users.phone }).from(schema.users).where(eq(schema.users.id, session.user.id)).get();
+    if (user && !user.phone) {
+      redirect("/complete-registration");
+    }
+  }
   return (
     <Suspense
       fallback={
