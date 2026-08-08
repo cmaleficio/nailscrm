@@ -9,6 +9,7 @@ type Service = {
   price: number;
   durationMins: number;
   isActive: number;
+  photos: { id: string; url: string; position: number }[];
 };
 
 type EditingState = {
@@ -34,6 +35,7 @@ export function ServicesContent() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<EditingState | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   const fetchServices = useCallback(async () => {
     const res = await fetch("/api/services?includeInactive=1");
@@ -132,6 +134,65 @@ export function ServicesContent() {
       await fetchServices();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
+    }
+  }
+
+  async function handleUploadPhotos(
+    service: Service,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    e.target.value = "";
+    setUploadingId(service.id);
+    setError("");
+    setSuccess("");
+    try {
+      const urls: string[] = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const up = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!up.ok) throw new Error("No se pudo subir una foto");
+        const data = await up.json();
+        urls.push(data.url);
+      }
+      const res = await fetch(`/api/services/${service.id}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudieron guardar las fotos");
+      }
+      setSuccess("Fotos subidas");
+      await fetchServices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
+  async function handleDeletePhoto(serviceId: string, photoId: string) {
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch(
+        `/api/services/${serviceId}/photos/${photoId}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar la foto");
+      }
+      setSuccess("Foto eliminada");
+      await fetchServices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
     }
   }
 
@@ -375,6 +436,40 @@ export function ServicesContent() {
                 <p className="mt-2 text-sm text-gray-600">
                   ${service.price.toFixed(2)} · {service.durationMins} min
                 </p>
+                {service.photos.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {service.photos.map((photo) => (
+                      <div key={photo.id} className="relative">
+                        <img
+                          src={photo.url}
+                          alt={service.name}
+                          className="h-16 w-16 rounded-lg object-cover"
+                        />
+                        <button
+                          onClick={() =>
+                            handleDeletePhoto(service.id, photo.id)
+                          }
+                          className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-xs text-white"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                  {uploadingId === service.id
+                    ? "Subiendo..."
+                    : "Subir fotos del servicio"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={uploadingId === service.id}
+                    className="hidden"
+                    onChange={(e) => handleUploadPhotos(service, e)}
+                  />
+                </label>
               </div>
             )}
           </div>
