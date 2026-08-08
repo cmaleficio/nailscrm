@@ -86,6 +86,15 @@ export const appointmentPhotos = sqliteTable("appointment_photos", {
   url: text("url").notNull(),
   position: integer("position").notNull().default(0),
   createdAt: integer("created_at"),
+  kind: text("kind").notNull().default("reference"),
+});
+
+export const servicePhotos = sqliteTable("service_photos", {
+  id: text("id").primaryKey(),
+  serviceId: text("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  position: integer("position").notNull().default(0),
+  createdAt: integer("created_at"),
 });
 
 export const servicePurchases = sqliteTable("service_purchases", {

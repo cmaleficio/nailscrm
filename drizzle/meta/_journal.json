@@ -36,6 +36,13 @@
       "when": 1785725756814,
       "tag": "0004_red_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786148673043,
+      "tag": "0005_photo-kind-and-service-photos",
+      "breakpoints": true
     }
   ]
 }
