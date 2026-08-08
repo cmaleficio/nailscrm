@@ -115,6 +115,33 @@ export async function PATCH(
         .where(eq(schema.users.id, client.id))
         .run();
     }
+
+    const finalPhotos: string[] = Array.isArray(body.finalPhotos)
+      ? body.finalPhotos.filter((u: unknown): u is string => typeof u === "string" && u.length > 0)
+      : [];
+
+    if (finalPhotos.length > 0) {
+      const now = Math.floor(Date.now() / 1000);
+      finalPhotos.forEach((url, i) => {
+        db.insert(schema.appointmentPhotos)
+          .values({
+            id: crypto.randomUUID(),
+            appointmentId: id,
+            url,
+            position: i,
+            createdAt: now,
+            kind: "final",
+          })
+          .run();
+      });
+      db.update(schema.appointments)
+        .set({
+          finalPhotoUrl: finalPhotos[0],
+          sharedToGallery: 1,
+        })
+        .where(eq(schema.appointments.id, id))
+        .run();
+    }
   }
 
   if (status) {
