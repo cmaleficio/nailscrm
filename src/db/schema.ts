@@ -125,3 +125,46 @@ export const blockouts = sqliteTable("blockouts", {
   endTime: integer("end_time"),
   reason: text("reason"),
 });
+
+export const workingHours = sqliteTable("working_hours", {
+  dayOfWeek: integer("day_of_week").primaryKey(),
+  isOpen: integer("is_open").notNull().default(1),
+  startTime: text("start_time").notNull().default("09:00"),
+  endTime: text("end_time").notNull().default("18:00"),
+});
+
+export const payments = sqliteTable(
+  "payments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    appointmentId: text("appointment_id").references(() => appointments.id, {
+      onDelete: "set null",
+    }),
+    amountUsd: real("amount_usd").notNull(),
+    currency: text("currency").$type<"USD" | "VES">().notNull().default("USD"),
+    amountVes: real("amount_ves"),
+    rate: real("rate"),
+    reference: text("reference").notNull(),
+    paidAt: integer("paid_at"),
+    notes: text("notes"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at"),
+  },
+  (t) => [
+    index("payments_user_idx").on(t.userId),
+    index("payments_appointment_idx").on(t.appointmentId),
+  ]
+);
+
+export const exchangeRates = sqliteTable("exchange_rates", {
+  id: text("id").primaryKey(),
+  date: text("date").unique().notNull(),
+  rate: real("rate").notNull(),
+  source: text("source").$type<"bcv" | "manual">().notNull().default("bcv"),
+  createdAt: integer("created_at"),
+});

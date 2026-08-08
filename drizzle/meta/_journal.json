@@ -43,6 +43,13 @@
       "when": 1786148673043,
       "tag": "0005_photo-kind-and-service-photos",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786168804258,
+      "tag": "0006_working-hours-payments-exchange-rates",
+      "breakpoints": true
     }
   ]
 }
