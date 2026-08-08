@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db/index";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
 import { generateSlots } from "@/lib/slots";
+import { getWorkingHoursForDate } from "@/lib/workingHours";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -68,12 +69,27 @@ export async function GET(req: NextRequest) {
       b.startTime !== null && b.endTime !== null
   );
 
-  const slots = generateSlots({
-    date,
-    durationMins: service.durationMins,
-    existingAppointments,
-    blockouts,
-  });
+  const { isOpen, openMin, closeMin } = getWorkingHoursForDate(date);
 
-  return NextResponse.json({ slots, durationMins: service.durationMins });
+  const slots = isOpen
+    ? generateSlots({
+        date,
+        durationMins: service.durationMins,
+        existingAppointments,
+        blockouts,
+        openMin,
+        closeMin,
+      })
+    : [];
+
+  return NextResponse.json({
+    slots,
+    durationMins: service.durationMins,
+    openTime: isOpen
+      ? `${String(Math.floor(openMin / 60)).padStart(2, "0")}:${String(openMin % 60).padStart(2, "0")}`
+      : null,
+    closeTime: isOpen
+      ? `${String(Math.floor(closeMin / 60)).padStart(2, "0")}:${String(closeMin % 60).padStart(2, "0")}`
+      : null,
+  });
 }

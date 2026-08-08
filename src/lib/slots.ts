@@ -10,22 +10,20 @@ export type SlotInput = {
   durationMins: number;
   existingAppointments: { startTime: number; endTime: number }[];
   blockouts: { startTime: number; endTime: number }[];
+  openMin: number;
+  closeMin: number;
 };
 
 export function generateSlots(input: SlotInput): SlotTime[] {
-  const { date, durationMins, existingAppointments, blockouts } = input;
+  const { date, durationMins, existingAppointments, blockouts, openMin, closeMin } = input;
 
   const dateObj = new Date(date + "T00:00:00-04:00");
   const dayStart = Math.floor(dateObj.getTime() / 1000);
-  const dayEnd = dayStart + 24 * 3600;
-
-  const OPEN = 9;
-  const CLOSE = 18;
 
   const slots: SlotTime[] = [];
 
-  for (let h = OPEN; h + durationMins / 60 <= CLOSE; h++) {
-    const slotStart = dayStart + h * 3600;
+  for (let m = openMin; m + durationMins <= closeMin; m += 60) {
+    const slotStart = dayStart + m * 60;
     const slotEnd = slotStart + durationMins * 60;
 
     const overlapsAppointment = existingAppointments.some(
@@ -39,10 +37,12 @@ export function generateSlots(input: SlotInput): SlotTime[] {
     const now = Math.floor(Date.now() / 1000);
     const isPast = slotStart <= now;
 
+    const hour = Math.floor(m / 60);
+    const minute = m % 60;
     slots.push({
-      hour: h,
-      minute: 0,
-      label: `${String(h).padStart(2, "0")}:00`,
+      hour,
+      minute,
+      label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
       available: !overlapsAppointment && !overlapsBlockout && !isPast,
     });
   }
