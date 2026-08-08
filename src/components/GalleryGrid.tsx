@@ -30,22 +30,21 @@ export function GalleryGrid() {
 
       if (reset) {
         setItems(data.items);
+        setCursor(null);
+        setHasMore(data.hasMore);
       } else {
         setItems((prev) => [...prev, ...data.items]);
+        setCursor(data.nextCursor);
+        setHasMore(data.hasMore);
       }
-      setCursor(data.nextCursor);
-      setHasMore(data.hasMore);
       setLoading(false);
     },
     [cursor, activeFilter]
   );
 
   useEffect(() => {
-    setCursor(null);
-    setItems([]);
-    setHasMore(true);
-    fetchItems(true);
-  }, [activeFilter]);
+    void fetchItems(true);
+  }, [fetchItems, activeFilter]);
 
   if (items.length === 0 && !loading) {
     return (

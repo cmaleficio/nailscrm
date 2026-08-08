@@ -8,6 +8,34 @@
       "when": 1785212067876,
       "tag": "0000_dear_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785703250225,
+      "tag": "0001_awesome_mentor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785703392762,
+      "tag": "0002_wakeful_dreaming_celestial",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785716642645,
+      "tag": "0003_good_dragon_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785725756814,
+      "tag": "0004_red_shatterstar",
+      "breakpoints": true
     }
   ]
 }

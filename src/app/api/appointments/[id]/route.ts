@@ -2,22 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "@/lib/authz";
+import {
+  updateAppointmentEvent,
+  getAdminUserId,
+  deleteEventOnPrimaryCalendar,
+} from "@/lib/calendar";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (!(await isAdmin(session))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   const { id } = await params;
   const body = await req.json();
-  const { status } = body;
+  const { status, startTime } = body;
 
-  if (!status) {
-    return NextResponse.json({ error: "status is required" }, { status: 400 });
+  if (!status && typeof startTime !== "number") {
+    return NextResponse.json(
+      { error: "status or startTime is required" },
+      { status: 400 }
+    );
   }
 
   const appointment = db
@@ -28,6 +37,60 @@ export async function PATCH(
 
   if (!appointment) {
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+  }
+
+  if (typeof startTime === "number" && startTime !== appointment.startTime) {
+    const service = db
+      .select()
+      .from(schema.services)
+      .where(eq(schema.services.id, appointment.serviceId))
+      .get();
+
+    const endTime =
+      startTime + Math.floor((service?.durationMins ?? 60) * 60);
+
+    db.update(schema.appointments)
+      .set({ startTime, endTime })
+      .where(eq(schema.appointments.id, id))
+      .run();
+
+    if (appointment.googleEventIdClient) {
+      await updateAppointmentEvent(
+        appointment.clientId,
+        appointment.googleEventIdClient,
+        startTime,
+        endTime
+      );
+    }
+    if (appointment.googleEventIdAdmin) {
+      const adminUserId = await getAdminUserId();
+      if (adminUserId) {
+        await updateAppointmentEvent(
+          adminUserId,
+          appointment.googleEventIdAdmin,
+          startTime,
+          endTime
+        );
+      }
+    }
+  }
+
+  if (status === "cancelled" && appointment.status !== "cancelled") {
+    if (appointment.googleEventIdClient) {
+      await deleteEventOnPrimaryCalendar(
+        appointment.clientId,
+        appointment.googleEventIdClient
+      );
+    }
+    if (appointment.googleEventIdAdmin) {
+      const adminUserId = await getAdminUserId();
+      if (adminUserId) {
+        await deleteEventOnPrimaryCalendar(
+          adminUserId,
+          appointment.googleEventIdAdmin
+        );
+      }
+    }
   }
 
   if (status === "completed" && appointment.status !== "completed") {
@@ -54,10 +117,12 @@ export async function PATCH(
     }
   }
 
-  db.update(schema.appointments)
-    .set({ status })
-    .where(eq(schema.appointments.id, id))
-    .run();
+  if (status) {
+    db.update(schema.appointments)
+      .set({ status })
+      .where(eq(schema.appointments.id, id))
+      .run();
+  }
 
   return NextResponse.json({ success: true });
 }

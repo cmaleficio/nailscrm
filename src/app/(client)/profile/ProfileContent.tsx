@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { StatsBanner } from "@/components/StatsBanner";
 
 type ProfileUser = {
   name: string;
+  email: string;
+  phone: string | null;
+  role: string;
   image: string | null;
   totalVisits: number;
   totalRevenue: number;
@@ -19,12 +24,47 @@ type Appointment = {
   serviceName: string;
 };
 
+type UpcomingAppointment = {
+  id: string;
+  startTime: number;
+  endTime: number;
+  status: string;
+  referencePhotoUrl: string | null;
+  serviceName: string;
+};
+
 type Props = {
   user: ProfileUser;
   appointments: Appointment[];
+  upcomingAppointments: UpcomingAppointment[];
 };
 
-export function ProfileContent({ user, appointments }: Props) {
+export function ProfileContent({ user, appointments, upcomingAppointments }: Props) {
+  const router = useRouter();
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState("");
+
+  async function handleCancel(id: string) {
+    setCancellingId(id);
+    setCancelError("");
+    try {
+      const res = await fetch(`/api/appointments/${id}/cancel`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo cancelar la cita");
+      }
+      setConfirmingId(null);
+      router.refresh();
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : "Error inesperado");
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       {/* Header */}
@@ -37,6 +77,22 @@ export function ProfileContent({ user, appointments }: Props) {
           />
         )}
         <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
+        <p className="mt-1 text-sm text-gray-500">{user.email}</p>
+        {user.phone && (
+          <p className="text-sm text-gray-500">
+            <a href={`https://wa.me/${user.phone.replace(/[^0-9]/g, "")}`} className="hover:text-gray-700">
+              WhatsApp: {user.phone}
+            </a>
+          </p>
+        )}
+        {user.role === "admin" && (
+          <Link
+            href="/dashboard"
+            className="mt-3 inline-block rounded-xl border border-pink-main px-4 py-2 text-sm font-medium text-pink-600 hover:bg-pink-light transition-colors"
+          >
+            Ir al dashboard
+          </Link>
+        )}
       </div>
 
       {/* Stats */}
@@ -59,6 +115,89 @@ export function ProfileContent({ user, appointments }: Props) {
           Agendar nueva cita
         </Link>
       </div>
+
+      {/* Próximas citas */}
+      <section className="mb-10">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          Mis próximas citas
+        </h2>
+        {upcomingAppointments.length === 0 ? (
+          <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
+            <p className="text-gray-400">No tienes citas próximas</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {upcomingAppointments.map((appt) => (
+              <div
+                key={appt.id}
+                className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                {appt.referencePhotoUrl && (
+                  <img
+                    src={appt.referencePhotoUrl}
+                    alt="Referencia"
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900">
+                    {appt.serviceName}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {new Intl.DateTimeFormat("es-ES", {
+                      dateStyle: "long",
+                      timeZone: "America/Caracas",
+                    }).format(new Date(appt.startTime * 1000))}
+                    {" · "}
+                    {new Intl.DateTimeFormat("es-ES", {
+                      timeStyle: "short",
+                      timeZone: "America/Caracas",
+                    }).format(new Date(appt.startTime * 1000))}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                    appt.status === "confirmed"
+                      ? "bg-green-50 text-green-600"
+                      : "bg-amber-50 text-amber-600"
+                  }`}
+                >
+                  {appt.status === "confirmed" ? "Confirmada" : "Pendiente"}
+                </span>
+                {confirmingId === appt.id ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleCancel(appt.id)}
+                      disabled={cancellingId === appt.id}
+                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {cancellingId === appt.id ? "Cancelando..." : "Sí, cancelar"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmingId(null)}
+                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingId(appt.id)}
+                    className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {cancelError && (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            {cancelError}
+          </p>
+        )}
+      </section>
 
       {/* Timeline */}
       <section>

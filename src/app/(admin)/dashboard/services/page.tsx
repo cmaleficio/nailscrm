@@ -1,8 +1,12 @@
-export default function ServicesPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900">Servicios</h1>
-      <p className="mt-2 text-gray-500">Próximamente: gestión de servicios</p>
-    </div>
-  );
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { isAdmin } from "@/lib/authz";
+import { ServicesContent } from "./ServicesContent";
+
+export default async function ServicesPage() {
+  const session = await auth();
+  if (!(await isAdmin(session))) {
+    redirect("/dashboard");
+  }
+  return <ServicesContent />;
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 
 type Service = {
   id: string;
@@ -37,9 +38,10 @@ export function BookingWizard() {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [referenceFile, setReferenceFile] = useState<File | null>(null);
-  const [referencePreview, setReferencePreview] = useState<string>("");
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
+  const [referencePreviews, setReferencePreviews] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return now.getMonth();
@@ -48,14 +50,6 @@ export function BookingWizard() {
     const now = new Date();
     return now.getFullYear();
   });
-
-  useEffect(() => {
-    fetch("/api/gallery?limit=100")
-      .then((r) => r.json())
-      .catch(() => {});
-    fetchServices();
-    preselectedService();
-  }, []);
 
   async function fetchServices() {
     const res = await fetch("/api/services");
@@ -74,6 +68,14 @@ export function BookingWizard() {
       }
     }
   }
+
+  useEffect(() => {
+    fetch("/api/gallery?limit=100")
+      .then((r) => r.json())
+      .catch(() => {});
+    void fetchServices();
+    void preselectedService();
+  }, []);
 
   const fetchSlots = useCallback(async (date: string) => {
     if (!selectedService) return;
@@ -103,32 +105,48 @@ export function BookingWizard() {
     if (!selectedService || !selectedSlot || status !== "authenticated") return;
 
     setSubmitting(true);
+    setSubmitError("");
 
-    let referencePhotoUrl = "";
+    try {
+      const referencePhotoUrls: string[] = [];
 
-    if (referenceFile) {
-      const formData = new FormData();
-      formData.append("file", referenceFile);
-      const uploadRes = await fetch("/api/upload", {
+      for (const file of referenceFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          throw new Error("No se pudo subir la foto de referencia.");
+        }
+        const uploadData = await uploadRes.json();
+        referencePhotoUrls.push(uploadData.url);
+      }
+
+      const res = await fetch("/api/appointments", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceId: selectedService.id,
+          startTime: selectedSlot,
+          referencePhotoUrl: referencePhotoUrls[0] || "",
+          referencePhotoUrls,
+        }),
       });
-      const uploadData = await uploadRes.json();
-      referencePhotoUrl = uploadData.url;
-    }
 
-    const res = await fetch("/api/appointments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        serviceId: selectedService.id,
-        startTime: selectedSlot,
-        referencePhotoUrl,
-      }),
-    });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo crear la reserva.");
+      }
 
-    if (res.ok) {
       router.push("/success");
+    } catch (e) {
+      setSubmitError(
+        e instanceof Error ? e.message : "Ocurrió un error al reservar."
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -168,14 +186,22 @@ export function BookingWizard() {
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="text-2xl font-bold text-gray-900">Inicia sesión para reservar</h1>
         <p className="mt-2 text-gray-500">
-          Necesitas iniciar sesión con Google para agendar una cita.
+          Necesitas iniciar sesión para agendar una cita.
         </p>
-        <button
-          onClick={() => signInGoogle()}
-          className="mt-6 rounded-xl bg-pink-main px-6 py-3 text-sm font-medium hover:bg-pink-light transition-colors"
-        >
-          Iniciar sesión con Google
-        </button>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <button
+            onClick={() => signInGoogle()}
+            className="w-full rounded-xl bg-pink-main px-6 py-3 text-sm font-medium hover:bg-pink-light transition-colors"
+          >
+            Iniciar sesión con Google
+          </button>
+          <Link
+            href="/login"
+            className="w-full rounded-xl border border-gray-200 px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Entrar o crear cuenta con correo
+          </Link>
+        </div>
       </div>
     );
   }
@@ -422,36 +448,68 @@ export function BookingWizard() {
           {/* Photo upload */}
           <div className="mt-6">
             <label className="mb-2 block text-sm font-medium text-gray-700">
-              Foto de referencia (opcional)
+              Fotos de referencia (opcional)
             </label>
             <div className="flex items-center gap-4">
               <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                Subir foto
+                Subir fotos
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setReferenceFile(file);
-                      setReferencePreview(URL.createObjectURL(file));
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 0) {
+                      setReferenceFiles((prev) => [...prev, ...files]);
+                      setReferencePreviews((prev) => [
+                        ...prev,
+                        ...files.map((f) => URL.createObjectURL(f)),
+                      ]);
                     }
+                    e.target.value = "";
                   }}
                 />
               </label>
-              {referencePreview && (
-                <img
-                  src={referencePreview}
-                  alt="Preview"
-                  className="h-16 w-16 rounded-lg object-cover"
-                />
+              {referencePreviews.length > 0 && (
+                <span className="text-sm text-gray-500">
+                  {referencePreviews.length} foto{referencePreviews.length > 1 ? "s" : ""}
+                </span>
               )}
             </div>
+            {referencePreviews.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {referencePreviews.map((preview, i) => (
+                  <div key={preview} className="relative">
+                    <img
+                      src={preview}
+                      alt={`Preview ${i + 1}`}
+                      className="h-16 w-16 rounded-lg object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReferencePreviews((prev) => prev.filter((_, idx) => idx !== i));
+                        setReferenceFiles((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                      className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-xs text-white"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
+          {submitError && (
+            <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              {submitError}
+            </p>
+          )}
 
           <div className="mt-8 flex gap-3">
             <button

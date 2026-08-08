@@ -1,11 +1,12 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { isAdmin } from "@/lib/authz";
 import { DashboardContent } from "./DashboardContent";
 
 export default async function DashboardPage() {
   const session = await auth();
 
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (!(await isAdmin(session))) {
     redirect("/");
   }
 

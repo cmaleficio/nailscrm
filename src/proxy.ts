@@ -7,13 +7,9 @@ const { auth } = NextAuth(authConfig);
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth?.user;
-  const isAdmin = req.auth?.user?.email === process.env.ADMIN_EMAIL;
 
   if (pathname.startsWith("/dashboard")) {
     if (!isLoggedIn) {
-      return NextResponse.redirect(new URL("/", req.url));
-    }
-    if (!isAdmin) {
       return NextResponse.redirect(new URL("/", req.url));
     }
   }

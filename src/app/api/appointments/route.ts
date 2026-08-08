@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
-
+import { isAdmin } from "@/lib/authz";
+import { createAppointmentClientEvent, createAppointmentAdminEvent } from "@/lib/calendar";
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (!(await isAdmin(session))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
       clientName: schema.users.name,
       clientId: schema.users.id,
       clientPhone: schema.users.phone,
-      serviceName: schema.services.name,
+      serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
       serviceId: schema.services.id,
     })
     .from(schema.appointments)
@@ -38,6 +39,10 @@ export async function GET(req: NextRequest) {
     .innerJoin(
       schema.services,
       eq(schema.appointments.serviceId, schema.services.id)
+    )
+    .leftJoin(
+      schema.servicePurchases,
+      eq(schema.servicePurchases.appointmentId, schema.appointments.id)
     )
     .where(
       and(
@@ -58,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { serviceId, startTime, referencePhotoUrl } = body;
+  const { serviceId, startTime, referencePhotoUrl, referencePhotoUrls } = body;
 
   if (!serviceId || !startTime) {
     return NextResponse.json(
@@ -66,6 +71,12 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  const urls: string[] = referencePhotoUrls?.length
+    ? referencePhotoUrls
+    : referencePhotoUrl
+      ? [referencePhotoUrl]
+      : [];
 
   const service = db
     .select()
@@ -87,11 +98,79 @@ export async function POST(req: NextRequest) {
     startTime,
     endTime,
     status: "pending",
-    referencePhotoUrl: referencePhotoUrl || null,
+    referencePhotoUrl: urls[0] || null,
     createdAt: now,
   };
 
   db.insert(schema.appointments).values(appointment).run();
 
+  urls.forEach((url, i) => {
+    db.insert(schema.appointmentPhotos)
+      .values({
+        id: crypto.randomUUID(),
+        appointmentId: appointment.id,
+        url,
+        position: i,
+        createdAt: now,
+      })
+      .run();
+  });
+
+  db.insert(schema.servicePurchases)
+    .values({
+      id: crypto.randomUUID(),
+      userId: session.user.id,
+      appointmentId: appointment.id,
+      serviceId: service.id,
+      serviceName: service.name,
+      serviceDescription: service.description,
+      servicePrice: service.price,
+      serviceDurationMins: service.durationMins,
+      createdAt: now,
+    })
+    .run();
+
+  await syncAppointmentToGoogleCalendars(appointment, service.name);
+
   return NextResponse.json({ id: appointment.id });
+}
+
+async function syncAppointmentToGoogleCalendars(
+  appointment: {
+    id: string;
+    clientId: string;
+    startTime: number;
+    endTime: number;
+  },
+  serviceName: string
+) {
+  const summary = `Cita: ${serviceName}`;
+  const start = appointment.startTime;
+  const end = appointment.endTime;
+
+  try {
+    const clientEventId = await createAppointmentClientEvent({
+      clientId: appointment.clientId,
+      startTime: start,
+      endTime: end,
+      summary,
+    });
+    const adminEventId = await createAppointmentAdminEvent({
+      startTime: start,
+      endTime: end,
+      summary,
+    });
+
+    if (clientEventId || adminEventId) {
+      db.update(schema.appointments)
+        .set({
+          googleEventIdClient: clientEventId,
+          googleEventIdAdmin: adminEventId,
+        })
+        .where(eq(schema.appointments.id, appointment.id))
+        .run();
+    }
+  } catch (e) {
+    console.error("calendar sync failed (best effort)", e);
+  }
 }

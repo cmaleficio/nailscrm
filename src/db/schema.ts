@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -7,10 +7,13 @@ export const users = sqliteTable("users", {
   emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
   image: text("image"),
   phone: text("phone"),
+  address: text("address"),
+  passwordHash: text("password_hash"),
   googleId: text("google_id"),
   techNotes: text("tech_notes"),
   totalVisits: integer("total_visits").default(0),
   totalRevenue: real("total_revenue").default(0),
+  role: text("role").notNull().default("client"),
   createdAt: integer("created_at"),
 });
 
@@ -53,22 +56,52 @@ export const services = sqliteTable("services", {
   isActive: integer("is_active").default(1),
 });
 
-export const appointments = sqliteTable("appointments", {
+export const appointments = sqliteTable(
+  "appointments",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id").notNull().references(() => users.id),
+    serviceId: text("service_id").notNull().references(() => services.id),
+    startTime: integer("start_time"),
+    endTime: integer("end_time"),
+    status: text("status").default("pending"),
+    referencePhotoUrl: text("reference_photo_url"),
+    finalPhotoUrl: text("final_photo_url"),
+    sharedToGallery: integer("shared_to_gallery").default(0),
+    reviewRating: integer("review_rating"),
+    reviewText: text("review_text"),
+    googleEventIdClient: text("google_event_id_client"),
+    googleEventIdAdmin: text("google_event_id_admin"),
+    createdAt: integer("created_at"),
+  },
+  (t) => [
+    index("appointments_client_id_idx").on(t.clientId),
+    index("appointments_start_time_idx").on(t.startTime),
+  ]
+);
+
+export const appointmentPhotos = sqliteTable("appointment_photos", {
   id: text("id").primaryKey(),
-  clientId: text("client_id").notNull().references(() => users.id),
-  serviceId: text("service_id").notNull().references(() => services.id),
-  startTime: integer("start_time"),
-  endTime: integer("end_time"),
-  status: text("status").default("pending"),
-  referencePhotoUrl: text("reference_photo_url"),
-  finalPhotoUrl: text("final_photo_url"),
-  sharedToGallery: integer("shared_to_gallery").default(0),
-  reviewRating: integer("review_rating"),
-  reviewText: text("review_text"),
-  googleEventIdClient: text("google_event_id_client"),
-  googleEventIdAdmin: text("google_event_id_admin"),
+  appointmentId: text("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  position: integer("position").notNull().default(0),
   createdAt: integer("created_at"),
 });
+
+export const servicePurchases = sqliteTable("service_purchases", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  appointmentId: text("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  serviceId: text("service_id").references(() => services.id),
+  serviceName: text("service_name").notNull(),
+  serviceDescription: text("service_description"),
+  servicePrice: real("service_price").notNull(),
+  serviceDurationMins: integer("service_duration_mins").notNull(),
+  createdAt: integer("created_at"),
+}, (t) => [
+  index("service_purchases_user_idx").on(t.userId),
+  index("service_purchases_appointment_idx").on(t.appointmentId),
+]);
 
 export const waitlist = sqliteTable("waitlist", {
   id: text("id").primaryKey(),

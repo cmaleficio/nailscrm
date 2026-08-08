@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { SignOutButton } from "@/components/SignOutButton";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Agenda", icon: "📅" },
   { href: "/dashboard/clients", label: "Clientes", icon: "👤" },
   { href: "/dashboard/services", label: "Servicios", icon: "💅" },
+  { href: "/dashboard/admin-users", label: "Admins", icon: "🛡️" },
 ];
 
 export default function AdminLayout({
@@ -75,14 +77,29 @@ export default function AdminLayout({
 
           <div className="border-t border-gray-100 px-4 py-3">
             <Link
-              href="/"
+              href="/profile"
               className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              Volver al inicio
+              Mi perfil
             </Link>
+            <div className="mt-2">
+              <Link
+                href="/"
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Volver al inicio
+              </Link>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+              <span className="text-sm text-gray-500">Admin</span>
+              <SignOutButton />
+            </div>
           </div>
         </div>
       </aside>

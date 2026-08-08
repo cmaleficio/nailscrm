@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nails App — Sistema de Gestión para Salón de Nail Design
 
-## Getting Started
+Aplicación web (SaaS/CRM) para la gestión integral de un salón de nail design. Los clientes reservan citas desde su celular; la manicurista administra agenda, clientes y servicios desde un dashboard, con sincronización a Google Calendar y comunicación por WhatsApp.
 
-First, run the development server:
+## Stack
+
+- **Framework:** Next.js 14+ (App Router, `src/`)
+- **Lenguaje:** TypeScript
+- **Estilos:** Tailwind CSS + shadcn/ui (paleta rosa pastel)
+- **Base de datos:** SQLite (`better-sqlite3`), tablas en `src/db/schema.ts`
+- **ORM:** Drizzle ORM (queries SQL puras)
+- **Autenticación:** NextAuth v5 (Auth.js) con Google, Facebook y Credentials (correo/contraseña)
+- **Sincronización:** Google Calendar API (push one-way a calendarios de cliente y admin)
+- **Comunicación:** Deep links de WhatsApp (`wa.me`)
+- **Despliegue:** local + Cloudflare Tunnel
+
+## Requisitos
+
+- Node.js 18.17+ (probado con Node 24)
+- Cliente OAuth de Google con scopes `openid email profile` y `https://www.googleapis.com/auth/calendar.events`
+- Cuenta de desarrollador de Facebook para el provider (opcional)
+
+## Configuración
+
+Copiar `.env.template` a `.env` y completar:
+
+| Variable | Descripción |
+| --- | --- |
+| `AUTH_GOOGLE_ID` | Client ID de Google OAuth (nombres v5 de Auth.js) |
+| `AUTH_GOOGLE_SECRET` | Client Secret de Google OAuth |
+| `AUTH_FACEBOOK_ID` | App ID de Facebook (opcional) |
+| `AUTH_FACEBOOK_SECRET` | App Secret de Facebook (opcional) |
+| `NEXTAUTH_SECRET` | Secreto para firmar sesiones |
+| `NEXTAUTH_URL` | URL pública de la app (en producción) |
+| `ADMIN_EMAIL` | Email del admin principal (superadmin) |
+| `NEXT_PUBLIC_SALON_NAME` | Nombre mostrado del salón |
+
+> **Nota:** Auth.js v5 lee las credenciales como `AUTH_<PROVIDER>_ID` / `AUTH_<PROVIDER>_SECRET`. No usar los nombres antiguos `GOOGLE_CLIENT_ID`.
+
+## Ejecución
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:setup   # genera y aplica migraciones + datos de semilla
+npm run dev        # desarrollo
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Para producción local: `npm run build && npm start`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Comandos útiles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run db:generate   # genera migración desde src/db/schema.ts
+npm run db:migrate    # aplica migraciones
+npm run db:seed:client # regenera datos demo del cliente (clienta@email.com / Cliente123!)
+npm run lint          # ESLint
+npx tsc --noEmit      # typecheck
+```
 
-## Learn More
+## Datos demo
 
-To learn more about Next.js, take a look at the following resources:
+- **Cliente:** `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` crea o actualiza este usuario con dirección, notas técnicas y citas de ejemplo (próxima con foto de referencia + completadas con foto final y reseñas). Es re-ejecutable: borra y regenera las citas del demo.
+- **Admin:** el `ADMIN_EMAIL` configurado se promueve automáticamente a superadmin al iniciar sesión con Google.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estructura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/                 # rutas (public, (client), (admin))
+    api/               # API routes (auth, appointments, admins, gallery, services, slots, upload…)
+  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, …)
+  db/                  # conexión SQLite + schema Drizzle
+  lib/                 # auth, auth.config, authz, calendar, slots, upload
+```
 
-## Deploy on Vercel
+## Roles
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Cliente:** reserva, sus próximas citas y pasaporte en `/profile`.
+- **Admin:** agenda día/semana, reprogramar (re-sincroniza Google Calendar), CRM, servicios.
+- **Superadmin (`ADMIN_EMAIL`):** gestión de admins en `/dashboard/admin-users`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Mantenimiento
+
+Cada cambio relevante (funcionalidad nueva/quitada o bug corregido) obliga a actualizar `AGENTS.md` (si aplica), `CHANGELOG.md` y `README.md` en el mismo commit.

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { GoogleSignInButton } from "./GoogleSignInButton";
+import { SignOutButton } from "./SignOutButton";
 
 type HeaderProps = {
   user: {
     name?: string | null;
     image?: string | null;
     email?: string | null;
+    role?: string | null;
   } | null;
 };
 
@@ -20,14 +22,43 @@ export function Header({ user }: HeaderProps) {
         </Link>
         <div className="flex items-center gap-3">
           {user ? (
-            <Link
-              href={user.email === process.env.ADMIN_EMAIL ? "/dashboard" : "/profile"}
-              className="rounded-xl bg-pink-light px-4 py-2 text-sm text-gray-700 hover:bg-pink-main transition-colors"
-            >
-              Mi cuenta
-            </Link>
+            <>
+              {user.image && (
+                <img
+                  src={user.image}
+                  alt={user.name ?? "Usuario"}
+                  className="hidden h-8 w-8 rounded-full object-cover sm:block"
+                />
+              )}
+              <span className="hidden text-sm font-medium text-gray-700 sm:block">
+                {user.name}
+              </span>
+              <Link
+                href="/profile"
+                className="rounded-xl bg-pink-light px-4 py-2 text-sm text-gray-700 hover:bg-pink-main transition-colors"
+              >
+                Mi cuenta
+              </Link>
+              {user.role === "admin" && (
+                <Link
+                  href="/dashboard"
+                  className="rounded-xl border border-pink-main px-4 py-2 text-sm font-medium text-pink-600 hover:bg-pink-light transition-colors"
+                >
+                  Dashboard
+                </Link>
+              )}
+              <SignOutButton />
+            </>
           ) : (
-            <GoogleSignInButton />
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Entrar
+              </Link>
+              <GoogleSignInButton />
+            </div>
           )}
         </div>
       </div>

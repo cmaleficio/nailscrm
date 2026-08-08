@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "@/lib/authz";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (!(await isAdmin(session))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -30,7 +31,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (!(await isAdmin(session))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
