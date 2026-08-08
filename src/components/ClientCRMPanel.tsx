@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
+import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 
 type ClientData = {
   id: string;
@@ -12,6 +13,16 @@ type ClientData = {
   totalVisits: number | null;
   totalRevenue: number | null;
   email: string;
+  balanceUsd: number;
+  payments: {
+    id: string;
+    amountUsd: number;
+    currency: string;
+    amountVes: number | null;
+    rate: number | null;
+    reference: string;
+    paidAt: number | null;
+  }[];
 };
 
 type Props = {
@@ -52,6 +63,7 @@ export function ClientCRMPanel({
   const [contact, setContact] = useState({ name: "", phone: "", address: "" });
   const [editingContact, setEditingContact] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -224,6 +236,37 @@ export function ClientCRMPanel({
             </p>
             <p className="text-xs text-gray-500">Ingresos</p>
           </div>
+        </div>
+
+        <div className="mb-6 rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Cuenta por cobrar</p>
+            <button
+              onClick={() => setShowPayment(true)}
+              className="rounded-lg bg-pink-main px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-pink-light transition-colors"
+            >
+              Registrar pago
+            </button>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-gray-900">
+            ${(client.balanceUsd ?? 0).toFixed(2)}
+          </p>
+          {(client.payments ?? []).length > 0 && (
+            <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
+              {client.payments.slice(0, 5).map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">
+                    ${p.amountUsd.toFixed(2)} · Ref: {p.reference}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {p.paidAt
+                      ? new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeZone: "America/Caracas" }).format(new Date(p.paidAt * 1000))
+                      : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mb-6 rounded-xl border border-gray-200 p-4">
@@ -460,6 +503,24 @@ export function ClientCRMPanel({
             Enviar WhatsApp
           </a>
         )}
+
+      {showPayment && (
+        <RegisterPaymentDialog
+          clientId={client.id}
+          clientName={client.name}
+          onClose={() => setShowPayment(false)}
+          onSaved={() => {
+            setShowPayment(false);
+            fetch(`/api/clients/${clientId}`)
+              .then((r) => r.json())
+              .then((data) => {
+                setClient(data);
+                setTechNotes(data.techNotes || "");
+                setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "" });
+              });
+          }}
+        />
+      )}
       </div>
     </div>
   );
