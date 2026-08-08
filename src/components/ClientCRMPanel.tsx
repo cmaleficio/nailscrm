@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getWhatsAppUrl } from "@/lib/whatsapp";
+import { PhotoCarousel } from "@/components/PhotoCarousel";
 
 type ClientData = {
   id: string;
   name: string;
   phone: string | null;
+  address: string | null;
   techNotes: string | null;
   totalVisits: number | null;
   totalRevenue: number | null;
@@ -15,10 +16,10 @@ type ClientData = {
 
 type Props = {
   clientId: string;
-  appointmentId: string;
-  serviceName: string;
-  appointmentDate: string;
-  appointmentTime: string;
+  appointmentId?: string;
+  serviceName?: string;
+  appointmentDate?: string;
+  appointmentTime?: string;
   onClose: () => void;
 };
 
@@ -47,6 +48,20 @@ export function ClientCRMPanel({
   const [purchaseSaving, setPurchaseSaving] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState("");
+  const [photos, setPhotos] = useState<{ id: string; url: string }[]>([]);
+  const [contact, setContact] = useState({ name: "", phone: "", address: "" });
+  const [editingContact, setEditingContact] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
+
+  useEffect(() => {
+    if (!appointmentId) return;
+    fetch(`/api/appointments/${appointmentId}/photos`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPhotos(data);
+      })
+      .catch(() => {});
+  }, [appointmentId]);
 
   useEffect(() => {
     fetch(`/api/clients/${clientId}`)
@@ -54,10 +69,16 @@ export function ClientCRMPanel({
       .then((data) => {
         setClient(data);
         setTechNotes(data.techNotes || "");
+        setContact({
+          name: data.name ?? "",
+          phone: data.phone ?? "",
+          address: data.address ?? "",
+        });
       });
   }, [clientId]);
 
   useEffect(() => {
+    if (!appointmentId) return;
     fetch(`/api/purchases?appointmentId=${appointmentId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -139,15 +160,38 @@ export function ClientCRMPanel({
     }
   }
 
+  async function saveContact() {
+    if (!client) return;
+    setContactSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: contact.name,
+          phone: contact.phone,
+          address: contact.address,
+        }),
+      });
+      if (!res.ok) throw new Error("No se pudo guardar");
+      setClient({ ...client, name: contact.name, phone: contact.phone, address: contact.address });
+      setEditingContact(false);
+    } catch {
+      setEditingContact(false);
+    } finally {
+      setContactSaving(false);
+    }
+  }
+
   if (!client) return null;
 
-  const whatsappUrl = getWhatsAppUrl(
-    client.phone || "",
-    client.name,
-    serviceName,
-    appointmentDate,
-    appointmentTime
-  );
+  const whatsappUrl = client.phone
+    ? `https://wa.me/${client.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+        appointmentId
+          ? `Hola ${client.name}, te recuerdo tu cita de ${serviceName ?? ""} el ${appointmentDate ?? ""} a las ${appointmentTime ?? ""}.`
+          : `Hola ${client.name}!`
+      )}`
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -165,6 +209,8 @@ export function ClientCRMPanel({
           </button>
         </div>
 
+        <PhotoCarousel photos={photos} />
+
         <div className="mb-6 flex gap-4">
           <div className="flex-1 rounded-xl bg-pink-light p-3 text-center">
             <p className="text-2xl font-bold text-gray-900">
@@ -178,6 +224,66 @@ export function ClientCRMPanel({
             </p>
             <p className="text-xs text-gray-500">Ingresos</p>
           </div>
+        </div>
+
+        <div className="mb-6 rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Contacto</p>
+            {!editingContact && (
+              <button
+                onClick={() => setEditingContact(true)}
+                className="rounded-lg bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                Editar
+              </button>
+            )}
+          </div>
+          {!editingContact ? (
+            <div className="mt-2 space-y-1 text-sm text-gray-700">
+              <p className="font-medium text-gray-900">{contact.name}</p>
+              {contact.phone && <p>{contact.phone}</p>}
+              {contact.address && <p className="text-gray-500">{contact.address}</p>}
+              {!contact.phone && !contact.address && (
+                <p className="text-gray-400">Sin datos de contacto</p>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 space-y-2">
+              <input
+                value={contact.name}
+                onChange={(e) => setContact({ ...contact, name: e.target.value })}
+                placeholder="Nombre"
+                className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
+              />
+              <input
+                value={contact.phone}
+                onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                placeholder="Teléfono"
+                className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
+              />
+              <input
+                value={contact.address}
+                onChange={(e) => setContact({ ...contact, address: e.target.value })}
+                placeholder="Dirección"
+                className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={saveContact}
+                  disabled={contactSaving}
+                  className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                >
+                  {contactSaving ? "Guardando..." : "Guardar"}
+                </button>
+                <button
+                  onClick={() => setEditingContact(false)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mb-6">
@@ -341,7 +447,7 @@ export function ClientCRMPanel({
           </div>
         )}
 
-        {client.phone && (
+        {whatsappUrl && (
           <a
             href={whatsappUrl}
             target="_blank"
