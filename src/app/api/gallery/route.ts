@@ -8,41 +8,46 @@ export async function GET(req: NextRequest) {
   const filter = searchParams.get("filter") || "";
   const limit = Math.min(Number(searchParams.get("limit")) || 10, 50);
 
-  const conditions = [eq(schema.appointments.sharedToGallery, 1)];
+  const conditions = [
+    eq(schema.appointmentPhotos.kind, "final"),
+    eq(schema.appointments.sharedToGallery, 1),
+  ];
 
   if (filter) {
     conditions.push(like(schema.services.name, `%${filter}%`));
   }
 
   if (cursor) {
-    conditions.push(sql`${schema.appointments.createdAt} < ${Number(cursor)}`);
+    conditions.push(sql`${schema.appointmentPhotos.createdAt} < ${Number(cursor)}`);
   }
 
   const rows = db
     .select({
-      id: schema.appointments.id,
-      finalPhotoUrl: schema.appointments.finalPhotoUrl,
+      id: schema.appointmentPhotos.id,
+      url: schema.appointmentPhotos.url,
       clientName: schema.users.name,
       serviceName: schema.services.name,
-      createdAt: schema.appointments.createdAt,
+      serviceId: schema.services.id,
+      appointmentId: schema.appointments.id,
+      createdAt: schema.appointmentPhotos.createdAt,
     })
-    .from(schema.appointments)
+    .from(schema.appointmentPhotos)
+    .innerJoin(schema.appointments, eq(schema.appointmentPhotos.appointmentId, schema.appointments.id))
     .innerJoin(schema.users, eq(schema.appointments.clientId, schema.users.id))
-    .innerJoin(
-      schema.services,
-      eq(schema.appointments.serviceId, schema.services.id)
-    )
+    .innerJoin(schema.services, eq(schema.appointments.serviceId, schema.services.id))
     .where(and(...conditions))
-    .orderBy(sql`${schema.appointments.createdAt} DESC`)
+    .orderBy(sql`${schema.appointmentPhotos.createdAt} DESC`)
     .limit(limit + 1)
     .all();
 
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit).map((r) => ({
     id: r.id,
-    finalPhotoUrl: r.finalPhotoUrl ?? "/placeholder.svg",
+    url: r.url ?? "/placeholder.svg",
     clientName: r.clientName,
     serviceName: r.serviceName,
+    serviceId: r.serviceId,
+    appointmentId: r.appointmentId,
   }));
   const nextCursor = hasMore ? String(rows[limit - 1]?.createdAt ?? "") : null;
 
