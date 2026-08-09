@@ -33,6 +33,11 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Botón "Cancelar" con confirmación para las citas en la agenda (vistas día y semana); las citas completadas/canceladas ya no se pueden cancelar (400).
 - Eliminar clientes desde la lista y desde el panel CRM (`DELETE /api/clients/[id]`): solo si no tienen citas, pagos/cuentas por cobrar ni lista de espera; los usuarios con rol admin están protegidos (403).
 - Eliminar servicios (`DELETE /api/services/[id]`) además de desactivarlos: solo si no tienen citas ni compras asociadas (de lo contrario se sugiere desactivar).
+- Módulo de compras en `/dashboard/purchases`: facturas a proveedores (de inventario con líneas de producto o gastos fijos en $/Bs), proveedores y categorías de gasto. Las facturas de inventario registran entradas de stock con costo promedio ponderado.
+- Cuentas por pagar en `/dashboard/accounts-payable`: facturas pendientes (badges de vencida/por vencer), registro y borrado de pagos a proveedores en $/Bs con tasa BCV (el estado de la factura se recalcula automáticamente) y gestión de cuentas bancarias del salón.
+- Inventario en `/dashboard/inventory`: existencias con valorización, badge "Stock bajo", kardex de movimientos (entradas/salidas/ajustes con motivo obligatorio) y uso de productos por servicio (las salidas de stock se sugieren según el consumo por servicio).
+- Estados financieros en `/dashboard/financials`: P&L mensual (ingresos, gastos, utilidad/pérdida, servicios y facturas) con desglose de ingresos por servicio y gastos por categoría.
+- Seed regenerable de finanzas (`npm run db:seed:finance`): proveedores, bancos ($/Bs), 4 items de inventario con entradas vía factura F-1001 (parcialmente pagada), factura de alquiler en Bs y uso de productos por servicio. Re-ejecutable: borra y regenera los datos de finanzas.
 
 ### Corregido
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.

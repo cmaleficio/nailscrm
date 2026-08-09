@@ -54,6 +54,7 @@ Para producción local: `npm run build && npm start`.
 npm run db:generate   # genera migración desde src/db/schema.ts
 npm run db:migrate    # aplica migraciones
 npm run db:seed:client # regenera datos demo del cliente (clienta@email.com / Cliente123!)
+npm run db:seed:finance # regenera datos demo de finanzas (proveedores, bancos, facturas, inventario)
 npm run lint          # ESLint
 npx tsc --noEmit      # typecheck
 ```
@@ -69,6 +70,10 @@ npx tsc --noEmit      # typecheck
 - **Muro de inspiración:** fotos finales de citas compartidas, filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo.
 - **Dashboard admin:** agenda día/semana con carrusel de modelos de referencia al abrir una cita, botón "Completar" que sube varias fotos finales (publicadas en el muro) y registra pago del momento ($/Bs con tasa del día), "Nueva cita" para walk-ins (clientes no registrados), "Bloquear tiempo" para marcar horarios no disponibles y "Cancelar" con confirmación para las citas. En `/dashboard/services` hay botón "Eliminar" (solo servicios sin citas ni compras), y en `/dashboard/clients` se pueden eliminar clientes sin movimientos (sin citas, pagos ni lista de espera), tanto desde la lista como desde el panel CRM.
 - **Cuentas por cobrar** en `/dashboard/balances`: total adeudado por cliente (calculado en vivo), historial de pagos y registro/borrado de pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria. La tasa se refresca diariamente con el endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET`), que cron-job.org debe llamar a la URL pública del túnel.
+- **Compras** en `/dashboard/purchases`: facturas a proveedores (de inventario con líneas de producto que registran entradas de stock, o gastos fijos en $/Bs), proveedores y categorías de gasto.
+- **Cuentas por pagar** en `/dashboard/accounts-payable`: facturas pendientes con aviso de vencimiento, registro de pagos a proveedores en $/Bs con tasa BCV (el estado de la factura se recalcula solo) y cuentas bancarias del salón.
+- **Inventario** en `/dashboard/inventory`: existencias valorizadas (costo promedio ponderado), badge "Stock bajo", kardex de movimientos (salidas y ajustes con motivo) y uso de productos por servicio.
+- **Estados financieros** en `/dashboard/financials`: P&L mensual con ingresos por servicio, gastos por categoría y utilidad/pérdida.
 - **Configuración de horario** en `/dashboard/settings`: horario de trabajo configurable por día de la semana.
 - **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección, stats de visitas e ingresos, saldo pendiente con registro de pagos y botón de WhatsApp.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home.
@@ -79,8 +84,8 @@ npx tsc --noEmit      # typecheck
 ```
 src/
   app/                 # rutas (public, (client), (admin))
-    api/               # API routes (auth, appointments, admins, gallery, services, slots, upload…)
-  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, GalleryGrid, PhotoCarousel, NewAppointmentDialog, BlockoutDialog, RegisterPaymentDialog, …)
+    api/               # API routes (auth, appointments, admins, gallery, services, slots, upload, suppliers, bills, inventory, financials…)
+  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, GalleryGrid, PhotoCarousel, NewAppointmentDialog, BlockoutDialog, RegisterPaymentDialog, BillFormDialog, SupplierPaymentDialog, MovementDialog, …)
   db/                  # conexión SQLite + schema Drizzle
   lib/                 # auth, auth.config, authz, calendar, slots, workingHours, availability, time, bcv, upload
 ```
@@ -88,7 +93,7 @@ src/
 ## Roles
 
 - **Cliente:** reserva, próximas citas y pasaporte en `/profile`.
-- **Admin:** agenda día/semana, completar citas con fotos y pago, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar, servicios y horario de trabajo.
+- **Admin:** agenda día/semana, completar citas con fotos y pago, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar, compras, cuentas por pagar, inventario, estados financieros, servicios y horario de trabajo.
 - **Superadmin (`ADMIN_EMAIL`):** gestión de admins en `/dashboard/admin-users`.
 
 ## Mantenimiento

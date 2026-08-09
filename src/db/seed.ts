@@ -30,4 +30,28 @@ const services = [
 console.log("🌱 Seeding services...");
 db.insert(schema.services).values(services).run();
 console.log(`✅ Inserted ${services.length} services`);
+
+const categoryNames = [
+  "Insumos y materiales",
+  "Alquiler",
+  "Servicios básicos",
+  "Nómina",
+  "Marketing y publicidad",
+  "Otros",
+];
+const existingCategories = db.select().from(schema.expenseCategories).all();
+if (existingCategories.length === 0) {
+  db.insert(schema.expenseCategories)
+    .values(
+      categoryNames.map((name) => ({
+        id: crypto.randomUUID(),
+        name,
+        isActive: 1,
+        createdAt: Math.floor(Date.now() / 1000),
+      }))
+    )
+    .run();
+  console.log(`✅ Inserted ${categoryNames.length} expense categories`);
+}
+
 console.log("✨ Seed complete!");
