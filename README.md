@@ -33,6 +33,7 @@ Copiar `.env.template` a `.env` y completar:
 | `NEXTAUTH_SECRET` | Secreto para firmar sesiones |
 | `NEXTAUTH_URL` | URL pública de la app (en producción) |
 | `ADMIN_EMAIL` | Email del admin principal (superadmin) |
+| `CRON_SECRET` | Secreto para el refresh diario de la tasa BCV (cron-job.org) |
 | `NEXT_PUBLIC_SALON_NAME` | Nombre mostrado del salón |
 
 > **Nota:** Auth.js v5 lee las credenciales como `AUTH_<PROVIDER>_ID` / `AUTH_<PROVIDER>_SECRET`. No usar los nombres antiguos `GOOGLE_CLIENT_ID`.
@@ -66,8 +67,8 @@ npx tsc --noEmit      # typecheck
 
 - **Reserva en 3 pasos:** elige servicio, horario y confirmas. En el último paso puedes subir fotos de referencia o elegir modelos del muro de inspiración.
 - **Muro de inspiración:** fotos finales de citas compartidas, filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo.
-- **Dashboard admin:** agenda día/semana con carrusel de modelos de referencia al abrir una cita, botón "Completar" que sube varias fotos finales (publicadas en el muro) y registra pago del momento ($/Bs con tasa del día), "Nueva cita" para walk-ins (clientes no registrados) y "Bloquear tiempo" para marcar horarios no disponibles.
-- **Cuentas por cobrar** en `/dashboard/balances`: total adeudado por cliente (calculado en vivo), historial de pagos y registro/borrado de pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria.
+- **Dashboard admin:** agenda día/semana con carrusel de modelos de referencia al abrir una cita, botón "Completar" que sube varias fotos finales (publicadas en el muro) y registra pago del momento ($/Bs con tasa del día), "Nueva cita" para walk-ins (clientes no registrados), "Bloquear tiempo" para marcar horarios no disponibles y "Cancelar" con confirmación para las citas. En `/dashboard/services` hay botón "Eliminar" (solo servicios sin citas ni compras), y en `/dashboard/clients` se pueden eliminar clientes sin movimientos (sin citas, pagos ni lista de espera), tanto desde la lista como desde el panel CRM.
+- **Cuentas por cobrar** en `/dashboard/balances`: total adeudado por cliente (calculado en vivo), historial de pagos y registro/borrado de pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria. La tasa se refresca diariamente con el endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET`), que cron-job.org debe llamar a la URL pública del túnel.
 - **Configuración de horario** en `/dashboard/settings`: horario de trabajo configurable por día de la semana.
 - **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección, stats de visitas e ingresos, saldo pendiente con registro de pagos y botón de WhatsApp.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home.

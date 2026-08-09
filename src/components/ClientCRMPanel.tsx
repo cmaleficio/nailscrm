@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type ClientData = {
   id: string;
@@ -32,6 +33,7 @@ type Props = {
   appointmentDate?: string;
   appointmentTime?: string;
   onClose: () => void;
+  onDeleted?: () => void;
 };
 
 type Purchase = {
@@ -49,6 +51,7 @@ export function ClientCRMPanel({
   appointmentDate,
   appointmentTime,
   onClose,
+  onDeleted,
 }: Props) {
   const [client, setClient] = useState<ClientData | null>(null);
   const [techNotes, setTechNotes] = useState("");
@@ -64,6 +67,9 @@ export function ClientCRMPanel({
   const [editingContact, setEditingContact] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -192,6 +198,25 @@ export function ClientCRMPanel({
       setEditingContact(false);
     } finally {
       setContactSaving(false);
+    }
+  }
+
+  async function confirmDeleteClient() {
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/clients/${clientId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar el cliente");
+      }
+      setConfirmDelete(false);
+      onDeleted?.();
+      onClose();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Error inesperado");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -504,6 +529,13 @@ export function ClientCRMPanel({
           </a>
         )}
 
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="mt-3 w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+        >
+          Eliminar cliente
+        </button>
+
       {showPayment && (
         <RegisterPaymentDialog
           clientId={client.id}
@@ -519,6 +551,19 @@ export function ClientCRMPanel({
                 setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "" });
               });
           }}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Eliminar cliente"
+          message={`¿Eliminar a ${client.name}? Solo se permite si no tiene citas, pagos ni lista de espera.`}
+          confirmLabel="Eliminar"
+          danger
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={confirmDeleteClient}
+          onClose={() => setConfirmDelete(false)}
         />
       )}
       </div>

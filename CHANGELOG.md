@@ -29,6 +29,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Cuentas por cobrar: sección `/dashboard/balances` con total adeudado, historial de pagos y registro/borrado de pagos.
 - Pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria.
 - Saldo de cada cliente visible en el panel CRM con registro de pagos.
+- Tasa BCV más robusta: la extracción ahora ancla en `<div id="dolar">` de la home de bcv.org.ve (independiente del orden de monedas) y también captura la fecha valor. Nuevo endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET` en header `Authorization: Bearer` o `?secret=`) que fuerza `refreshTodayRate()` (inserta/actualiza la fila de hoy) para que cron-job.org lo llame a diario vía túnel.
+- Botón "Cancelar" con confirmación para las citas en la agenda (vistas día y semana); las citas completadas/canceladas ya no se pueden cancelar (400).
+- Eliminar clientes desde la lista y desde el panel CRM (`DELETE /api/clients/[id]`): solo si no tienen citas, pagos/cuentas por cobrar ni lista de espera; los usuarios con rol admin están protegidos (403).
+- Eliminar servicios (`DELETE /api/services/[id]`) además de desactivarlos: solo si no tienen citas ni compras asociadas (de lo contrario se sugiere desactivar).
 
 ### Corregido
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.

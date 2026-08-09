@@ -141,7 +141,10 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - rate: real, not null
 - source: text, default 'bcv' (bcv | manual)
 - created_at: integer (timestamp)
-- La tasa se obtiene SOLO de bcv.org.ve (fetch HTML → .txt en tmp → regex) y se cachea por día.
+- La tasa se obtiene SOLO de bcv.org.ve (fetch HTML de la home → .txt en tmp → regex) y se cachea por día.
+- El fetch usa `node:https` con `rejectUnauthorized: false` (el certificado del BCV no lo valida el trust store de Node; equivale a `curl -sk` del script original). Timeout 10s y sigue redirects.
+- La extracción ancla en `<div id="dolar">` (independiente del orden de monedas): regex `id="dolar"[\s\S]*?<strong class="strong-tb">([\d.,]+)<\/strong>` + `normalizeBcvNumber` (quita puntos de miles y cambia coma a punto). La fecha valor se extrae de `date-display-single` `content="YYYY-MM-DDTHH:mm:ss-04:00"`.
+- Refresh diario vía cron externo: `GET /api/exchange-rate/refresh` (admin con sesión o `CRON_SECRET` en header `Authorization: Bearer` o query `?secret=`) fuerza `refreshTodayRate()` (inserta o actualiza la fila de hoy con `onConflictDoUpdate`). cron-job.org debe llamar la URL pública del túnel a diario.
 
 ## 🗺️ Estructura de Rutas
 
@@ -156,7 +159,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
 - `/dashboard/balances` → Cuentas por cobrar (total adeudado, pagos por cliente)
 - `/dashboard/settings` → Configuración (horario de trabajo por día de la semana)
-- `/dashboard/services` → Gestión de servicios (+ fotos del servicio)
+- `/dashboard/services` → Gestión de servicios (+ fotos del servicio, eliminar si no tiene uso)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
 - `/profile` → Portal de cliente (pasaporte de uñas + historial)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
@@ -177,6 +180,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - BlockoutDialog: crea bloques "no disponible" desde la agenda
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
 - SettingsContent: editor del horario de trabajo por día de la semana
+- ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)
 
 ## 🚀 Comandos
 - `npm run dev` → desarrollo
@@ -196,3 +200,8 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - Lectura bidireccional de Google Calendar
 - API oficial de WhatsApp Business
 - Despliegue en la nube (solo local + Cloudflare Tunnel)
+
+## 🗑️ Reglas de borrado
+- Eliminar cliente (`DELETE /api/clients/[id]`, admin): solo si NO tiene citas (`appointments.client_id`), pagos/cuentas por cobrar (`payments.user_id`) ni filas en `waitlist`. Los usuarios con `role='admin'` no se eliminan (403). Las filas de Auth.js (`account`, `session`) se borran por CASCADE.
+- Eliminar servicio (`DELETE /api/services/[id]`, admin): solo si NO tiene citas (`appointments.service_id`) ni `service_purchases` (400 + sugerir desactivar). Las fotos (`service_photos`) se borran por CASCADE.
+- Cancelar cita (admin): `PATCH /api/appointments/[id]` con `status:'cancelled'` (borra los eventos de Google Calendar); las citas `completed`/`cancelled` no se pueden cancelar (400). En la agenda, cancelar pide confirmación (`ConfirmDialog`).

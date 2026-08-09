@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ClientCRMPanel } from "@/components/ClientCRMPanel";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Client = {
   id: string;
@@ -26,6 +27,9 @@ export function ClientsContent() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState<Client | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const fetchClients = useCallback(async (query: string) => {
     const params = new URLSearchParams();
@@ -60,6 +64,25 @@ export function ClientsContent() {
       setError(err instanceof Error ? err.message : "Error inesperado");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/clients/${deleting.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar el cliente");
+      }
+      setDeleting(null);
+      await fetchClients(q);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -142,30 +165,43 @@ export function ClientsContent() {
 
       <div className="space-y-3">
         {clients.map((c) => (
-          <button
+          <div
             key={c.id}
-            onClick={() => setSelected(c)}
-            className="w-full rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-pink-main hover:shadow-md transition-all"
+            className="w-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-pink-main hover:shadow-md transition-all"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <button
+                onClick={() => setSelected(c)}
+                className="min-w-0 flex-1 text-left"
+              >
                 <p className="font-medium text-gray-900">{c.name}</p>
                 <p className="text-sm text-gray-500 truncate">{c.email}</p>
                 <p className="text-sm text-gray-500">{c.phone ?? "Sin teléfono"}</p>
                 {c.address && <p className="text-sm text-gray-400 truncate">{c.address}</p>}
-              </div>
-              <div className="flex shrink-0 gap-3 text-center">
-                <div className="rounded-lg bg-pink-light px-3 py-1.5">
-                  <p className="text-sm font-bold text-gray-900">{c.totalVisits ?? 0}</p>
-                  <p className="text-[10px] text-gray-500">Visitas</p>
+              </button>
+              <div className="flex shrink-0 items-center gap-3">
+                <div className="flex gap-3 text-center">
+                  <div className="rounded-lg bg-pink-light px-3 py-1.5">
+                    <p className="text-sm font-bold text-gray-900">{c.totalVisits ?? 0}</p>
+                    <p className="text-[10px] text-gray-500">Visitas</p>
+                  </div>
+                  <div className="rounded-lg bg-pink-light px-3 py-1.5">
+                    <p className="text-sm font-bold text-gray-900">${(c.totalRevenue ?? 0).toFixed(2)}</p>
+                    <p className="text-[10px] text-gray-500">Ingresos</p>
+                  </div>
                 </div>
-                <div className="rounded-lg bg-pink-light px-3 py-1.5">
-                  <p className="text-sm font-bold text-gray-900">${(c.totalRevenue ?? 0).toFixed(2)}</p>
-                  <p className="text-[10px] text-gray-500">Ingresos</p>
-                </div>
+                <button
+                  onClick={() => {
+                    setDeleting(c);
+                    setDeleteError("");
+                  }}
+                  className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                >
+                  Eliminar
+                </button>
               </div>
             </div>
-          </button>
+          </div>
         ))}
         {clients.length === 0 && (
           <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
@@ -178,6 +214,23 @@ export function ClientsContent() {
         <ClientCRMPanel
           clientId={selected.id}
           onClose={() => setSelected(null)}
+          onDeleted={() => {
+            setSelected(null);
+            fetchClients(q);
+          }}
+        />
+      )}
+
+      {deleting && (
+        <ConfirmDialog
+          title="Eliminar cliente"
+          message={`¿Eliminar a ${deleting.name}? Solo se permite si no tiene citas, pagos ni lista de espera.`}
+          confirmLabel="Eliminar"
+          danger
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={confirmDelete}
+          onClose={() => setDeleting(null)}
         />
       )}
     </div>

@@ -39,6 +39,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
   }
 
+  if (status === "cancelled" && (appointment.status === "completed" || appointment.status === "cancelled")) {
+    return NextResponse.json(
+      { error: "Esta cita ya no se puede cancelar" },
+      { status: 400 }
+    );
+  }
+
   if (typeof startTime === "number" && startTime !== appointment.startTime) {
     const service = db
       .select()

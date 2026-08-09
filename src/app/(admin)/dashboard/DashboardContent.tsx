@@ -7,6 +7,7 @@ import { ReschedulePicker } from "@/components/ReschedulePicker";
 import { CompleteAppointmentDialog } from "@/components/CompleteAppointmentDialog";
 import { NewAppointmentDialog } from "@/components/NewAppointmentDialog";
 import { BlockoutDialog } from "@/components/BlockoutDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { dateToDayStartTs } from "@/lib/time";
 
 type Appointment = {
@@ -60,6 +61,8 @@ export function DashboardContent({ today }: Props) {
   const [weekData, setWeekData] = useState<Record<string, Appointment[]>>({});
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [completing, setCompleting] = useState<Appointment | null>(null);
+  const [cancelling, setCancelling] = useState<Appointment | null>(null);
+  const [cancellingBusy, setCancellingBusy] = useState(false);
   const [showNewAppointment, setShowNewAppointment] = useState(false);
   const [showBlockout, setShowBlockout] = useState(false);
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
@@ -116,11 +119,14 @@ export function DashboardContent({ today }: Props) {
   }
 
   async function handleCancel(id: string) {
+    setCancellingBusy(true);
     await fetch(`/api/appointments/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancelled" }),
     });
+    setCancellingBusy(false);
+    setCancelling(null);
     refreshAll();
   }
 
@@ -243,7 +249,7 @@ export function DashboardContent({ today }: Props) {
                   appointmentDate={dateStr(appt.startTime)}
                   appointmentTime={timeStr(appt.startTime)}
                   onComplete={() => handleComplete(appt)}
-                  onCancel={handleCancel}
+                  onCancel={() => setCancelling(appt)}
                   onSelect={() => handleSelectAppointment(appt)}
                   onReschedule={() => setRescheduling(appt)}
                 />
@@ -328,6 +334,14 @@ export function DashboardContent({ today }: Props) {
                             >
                               Ver
                             </button>
+                            {appt.status === "pending" || appt.status === "confirmed" ? (
+                              <button
+                                onClick={() => setCancelling(appt)}
+                                className="rounded bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-100"
+                              >
+                                Cancelar
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       ))}
@@ -353,6 +367,18 @@ export function DashboardContent({ today }: Props) {
         />
       )}
 
+      {cancelling && (
+        <ConfirmDialog
+          title="Cancelar cita"
+          message={`¿Cancelar la cita de ${cancelling.clientName}? Se eliminará también del calendario.`}
+          confirmLabel="Cancelar cita"
+          danger
+          busy={cancellingBusy}
+          onConfirm={() => handleCancel(cancelling.id)}
+          onClose={() => setCancelling(null)}
+        />
+      )}
+
       {selectedClientId && selectedAppointment && (
         <ClientCRMPanel
           clientId={selectedClientId}
@@ -363,6 +389,11 @@ export function DashboardContent({ today }: Props) {
           onClose={() => {
             setSelectedClientId(null);
             setSelectedAppointment(null);
+          }}
+          onDeleted={() => {
+            setSelectedClientId(null);
+            setSelectedAppointment(null);
+            refreshAll();
           }}
         />
       )}

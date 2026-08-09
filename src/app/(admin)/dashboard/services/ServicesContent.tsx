@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Service = {
   id: string;
@@ -36,6 +37,9 @@ export function ServicesContent() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Service | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const fetchServices = useCallback(async () => {
     const res = await fetch("/api/services?includeInactive=1");
@@ -134,6 +138,26 @@ export function ServicesContent() {
       await fetchServices();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
+    }
+  }
+
+  async function confirmDeleteService() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/services/${deleting.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar el servicio");
+      }
+      setDeleting(null);
+      setSuccess("Servicio eliminado");
+      await fetchServices();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Error inesperado");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -431,6 +455,15 @@ export function ServicesContent() {
                     >
                       {service.isActive === 1 ? "Desactivar" : "Activar"}
                     </button>
+                    <button
+                      onClick={() => {
+                        setDeleting(service);
+                        setDeleteError("");
+                      }}
+                      className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                    >
+                      Eliminar
+                    </button>
                   </div>
                 </div>
                 <p className="mt-2 text-sm text-gray-600">
@@ -480,6 +513,18 @@ export function ServicesContent() {
           </div>
         )}
       </div>
+      {deleting && (
+        <ConfirmDialog
+          title="Eliminar servicio"
+          message={`¿Eliminar el servicio "${deleting.name}"? Esta acción no se puede deshacer.`}
+          confirmLabel="Eliminar"
+          danger
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={confirmDeleteService}
+          onClose={() => setDeleting(null)}
+        />
+      )}
     </div>
   );
 }
