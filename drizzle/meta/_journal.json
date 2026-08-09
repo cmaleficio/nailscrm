@@ -50,6 +50,13 @@
       "when": 1786168804258,
       "tag": "0006_working-hours-payments-exchange-rates",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786314170868,
+      "tag": "0007_purchases-inventory-financials",
+      "breakpoints": true
     }
   ]
 }
