@@ -39,9 +39,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
   }
 
-  if (status === "cancelled" && (appointment.status === "completed" || appointment.status === "cancelled")) {
+  if (status === "cancelled") {
     return NextResponse.json(
-      { error: "Esta cita ya no se puede cancelar" },
+      { error: "Usa el método DELETE para cancelar citas" },
       { status: 400 }
     );
   }
@@ -77,24 +77,6 @@ export async function PATCH(
           appointment.googleEventIdAdmin,
           startTime,
           endTime
-        );
-      }
-    }
-  }
-
-  if (status === "cancelled" && appointment.status !== "cancelled") {
-    if (appointment.googleEventIdClient) {
-      await deleteEventOnPrimaryCalendar(
-        appointment.clientId,
-        appointment.googleEventIdClient
-      );
-    }
-    if (appointment.googleEventIdAdmin) {
-      const adminUserId = await getAdminUserId();
-      if (adminUserId) {
-        await deleteEventOnPrimaryCalendar(
-          adminUserId,
-          appointment.googleEventIdAdmin
         );
       }
     }
@@ -159,4 +141,89 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const appointment = db
+    .select()
+    .from(schema.appointments)
+    .where(eq(schema.appointments.id, id))
+    .get();
+
+  if (!appointment) {
+    return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+  }
+
+  const admin = await isAdmin(session);
+  if (!admin && appointment.clientId !== session.user.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  if (appointment.status === "completed") {
+    return NextResponse.json(
+      { error: "No se puede cancelar una cita completada" },
+      { status: 400 }
+    );
+  }
+
+  const purchase = db
+    .select()
+    .from(schema.servicePurchases)
+    .where(eq(schema.servicePurchases.appointmentId, id))
+    .get();
+
+  const photos = db
+    .select({ url: schema.appointmentPhotos.url })
+    .from(schema.appointmentPhotos)
+    .where(eq(schema.appointmentPhotos.appointmentId, id))
+    .all();
+
+  db.insert(schema.cancelledAppointments)
+    .values({
+      id: crypto.randomUUID(),
+      appointmentId: appointment.id,
+      clientId: appointment.clientId,
+      serviceId: appointment.serviceId,
+      serviceName: purchase?.serviceName ?? "",
+      servicePrice: purchase?.servicePrice ?? 0,
+      startTime: appointment.startTime ?? null,
+      endTime: appointment.endTime ?? null,
+      referencePhotoUrls: photos.length
+        ? JSON.stringify(photos.map((p) => p.url))
+        : null,
+      cancelledBy: session.user.id,
+      cancelledAt: Math.floor(Date.now() / 1000),
+      reason: null,
+    })
+    .run();
+
+  if (appointment.googleEventIdClient) {
+    await deleteEventOnPrimaryCalendar(
+      appointment.clientId,
+      appointment.googleEventIdClient
+    );
+  }
+  if (appointment.googleEventIdAdmin) {
+    const adminUserId = await getAdminUserId();
+    if (adminUserId) {
+      await deleteEventOnPrimaryCalendar(
+        adminUserId,
+        appointment.googleEventIdAdmin
+      );
+    }
+  }
+
+  db.delete(schema.appointments).where(eq(schema.appointments.id, id)).run();
+
+  return NextResponse.json({ success: true, deleted: true });
 }
