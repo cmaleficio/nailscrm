@@ -54,7 +54,7 @@ export function DashboardContent({ today }: Props) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
-  const [view, setView] = useState<"day" | "week">("day");
+  const [view, setView] = useState<"day" | "week" | "cancelled">("day");
   const [weekDates, setWeekDates] = useState<Date[]>(() =>
     datesOfWeek(new Date())
   );
@@ -67,6 +67,18 @@ export function DashboardContent({ today }: Props) {
   const [showBlockout, setShowBlockout] = useState(false);
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
   const [weekBlockouts, setWeekBlockouts] = useState<Record<string, Blockout[]>>({});
+  const [cancelledList, setCancelledList] = useState<
+    {
+      id: string;
+      clientId: string;
+      serviceName: string;
+      servicePrice: number;
+      startTime: number | null;
+      cancelledBy: string;
+      cancelledAt: number;
+      clientName: string;
+    }[]
+  >([]);
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -81,10 +93,17 @@ export function DashboardContent({ today }: Props) {
     setBlockouts(Array.isArray(data) ? data : []);
   }, [today]);
 
+  const fetchCancelled = useCallback(async () => {
+    const res = await fetch("/api/appointments/cancelled");
+    const data = await res.json();
+    setCancelledList(Array.isArray(data) ? data : []);
+  }, []);
+
   useEffect(() => {
     fetchAppointments();
     fetchBlockouts();
-  }, [fetchAppointments, fetchBlockouts]);
+    fetchCancelled();
+  }, [fetchAppointments, fetchBlockouts, fetchCancelled]);
 
   const fetchWeek = useCallback(async (dates: Date[]) => {
     const entries: Record<string, Appointment[]> = {};
@@ -120,11 +139,7 @@ export function DashboardContent({ today }: Props) {
 
   async function handleCancel(id: string) {
     setCancellingBusy(true);
-    await fetch(`/api/appointments/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancelled" }),
-    });
+    await fetch(`/api/appointments/${id}`, { method: "DELETE" });
     setCancellingBusy(false);
     setCancelling(null);
     refreshAll();
@@ -133,6 +148,7 @@ export function DashboardContent({ today }: Props) {
   function refreshAll() {
     fetchAppointments();
     fetchBlockouts();
+    fetchCancelled();
     if (view === "week") fetchWeek(weekDates);
   }
 
@@ -181,7 +197,7 @@ export function DashboardContent({ today }: Props) {
       </div>
 
       <div className="mb-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
-        {(["day", "week"] as const).map((v) => (
+        {(["day", "week", "cancelled"] as const).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -191,7 +207,7 @@ export function DashboardContent({ today }: Props) {
                 : "text-gray-500 hover:bg-gray-50"
             }`}
           >
-            {v === "day" ? "Día" : "Semana"}
+            {v === "day" ? "Día" : v === "week" ? "Semana" : "Canceladas"}
           </button>
         ))}
       </div>
@@ -354,6 +370,64 @@ export function DashboardContent({ today }: Props) {
         </div>
       )}
 
+      {view === "cancelled" && (
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-gray-500">
+            Historial de citas canceladas
+          </h2>
+          {cancelledList.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay citas canceladas</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Servicio</th>
+                    <th className="px-4 py-3">Precio</th>
+                    <th className="px-4 py-3">Canceló</th>
+                    <th className="px-4 py-3">Cuándo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {cancelledList.map((c) => (
+                    <tr key={c.id}>
+                      <td className="px-4 py-3">
+                        {c.startTime
+                          ? new Intl.DateTimeFormat("es-ES", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                              timeZone: "America/Caracas",
+                            }).format(new Date(c.startTime * 1000))
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {c.clientName}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{c.serviceName}</td>
+                      <td className="px-4 py-3">${c.servicePrice.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {c.cancelledBy === c.clientId ? "Cliente" : "Admin"}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {new Intl.DateTimeFormat("es-ES", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                          timeZone: "America/Caracas",
+                        }).format(new Date(c.cancelledAt * 1000))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {rescheduling && (
         <ReschedulePicker
           appointmentId={rescheduling.id}
@@ -370,7 +444,7 @@ export function DashboardContent({ today }: Props) {
       {cancelling && (
         <ConfirmDialog
           title="Cancelar cita"
-          message={`¿Cancelar la cita de ${cancelling.clientName}? Se eliminará también del calendario.`}
+          message={`¿Cancelar la cita de ${cancelling.clientName}? Se eliminará y quedará registrada en el historial de canceladas.`}
           confirmLabel="Cancelar cita"
           danger
           busy={cancellingBusy}
