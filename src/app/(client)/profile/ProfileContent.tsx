@@ -49,8 +49,8 @@ export function ProfileContent({ user, appointments, upcomingAppointments }: Pro
     setCancellingId(id);
     setCancelError("");
     try {
-      const res = await fetch(`/api/appointments/${id}/cancel`, {
-        method: "POST",
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: "DELETE",
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
