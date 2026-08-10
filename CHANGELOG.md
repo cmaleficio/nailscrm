@@ -44,6 +44,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 
 ### Corregido
 - Avatar de Google en el `Header`: `next/image` fallaba con 500 porque el host `lh3.googleusercontent.com` no estaba configurado en `next.config.ts`. Se añadió el `remotePatterns` correspondiente.
+- Fotos de los seeds (`picsum.photos`) en las tarjetas de servicio: `next/image` fallaba con 500 porque el host no estaba en `images.remotePatterns` de `next.config.ts`. Se añadió el patrón correspondiente.
 - Lint: eliminados los 21 warnings pre-existentes (variables sin usar, dependencia faltante en un `useEffect` y migración de todas las etiquetas `<img>` a `next/image` con `fill`). Nota visual: el muro de inspiración y los modelos del booking ahora muestran imágenes en celdas cuadradas uniformes (`aspect-square`).
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.
 - Sesión que se cerraba y 401 en `POST /api/appointments`: errores de configuración de.env.
