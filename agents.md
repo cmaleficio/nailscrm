@@ -74,6 +74,22 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - google_event_id_client: text
 - google_event_id_admin: text
 - created_at: integer (timestamp)
+- Cancelar una cita la **elimina definitivamente** (hard delete, `DELETE /api/appointments/[id]`) tras archivar un snapshot en `cancelled_appointments`; el status `cancelled` ya no se genera para citas nuevas.
+
+### Tabla: cancelled_appointments (archivo de citas canceladas)
+- id: text, primary key
+- appointment_id: text (id original de la cita)
+- client_id: text, foreign key → users.id
+- service_id: text, foreign key → services.id
+- service_name: text, not null (snapshot de service_purchases)
+- service_price: real, not null (snapshot de service_purchases)
+- start_time: integer (timestamp)
+- end_time: integer (timestamp)
+- reference_photo_urls: text (JSON array de urls de appointment_photos)
+- cancelled_by: text, foreign key → users.id (quién canceló: cliente o admin)
+- cancelled_at: integer (timestamp)
+- reason: text
+- Se llena al cancelar (admin o propietario); visible en la pestaña "Canceladas" de la agenda.
 
 ### Tabla: appointment_photos
 - id: text, primary key
@@ -252,7 +268,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `/review/[id]` → Formulario de reseña post-cita
 
 ### Protegidas (requieren auth)
-- `/dashboard` → Panel admin (agenda del día)
+- `/dashboard` → Panel admin (agenda del día/semana + pestaña "Canceladas" con el archivo de citas canceladas)
 - `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
 - `/dashboard/balances` → Cuentas por cobrar (total adeudado, pagos por cliente)
 - `/dashboard/purchases` → Compras (facturas, proveedores y categorías de gasto)
@@ -314,7 +330,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 ## 🗑️ Reglas de borrado
 - Eliminar cliente (`DELETE /api/clients/[id]`, admin): solo si NO tiene citas (`appointments.client_id`), pagos/cuentas por cobrar (`payments.user_id`) ni filas en `waitlist`. Los usuarios con `role='admin'` no se eliminan (403). Las filas de Auth.js (`account`, `session`) se borran por CASCADE.
 - Eliminar servicio (`DELETE /api/services/[id]`, admin): solo si NO tiene citas (`appointments.service_id`) ni `service_purchases` (400 + sugerir desactivar). Las fotos (`service_photos`) se borran por CASCADE.
-- Cancelar cita (admin): `PATCH /api/appointments/[id]` con `status:'cancelled'` (borra los eventos de Google Calendar); las citas `completed`/`cancelled` no se pueden cancelar (400). En la agenda, cancelar pide confirmación (`ConfirmDialog`).
+- Cancelar cita (`DELETE /api/appointments/[id]`, admin o propietario): borra la cita **definitivamente** tras archivar el snapshot en `cancelled_appointments` y borrar los eventos de Google Calendar. Las citas `completed` no se pueden cancelar (400). El `PATCH` con `status:'cancelled'` devuelve 400 ("usa DELETE"). En la agenda, cancelar pide confirmación (`ConfirmDialog`); las canceladas se ven en la pestaña "Canceladas" de la agenda.
 - Eliminar proveedor (`DELETE /api/suppliers/[id]`, admin): solo si NO tiene facturas (`bills.supplier_id`).
 - Eliminar categoría (`DELETE /api/expense-categories/[id]`, admin): solo si NO tiene facturas (`bills.category_id`).
 - Eliminar banco (`DELETE /api/bank-accounts/[id]`, admin): solo si NO tiene pagos (`supplier_payments.bank_account_id`); si los tiene se sugiere desactivarlo.

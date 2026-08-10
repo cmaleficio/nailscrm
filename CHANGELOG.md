@@ -39,6 +39,9 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Estados financieros en `/dashboard/financials`: P&L mensual (ingresos, gastos, utilidad/pérdida, servicios y facturas) con desglose de ingresos por servicio y gastos por categoría.
 - Seed regenerable de finanzas (`npm run db:seed:finance`): proveedores, bancos ($/Bs), 4 items de inventario con entradas vía factura F-1001 (parcialmente pagada), factura de alquiler en Bs y uso de productos por servicio. Re-ejecutable: borra y regenera los datos de finanzas.
 
+### Cambiado
+- Cancelar una cita ahora la elimina definitivamente (hard delete, `DELETE /api/appointments/[id]` desde el dashboard y el perfil del cliente) y archiva un snapshot en la nueva tabla `cancelled_appointments`, visible en la pestaña "Canceladas" de la agenda. El `PATCH` con `status: 'cancelled'` y el endpoint `/api/appointments/[id]/cancel` quedan obsoletos.
+
 ### Corregido
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.
 - Sesión que se cerraba y 401 en `POST /api/appointments`: errores de configuración de.env.
