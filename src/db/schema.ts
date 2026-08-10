@@ -295,3 +295,25 @@ export const serviceProducts = sqliteTable(
   },
   (t) => [uniqueIndex("service_products_unique_idx").on(t.serviceId, t.inventoryItemId)]
 );
+
+export const cancelledAppointments = sqliteTable(
+  "cancelled_appointments",
+  {
+    id: text("id").primaryKey(),
+    appointmentId: text("appointment_id"),
+    clientId: text("client_id").notNull().references(() => users.id),
+    serviceId: text("service_id").references(() => services.id),
+    serviceName: text("service_name").notNull(),
+    servicePrice: real("service_price").notNull().default(0),
+    startTime: integer("start_time"),
+    endTime: integer("end_time"),
+    referencePhotoUrls: text("reference_photo_urls"),
+    cancelledBy: text("cancelled_by").notNull().references(() => users.id),
+    cancelledAt: integer("cancelled_at").notNull(),
+    reason: text("reason"),
+  },
+  (t) => [
+    index("cancelled_appointments_client_idx").on(t.clientId),
+    index("cancelled_appointments_cancelled_at_idx").on(t.cancelledAt),
+  ]
+);

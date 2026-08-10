@@ -57,6 +57,13 @@
       "when": 1786314170868,
       "tag": "0007_purchases-inventory-financials",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786328647415,
+      "tag": "0008_lively_iron_fist",
+      "breakpoints": true
     }
   ]
 }
