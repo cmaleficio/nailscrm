@@ -43,6 +43,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Cancelar una cita ahora la elimina definitivamente (hard delete, `DELETE /api/appointments/[id]` desde el dashboard y el perfil del cliente) y archiva un snapshot en la nueva tabla `cancelled_appointments`, visible en la pestaña "Canceladas" de la agenda. El `PATCH` con `status: 'cancelled'` y el endpoint `/api/appointments/[id]/cancel` quedan obsoletos.
 
 ### Corregido
+- Avatar de Google en el `Header`: `next/image` fallaba con 500 porque el host `lh3.googleusercontent.com` no estaba configurado en `next.config.ts`. Se añadió el `remotePatterns` correspondiente.
 - Lint: eliminados los 21 warnings pre-existentes (variables sin usar, dependencia faltante en un `useEffect` y migración de todas las etiquetas `<img>` a `next/image` con `fill`). Nota visual: el muro de inspiración y los modelos del booking ahora muestran imágenes en celdas cuadradas uniformes (`aspect-square`).
 - Configuración de Auth.js v5: `.env` usa `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (nombres v5) en lugar de `GOOGLE_CLIENT_ID`. Uso de Google ahora inicia sesión correctamente.
 - Sesión que se cerraba y 401 en `POST /api/appointments`: errores de configuración de.env.
