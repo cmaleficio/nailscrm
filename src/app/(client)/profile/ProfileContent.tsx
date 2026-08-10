@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { StatsBanner } from "@/components/StatsBanner";
@@ -70,9 +71,11 @@ export function ProfileContent({ user, appointments, upcomingAppointments }: Pro
       {/* Header */}
       <div className="mb-8 text-center">
         {user.image && (
-          <img
+          <Image
             src={user.image}
             alt={user.name}
+            width={80}
+            height={80}
             className="mx-auto mb-3 h-20 w-20 rounded-full object-cover"
           />
         )}
@@ -133,9 +136,11 @@ export function ProfileContent({ user, appointments, upcomingAppointments }: Pro
                 className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
               >
                 {appt.referencePhotoUrl && (
-                  <img
+                  <Image
                     src={appt.referencePhotoUrl}
                     alt="Referencia"
+                    width={48}
+                    height={48}
                     className="h-12 w-12 rounded-lg object-cover"
                   />
                 )}
@@ -246,11 +251,15 @@ export function ProfileContent({ user, appointments, upcomingAppointments }: Pro
                   </p>
 
                   {appt.finalPhotoUrl && (
-                    <img
-                      src={appt.finalPhotoUrl}
-                      alt="Resultado final"
-                      className="mt-3 w-full rounded-lg object-cover max-h-48"
-                    />
+                    <div className="relative mt-3 aspect-[4/3] w-full max-h-48 overflow-hidden rounded-lg">
+                      <Image
+                        fill
+                        sizes="(max-width: 640px) 100vw, 512px"
+                        src={appt.finalPhotoUrl}
+                        alt="Resultado final"
+                        className="object-cover"
+                      />
+                    </div>
                   )}
 
                   {appt.reviewRating && (

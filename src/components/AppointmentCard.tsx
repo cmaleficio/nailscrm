@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 type Props = {
   id: string;
   startTime: number;
@@ -8,8 +10,6 @@ type Props = {
   serviceName: string;
   referencePhotoUrl: string | null;
   status: string;
-  appointmentDate: string;
-  appointmentTime: string;
   onComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onSelect: (clientId: string) => void;
@@ -24,8 +24,6 @@ export function AppointmentCard({
   serviceName,
   referencePhotoUrl,
   status,
-  appointmentDate,
-  appointmentTime,
   onComplete,
   onCancel,
   onSelect,
@@ -45,9 +43,11 @@ export function AppointmentCard({
       </div>
 
       {referencePhotoUrl && (
-        <img
+        <Image
           src={referencePhotoUrl}
           alt="Referencia"
+          width={48}
+          height={48}
           className="h-12 w-12 rounded-lg object-cover"
         />
       )}

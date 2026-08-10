@@ -2,13 +2,6 @@
 
 import { useState, useEffect } from "react";
 
-type Slot = {
-  hour: number;
-  minute: number;
-  label: string;
-  available: boolean;
-};
-
 type Props = {
   appointmentId: string;
   serviceId: string;

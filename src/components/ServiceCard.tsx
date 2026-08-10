@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 type ServiceCardProps = {
   id: string;
@@ -30,7 +31,15 @@ export function ServiceCard({
       <div className="relative overflow-hidden rounded-xl bg-gray-soft">
         {photo ? (
           <>
-            <img src={photo.url} alt={name} className="h-36 w-full object-cover" />
+            <div className="relative h-36">
+              <Image
+                fill
+                sizes="(max-width: 640px) 100vw, 33vw"
+                src={photo.url}
+                alt={name}
+                className="object-cover"
+              />
+            </div>
             {photos.length > 1 && (
               <>
                 <button

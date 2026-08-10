@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { todayStr } from "@/lib/time";
 
 type Props = {
@@ -149,7 +150,7 @@ export function CompleteAppointmentDialog({
             <div className="mt-3 flex flex-wrap gap-2">
               {previews.map((p, i) => (
                 <div key={p} className="relative">
-                  <img src={p} alt={`Foto ${i + 1}`} className="h-16 w-16 rounded-lg object-cover" />
+                  <Image src={p} alt={`Foto ${i + 1}`} width={64} height={64} className="h-16 w-16 rounded-lg object-cover" />
                   <button
                     type="button"
                     onClick={() => removeAt(i)}

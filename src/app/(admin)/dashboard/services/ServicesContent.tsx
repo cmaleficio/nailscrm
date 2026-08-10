@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type Service = {
@@ -473,9 +474,11 @@ export function ServicesContent() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {service.photos.map((photo) => (
                       <div key={photo.id} className="relative">
-                        <img
+                        <Image
                           src={photo.url}
                           alt={service.name}
+                          width={64}
+                          height={64}
                           className="h-16 w-16 rounded-lg object-cover"
                         />
                         <button

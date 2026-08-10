@@ -75,15 +75,6 @@ const actualClientId =
     .get()?.id ??
   clientId;
 
-const actualAdminId =
-  existingAdmin?.id ??
-  db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.email, "admin@nails.com"))
-    .get()?.id ??
-  adminId;
-
 // ── Appointments ──
 const acrylicId = getServiceId("Acrílicas Full");
 const gelId = getServiceId("Gel Semipermanente");

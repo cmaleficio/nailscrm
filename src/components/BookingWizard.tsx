@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import Image from "next/image";
 
 type Service = {
   id: string;
@@ -35,7 +36,7 @@ const MONTHS = [
 export function BookingWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
 
   const [step, setStep] = useState(1);
   const [services, setServices] = useState<Service[]>([]);
@@ -65,7 +66,7 @@ export function BookingWizard() {
     setServices(data);
   }
 
-  async function preselectedService() {
+  const preselectedService = useCallback(async () => {
     const serviceId = searchParams.get("serviceId");
     if (serviceId) {
       const res = await fetch(`/api/services?id=${serviceId}`);
@@ -81,7 +82,7 @@ export function BookingWizard() {
         prev.includes(referencePhotoUrl) ? prev : [...prev, referencePhotoUrl]
       );
     }
-  }
+  }, [searchParams]);
 
   useEffect(() => {
     fetch("/api/gallery?limit=50")
@@ -92,7 +93,7 @@ export function BookingWizard() {
       .catch(() => {});
     void fetchServices();
     void preselectedService();
-  }, []);
+  }, [preselectedService]);
 
   const fetchSlots = useCallback(async (date: string) => {
     if (!selectedService) return;
@@ -509,9 +510,11 @@ export function BookingWizard() {
               <div className="mt-3 flex flex-wrap gap-2">
                 {referencePreviews.map((preview, i) => (
                   <div key={preview} className="relative">
-                    <img
+                    <Image
                       src={preview}
                       alt={`Preview ${i + 1}`}
+                      width={64}
+                      height={64}
                       className="h-16 w-16 rounded-lg object-cover"
                     />
                     <button
@@ -548,11 +551,17 @@ export function BookingWizard() {
                       key={g.id}
                       type="button"
                       onClick={() => toggleModel(g.url)}
-                      className={`relative overflow-hidden rounded-xl border-2 transition-all ${
+                      className={`relative aspect-square overflow-hidden rounded-xl border-2 transition-all ${
                         selected ? "border-pink-main" : "border-transparent"
                       }`}
                     >
-                      <img src={g.url} alt={g.serviceName} className="aspect-square w-full object-cover" />
+                      <Image
+                        fill
+                        sizes="(max-width: 640px) 33vw, 25vw"
+                        src={g.url}
+                        alt={g.serviceName}
+                        className="object-cover"
+                      />
                       {selected && (
                         <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-pink-main text-xs font-bold text-gray-900">
                           ✓
@@ -572,7 +581,13 @@ export function BookingWizard() {
                 <div className="flex flex-wrap gap-2">
                   {selectedModels.map((url) => (
                     <div key={url} className="relative">
-                      <img src={url} alt="Modelo" className="h-16 w-16 rounded-lg object-cover" />
+                      <Image
+                        src={url}
+                        alt="Modelo"
+                        width={64}
+                        height={64}
+                        className="h-16 w-16 rounded-lg object-cover"
+                      />
                       <button
                         type="button"
                         onClick={() => toggleModel(url)}

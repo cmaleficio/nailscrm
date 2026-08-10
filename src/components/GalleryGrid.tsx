@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { FilterPills } from "./FilterPills";
 
 type GalleryItem = {
@@ -71,12 +72,15 @@ export function GalleryGrid() {
             onClick={() => setSelected(item)}
             className="mb-3 block w-full break-inside-avoid overflow-hidden rounded-xl bg-gray-soft text-left transition-shadow hover:shadow-md"
           >
-            <img
-              src={item.url}
-              alt={`Uñas de ${item.clientName}`}
-              className="w-full object-cover"
-              loading="lazy"
-            />
+            <div className="relative aspect-square">
+              <Image
+                fill
+                sizes="(max-width: 640px) 50vw, 33vw"
+                src={item.url}
+                alt={`Uñas de ${item.clientName}`}
+                className="object-cover"
+              />
+            </div>
             <div className="p-3">
               <p className="text-sm font-medium text-gray-900">{item.clientName}</p>
               <p className="text-xs text-gray-500">{item.serviceName}</p>
@@ -100,7 +104,15 @@ export function GalleryGrid() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setSelected(null)} />
           <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl">
-            <img src={selected.url} alt={`Uñas de ${selected.clientName}`} className="w-full object-cover" />
+            <div className="relative aspect-square">
+              <Image
+                fill
+                sizes="(max-width: 640px) 100vw, 448px"
+                src={selected.url}
+                alt={`Uñas de ${selected.clientName}`}
+                className="object-cover"
+              />
+            </div>
             <div className="p-5">
               <p className="font-medium text-gray-900">¿Agendar un servicio similar con este modelo?</p>
               <p className="mt-1 text-sm text-gray-500">

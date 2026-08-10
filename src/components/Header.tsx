@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { GoogleSignInButton } from "./GoogleSignInButton";
 import { SignOutButton } from "./SignOutButton";
 
@@ -24,9 +25,11 @@ export function Header({ user }: HeaderProps) {
           {user ? (
             <>
               {user.image && (
-                <img
+                <Image
                   src={user.image}
                   alt={user.name ?? "Usuario"}
+                  width={32}
+                  height={32}
                   className="hidden h-8 w-8 rounded-full object-cover sm:block"
                 />
               )}

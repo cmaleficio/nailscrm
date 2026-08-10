@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 type Photo = { id: string; url: string };
 
@@ -17,7 +18,15 @@ export function PhotoCarousel({ photos }: { photos: Photo[] }) {
         Modelos de referencia
       </p>
       <div className="relative overflow-hidden rounded-xl bg-gray-soft">
-        <img src={current.url} alt="Modelo de referencia" className="h-52 w-full object-cover" />
+        <div className="relative h-52">
+          <Image
+            fill
+            sizes="(max-width: 768px) 100vw, 33vw"
+            src={current.url}
+            alt="Modelo de referencia"
+            className="object-cover"
+          />
+        </div>
         {photos.length > 1 && (
           <>
             <button

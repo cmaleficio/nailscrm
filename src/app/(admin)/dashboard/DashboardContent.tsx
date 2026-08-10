@@ -270,8 +270,6 @@ export function DashboardContent({ today }: Props) {
                   serviceName={appt.serviceName}
                   referencePhotoUrl={appt.referencePhotoUrl}
                   status={appt.status}
-                  appointmentDate={dateStr(appt.startTime)}
-                  appointmentTime={timeStr(appt.startTime)}
                   onComplete={() => handleComplete(appt)}
                   onCancel={() => setCancelling(appt)}
                   onSelect={() => handleSelectAppointment(appt)}
@@ -520,11 +518,4 @@ export function DashboardContent({ today }: Props) {
       )}
     </div>
   );
-}
-
-function dateStr(ts: number) {
-  return new Intl.DateTimeFormat("es-ES", {
-    dateStyle: "long",
-    timeZone: "America/Caracas",
-  }).format(new Date(ts * 1000));
 }
