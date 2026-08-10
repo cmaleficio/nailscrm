@@ -328,8 +328,8 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - Despliegue en la nube (solo local + Cloudflare Tunnel)
 
 ## 🗑️ Reglas de borrado
-- Eliminar cliente (`DELETE /api/clients/[id]`, admin): solo si NO tiene citas (`appointments.client_id`), pagos/cuentas por cobrar (`payments.user_id`) ni filas en `waitlist`. Los usuarios con `role='admin'` no se eliminan (403). Las filas de Auth.js (`account`, `session`) se borran por CASCADE.
-- Eliminar servicio (`DELETE /api/services/[id]`, admin): solo si NO tiene citas (`appointments.service_id`) ni `service_purchases` (400 + sugerir desactivar). Las fotos (`service_photos`) se borran por CASCADE.
+- Eliminar cliente (`DELETE /api/clients/[id]`, admin): solo si NO tiene citas (`appointments.client_id`), pagos/cuentas por cobrar (`payments.user_id`), filas en `waitlist` ni citas canceladas archivadas (`cancelled_appointments.client_id`). Los usuarios con `role='admin'` no se eliminan (403). Las filas de Auth.js (`account`, `session`) se borran por CASCADE.
+- Eliminar servicio (`DELETE /api/services/[id]`, admin): solo si NO tiene citas (`appointments.service_id`), `service_purchases` ni filas en `cancelled_appointments.service_id` (400 + sugerir desactivar). Las fotos (`service_photos`) se borran por CASCADE.
 - Cancelar cita (`DELETE /api/appointments/[id]`, admin o propietario): borra la cita **definitivamente** tras archivar el snapshot en `cancelled_appointments` y borrar los eventos de Google Calendar. Las citas `completed` no se pueden cancelar (400). El `PATCH` con `status:'cancelled'` devuelve 400 ("usa DELETE"). En la agenda, cancelar pide confirmación (`ConfirmDialog`); las canceladas se ven en la pestaña "Canceladas" de la agenda.
 - Eliminar proveedor (`DELETE /api/suppliers/[id]`, admin): solo si NO tiene facturas (`bills.supplier_id`).
 - Eliminar categoría (`DELETE /api/expense-categories/[id]`, admin): solo si NO tiene facturas (`bills.category_id`).

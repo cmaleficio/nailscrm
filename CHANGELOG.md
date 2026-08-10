@@ -30,7 +30,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria.
 - Saldo de cada cliente visible en el panel CRM con registro de pagos.
 - Tasa BCV más robusta: la extracción ahora ancla en `<div id="dolar">` de la home de bcv.org.ve (independiente del orden de monedas) y también captura la fecha valor. Nuevo endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET` en header `Authorization: Bearer` o `?secret=`) que fuerza `refreshTodayRate()` (inserta/actualiza la fila de hoy) para que cron-job.org lo llame a diario vía túnel.
-- Botón "Cancelar" con confirmación para las citas en la agenda (vistas día y semana); las citas completadas/canceladas ya no se pueden cancelar (400).
+- Botón "Cancelar" con confirmación para las citas en la agenda (vistas día y semana); las citas completadas ya no se pueden cancelar (400).
 - Eliminar clientes desde la lista y desde el panel CRM (`DELETE /api/clients/[id]`): solo si no tienen citas, pagos/cuentas por cobrar ni lista de espera; los usuarios con rol admin están protegidos (403).
 - Eliminar servicios (`DELETE /api/services/[id]`) además de desactivarlos: solo si no tienen citas ni compras asociadas (de lo contrario se sugiere desactivar).
 - Módulo de compras en `/dashboard/purchases`: facturas a proveedores (de inventario con líneas de producto o gastos fijos en $/Bs), proveedores y categorías de gasto. Las facturas de inventario registran entradas de stock con costo promedio ponderado.
