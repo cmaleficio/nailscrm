@@ -63,6 +63,7 @@ export function DashboardContent({ today }: Props) {
   const [completing, setCompleting] = useState<Appointment | null>(null);
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
   const [cancellingBusy, setCancellingBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [showNewAppointment, setShowNewAppointment] = useState(false);
   const [showBlockout, setShowBlockout] = useState(false);
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
@@ -77,6 +78,7 @@ export function DashboardContent({ today }: Props) {
       cancelledBy: string;
       cancelledAt: number;
       clientName: string;
+      actorRole: string;
     }[]
   >([]);
 
@@ -139,8 +141,14 @@ export function DashboardContent({ today }: Props) {
 
   async function handleCancel(id: string) {
     setCancellingBusy(true);
-    await fetch(`/api/appointments/${id}`, { method: "DELETE" });
+    setCancelError(null);
+    const res = await fetch(`/api/appointments/${id}`, { method: "DELETE" });
     setCancellingBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setCancelError(data.error || "No se pudo cancelar la cita");
+      return;
+    }
     setCancelling(null);
     refreshAll();
   }
@@ -410,7 +418,7 @@ export function DashboardContent({ today }: Props) {
                       <td className="px-4 py-3 text-gray-700">{c.serviceName}</td>
                       <td className="px-4 py-3">${c.servicePrice.toFixed(2)}</td>
                       <td className="px-4 py-3 text-gray-600">
-                        {c.cancelledBy === c.clientId ? "Cliente" : "Admin"}
+                        {c.actorRole === "client" ? "Cliente" : "Admin"}
                       </td>
                       <td className="px-4 py-3 text-gray-500">
                         {new Intl.DateTimeFormat("es-ES", {
@@ -448,8 +456,12 @@ export function DashboardContent({ today }: Props) {
           confirmLabel="Cancelar cita"
           danger
           busy={cancellingBusy}
+          error={cancelError}
           onConfirm={() => handleCancel(cancelling.id)}
-          onClose={() => setCancelling(null)}
+          onClose={() => {
+            setCancelling(null);
+            setCancelError(null);
+          }}
         />
       )}
 
