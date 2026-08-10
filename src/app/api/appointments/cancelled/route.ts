@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 
 export async function GET() {
@@ -33,11 +33,29 @@ export async function GET() {
     .orderBy(desc(schema.cancelledAppointments.cancelledAt))
     .all();
 
+  const actorIds = Array.from(new Set(rows.map((r) => r.cancelledBy)));
+  const roleRows =
+    actorIds.length > 0
+      ? db
+          .select({ id: schema.users.id, role: schema.users.role })
+          .from(schema.users)
+          .where(inArray(schema.users.id, actorIds))
+          .all()
+      : [];
+  const roleMap = new Map(roleRows.map((u) => [u.id, u.role]));
+
   return NextResponse.json(
     rows.map((r) => ({
       ...r,
+      actorRole: roleMap.get(r.cancelledBy) ?? "client",
       referencePhotoUrls: r.referencePhotoUrls
-        ? JSON.parse(r.referencePhotoUrls)
+        ? (() => {
+            try {
+              return JSON.parse(r.referencePhotoUrls);
+            } catch {
+              return [];
+            }
+          })()
         : [],
     }))
   );

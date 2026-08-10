@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, and, gte, lt, sql } from "drizzle-orm";
+import { eq, and, gte, lt, ne, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 import { validateSlot } from "@/lib/availability";
 import { createAppointmentClientEvent, createAppointmentAdminEvent } from "@/lib/calendar";
@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
     .where(
       and(
         gte(schema.appointments.startTime, dayStart),
-        lt(schema.appointments.startTime, dayEnd)
+        lt(schema.appointments.startTime, dayEnd),
+        ne(schema.appointments.status, "cancelled")
       )
     )
     .orderBy(sql`${schema.appointments.startTime} ASC`)

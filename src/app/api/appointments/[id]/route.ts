@@ -188,24 +188,36 @@ export async function DELETE(
     .where(eq(schema.appointmentPhotos.appointmentId, id))
     .all();
 
-  db.insert(schema.cancelledAppointments)
-    .values({
-      id: crypto.randomUUID(),
-      appointmentId: appointment.id,
-      clientId: appointment.clientId,
-      serviceId: appointment.serviceId,
-      serviceName: purchase?.serviceName ?? "",
-      servicePrice: purchase?.servicePrice ?? 0,
-      startTime: appointment.startTime ?? null,
-      endTime: appointment.endTime ?? null,
-      referencePhotoUrls: photos.length
-        ? JSON.stringify(photos.map((p) => p.url))
-        : null,
-      cancelledBy: session.user.id,
-      cancelledAt: Math.floor(Date.now() / 1000),
-      reason: null,
-    })
-    .run();
+  const service = db
+    .select()
+    .from(schema.services)
+    .where(eq(schema.services.id, appointment.serviceId))
+    .get();
+
+  db.transaction((tx) => {
+    tx.insert(schema.cancelledAppointments)
+      .values({
+        id: crypto.randomUUID(),
+        appointmentId: appointment.id,
+        clientId: appointment.clientId,
+        serviceId: appointment.serviceId,
+        serviceName: purchase?.serviceName ?? service?.name ?? "",
+        servicePrice: purchase?.servicePrice ?? service?.price ?? 0,
+        startTime: appointment.startTime ?? null,
+        endTime: appointment.endTime ?? null,
+        referencePhotoUrls: photos.length
+          ? JSON.stringify(photos.map((p) => p.url))
+          : null,
+        cancelledBy: session.user.id,
+        cancelledAt: Math.floor(Date.now() / 1000),
+        reason: null,
+      })
+      .run();
+
+    tx.delete(schema.appointments)
+      .where(eq(schema.appointments.id, id))
+      .run();
+  });
 
   if (appointment.googleEventIdClient) {
     await deleteEventOnPrimaryCalendar(
@@ -222,8 +234,6 @@ export async function DELETE(
       );
     }
   }
-
-  db.delete(schema.appointments).where(eq(schema.appointments.id, id)).run();
 
   return NextResponse.json({ success: true, deleted: true });
 }

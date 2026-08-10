@@ -134,6 +134,20 @@ export async function DELETE(
     );
   }
 
+  const archivedCount =
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.cancelledAppointments)
+      .where(eq(schema.cancelledAppointments.serviceId, id))
+      .get()?.count ?? 0;
+
+  if (archivedCount > 0) {
+    return NextResponse.json(
+      { error: "El servicio aparece en citas canceladas archivadas; desactívalo en su lugar" },
+      { status: 400 }
+    );
+  }
+
   db.delete(schema.services).where(eq(schema.services.id, id)).run();
 
   return NextResponse.json({ success: true });

@@ -157,6 +157,20 @@ export async function DELETE(
     );
   }
 
+  const archivedCount =
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.cancelledAppointments)
+      .where(eq(schema.cancelledAppointments.clientId, id))
+      .get()?.count ?? 0;
+
+  if (archivedCount > 0) {
+    return NextResponse.json(
+      { error: "El cliente tiene citas canceladas archivadas; no se puede eliminar" },
+      { status: 400 }
+    );
+  }
+
   db.delete(schema.users).where(eq(schema.users.id, id)).run();
 
   return NextResponse.json({ success: true });
