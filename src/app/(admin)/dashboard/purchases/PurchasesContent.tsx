@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { BillFormDialog } from "@/components/BillFormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -59,6 +59,7 @@ export function PurchasesContent() {
   const [monthFilter, setMonthFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [expandedBill, setExpandedBill] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ kind: "bill" | "supplier" | "category"; id: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -202,59 +203,120 @@ export function PurchasesContent() {
             />
           </div>
 
-          <div className="space-y-3">
-            {bills.length === 0 ? (
-              <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
-                <p className="text-gray-400">No hay facturas con estos filtros</p>
-              </div>
-            ) : (
-              bills.map((b) => (
-                <div key={b.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-gray-900">{b.supplierName ?? "Sin proveedor"}</p>
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${typePill[b.type]}`}>
-                          {b.type === "inventory" ? "Inventario" : "Gasto fijo"}
-                        </span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${statusPill[b.status]}`}>
-                          {b.status === "pending" ? "Pendiente" : b.status === "partial" ? "Parcial" : "Pagada"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {b.invoiceNumber ? `${b.invoiceNumber} · ` : ""}
-                        {fmtDate(b.billDate)}
-                        {b.categoryName ? ` · ${b.categoryName}` : ""}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900">
-                        ${b.totalUsd.toFixed(2)}
-                        {b.paidUsd > 0 && (
-                          <span className="ml-2 text-xs font-normal text-gray-500">
-                            Pagado ${b.paidUsd.toFixed(2)} / Pendiente ${(b.totalUsd - b.paidUsd).toFixed(2)}
-                          </span>
+          {bills.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay facturas con estos filtros</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                    <th className="px-4 py-3"># Factura</th>
+                    <th className="px-4 py-3">Proveedor</th>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Vence</th>
+                    <th className="px-4 py-3">Tipo</th>
+                    <th className="px-4 py-3">Total $</th>
+                    <th className="px-4 py-3">Estado</th>
+                    <th className="px-4 py-3">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bills.map((b) => {
+                    const overdue = b.dueDate && b.status !== "paid" && b.dueDate * 1000 < Date.now();
+                    return (
+                      <Fragment key={b.id}>
+                        <tr className={`border-b border-gray-50 ${overdue ? "bg-red-50/50" : ""}`}>
+                          <td className="px-4 py-3 font-mono text-xs text-gray-600">{b.invoiceNumber ?? "—"}</td>
+                          <td className="px-4 py-3 font-medium text-gray-900">{b.supplierName ?? "Sin proveedor"}</td>
+                          <td className="px-4 py-3 text-gray-600">{fmtDate(b.billDate)}</td>
+                          <td className="px-4 py-3 text-gray-600">{fmtDate(b.dueDate)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${typePill[b.type]}`}>
+                              {b.type === "inventory" ? "Inventario" : "Gasto fijo"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-gray-900">${b.totalUsd.toFixed(2)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${statusPill[b.status]}`}>
+                              {b.status === "pending" ? "Pendiente" : b.status === "partial" ? "Parcial" : "Pagada"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => setExpandedBill(expandedBill === b.id ? null : b.id)}
+                                className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                              >
+                                {expandedBill === b.id ? "Ocultar" : "Ver"}
+                              </button>
+                              <button
+                                onClick={() => void openEdit(b.id)}
+                                className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => setDeleting({ kind: "bill", id: b.id })}
+                                disabled={b.paidUsd > 0}
+                                className="rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-40"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedBill === b.id && (
+                          <tr className="border-b border-gray-50 bg-gray-50/50">
+                            <td colSpan={8} className="px-4 py-4">
+                              <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                                <span className="text-gray-500">
+                                  Pagado <span className="font-semibold text-gray-900">${b.paidUsd.toFixed(2)}</span>
+                                </span>
+                                <span className="text-gray-500">
+                                  Pendiente <span className="font-semibold text-gray-900">${Math.max(0, b.totalUsd - b.paidUsd).toFixed(2)}</span>
+                                </span>
+                                {b.categoryName && <span className="text-gray-500">Categoría: {b.categoryName}</span>}
+                                {b.notes && <span className="text-gray-400">{b.notes}</span>}
+                              </div>
+                              {b.items.length > 0 && (
+                                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                                  <table className="w-full text-left text-xs">
+                                    <thead>
+                                      <tr className="border-b border-gray-100 text-gray-400">
+                                        <th className="px-3 py-2">Descripción</th>
+                                        <th className="px-3 py-2">Cantidad</th>
+                                        <th className="px-3 py-2">Costo un.</th>
+                                        <th className="px-3 py-2">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {b.items.map((it) => (
+                                        <tr key={it.id} className="border-b border-gray-50">
+                                          <td className="px-3 py-2 text-gray-700">{it.description ?? "Item de inventario"}</td>
+                                          <td className="px-3 py-2 text-gray-600">{it.quantity}</td>
+                                          <td className="px-3 py-2 text-gray-600">${it.unitCostUsd.toFixed(2)}</td>
+                                          <td className="px-3 py-2 font-medium text-gray-900">${it.totalUsd.toFixed(2)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                              {b.items.length === 0 && (
+                                <p className="text-xs text-gray-400">Sin detalle de líneas.</p>
+                              )}
+                            </td>
+                          </tr>
                         )}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        onClick={() => void openEdit(b.id)}
-                        className="rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => setDeleting({ kind: "bill", id: b.id })}
-                        disabled={b.paidUsd > 0}
-                        className="rounded-xl bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors disabled:opacity-40"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
 
