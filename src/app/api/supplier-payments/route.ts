@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
   if (typeof body.reference !== "string" || !body.reference.trim()) {
     return NextResponse.json({ error: "La referencia es requerida" }, { status: 400 });
   }
+  if (typeof body.photoUrl !== "string" || !body.photoUrl.trim()) {
+    return NextResponse.json({ error: "La captura del pago es requerida" }, { status: 400 });
+  }
   const now = Math.floor(Date.now() / 1000);
   const payment = {
     id: crypto.randomUUID(),
@@ -76,6 +79,7 @@ export async function POST(req: NextRequest) {
     rate: currency === "VES" ? body.rate : null,
     paymentDate: typeof body.paymentDate === "number" ? body.paymentDate : now,
     reference: body.reference.trim(),
+    photoUrl: body.photoUrl.trim(),
     notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
     createdBy: adminId,
     createdAt: now,
