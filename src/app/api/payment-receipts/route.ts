@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
-import { isAdmin, hasPermission } from "@/lib/authz";
+import { isAdmin } from "@/lib/authz";
 import { getTodayRate } from "@/lib/bcv";
 
 export async function GET(req: NextRequest) {

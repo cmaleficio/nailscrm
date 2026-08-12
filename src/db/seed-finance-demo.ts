@@ -28,12 +28,13 @@ function categoryId(name: string): string | undefined {
 }
 
 function wipe() {
+  db.delete(schema.paymentReceipts).run();
   db.delete(schema.supplierPayments).run();
   db.delete(schema.billItems).run();
   db.delete(schema.bills).run();
   db.delete(schema.inventoryMovements).run();
-  db.delete(schema.inventoryItems).run();
   db.delete(schema.serviceProducts).run();
+  db.delete(schema.inventoryItems).run();
   db.delete(schema.suppliers).run();
   db.delete(schema.bankAccounts).run();
 }
@@ -82,10 +83,10 @@ const bankVes = {
 };
 db.insert(schema.bankAccounts).values([bankUsd, bankVes]).run();
 
-const itemMon = { id: crypto.randomUUID(), name: "Monómero acrílico", unit: "ml", stock: 0, avgCost: 0, minStock: 200, isActive: 1, notes: null, createdAt: now };
-const itemPow = { id: crypto.randomUUID(), name: "Polvo acrílico", unit: "g", stock: 0, avgCost: 0, minStock: 150, isActive: 1, notes: null, createdAt: now };
-const itemGel = { id: crypto.randomUUID(), name: "Esmalte semipermanente", unit: "ml", stock: 0, avgCost: 0, minStock: 100, isActive: 1, notes: null, createdAt: now };
-const itemTips = { id: crypto.randomUUID(), name: "Tips pack", unit: "pack", stock: 0, avgCost: 0, minStock: 10, isActive: 1, notes: null, createdAt: now };
+const itemMon = { id: "ACR-001", name: "Monómero acrílico", unit: "ml", stock: 0, avgCost: 0, minStock: 200, isActive: 1, notes: null, barcode: "7701000000001", photoUrl: null, createdAt: now };
+const itemPow = { id: "ACR-002", name: "Polvo acrílico", unit: "g", stock: 0, avgCost: 0, minStock: 150, isActive: 1, notes: null, barcode: "7701000000002", photoUrl: null, createdAt: now };
+const itemGel = { id: "GEL-001", name: "Esmalte semipermanente", unit: "ml", stock: 0, avgCost: 0, minStock: 100, isActive: 1, notes: null, barcode: "7701000000003", photoUrl: null, createdAt: now };
+const itemTips = { id: "TIP-001", name: "Tips pack", unit: "pack", stock: 0, avgCost: 0, minStock: 10, isActive: 1, notes: null, barcode: "7701000000004", photoUrl: null, createdAt: now };
 db.insert(schema.inventoryItems).values([itemMon, itemPow, itemGel, itemTips]).run();
 
 const invCat = categoryId("Insumos y materiales");
@@ -168,6 +169,28 @@ db.insert(schema.supplierPayments)
   })
   .run();
 db.update(schema.bills).set({ status: "partial" }).where(eq(schema.bills.id, bill1.id)).run();
+
+const demoClient = db.select().from(schema.users).where(eq(schema.users.role, "client")).all()[0];
+if (demoClient) {
+  const rateDemo = 60;
+  db.insert(schema.paymentReceipts)
+    .values({
+      id: crypto.randomUUID(),
+      clientId: demoClient.id,
+      appointmentId: null,
+      amountVes: 500,
+      rate: rateDemo,
+      amountUsd: Math.round((500 / rateDemo) * 100) / 100,
+      photoUrl: "/uploads/demo-captura.jpg",
+      status: "pending",
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNotes: null,
+      paymentId: null,
+      createdAt: now - 1 * DAY,
+    })
+    .run();
+}
 
 const acrylicId = serviceId("Acrílicas Full");
 const gelId = serviceId("Gel Semipermanente");

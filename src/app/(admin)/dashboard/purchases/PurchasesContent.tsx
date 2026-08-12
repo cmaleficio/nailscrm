@@ -51,6 +51,7 @@ const fmtDate = (ts: number | null) =>
     : "—";
 
 export function PurchasesContent() {
+  const [nowTs] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState<"facturas" | "proveedores" | "categorias">("facturas");
   const [bills, setBills] = useState<Bill[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -224,7 +225,7 @@ export function PurchasesContent() {
                 </thead>
                 <tbody>
                   {bills.map((b) => {
-                    const overdue = b.dueDate && b.status !== "paid" && b.dueDate * 1000 < Date.now();
+                    const overdue = b.dueDate && b.status !== "paid" && b.dueDate * 1000 < nowTs;
                     return (
                       <Fragment key={b.id}>
                         <tr className={`border-b border-gray-50 ${overdue ? "bg-red-50/50" : ""}`}>

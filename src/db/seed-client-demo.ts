@@ -253,6 +253,35 @@ for (let i = 0; i < demoPayments.length && i < completedAppts.length; i++) {
 }
 console.log(`✅ ${demoPayments.length} pagos demo registrados`);
 
+const existingReceipts = db
+  .select({ id: schema.paymentReceipts.id })
+  .from(schema.paymentReceipts)
+  .where(eq(schema.paymentReceipts.clientId, userId!))
+  .all();
+for (const r of existingReceipts) {
+  db.delete(schema.paymentReceipts).where(eq(schema.paymentReceipts.id, r.id)).run();
+}
+
+const rateDemo = 60;
+db.insert(schema.paymentReceipts)
+  .values({
+    id: crypto.randomUUID(),
+    clientId: userId!,
+    appointmentId: null,
+    amountVes: 900,
+    rate: rateDemo,
+    amountUsd: Math.round((900 / rateDemo) * 100) / 100,
+    photoUrl: "/uploads/demo-captura.jpg",
+    status: "pending",
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNotes: null,
+    paymentId: null,
+    createdAt: now - 1 * DAY,
+  })
+  .run();
+console.log("✅ 1 captura de pago demo pendiente de aprobar");
+
 const existingServicePhotos = db.select().from(schema.servicePhotos).all();
 if (existingServicePhotos.length === 0) {
   const photoSeeds: { url: string; position: number }[] = [

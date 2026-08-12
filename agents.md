@@ -46,6 +46,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - total_visits: integer, default 0
 - total_revenue: real, default 0
 - role: text, default 'client' (client | admin)
+- permissions: text (JSON array de permisos de módulos; null = acceso a todos)
 - created_at: integer (timestamp)
 
 ### Tablas de Auth.js: account, session, verificationToken
@@ -150,6 +151,23 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
 - El saldo se calcula en vivo: `Σ service_purchases.service_price de citas completed − Σ payments.amount_usd`.
+- `photo_url` (opcional): captura de la transferencia al registrar un pago de cliente.
+
+### Tabla: payment_receipts (capturas de pago reportadas por el cliente)
+- id: text, primary key
+- client_id: text, foreign key → users.id
+- appointment_id: text, foreign key → appointments.id (opcional)
+- amount_ves: real, not null
+- rate: real, not null (tasa Bs/US$ del día al reportar)
+- amount_usd: real, not null (equiv. en USD)
+- photo_url: text, not null (captura obligatoria)
+- status: text, default 'pending' (pending | approved | rejected)
+- reviewed_by: text, foreign key → users.id (admin que revisó)
+- reviewed_at: integer (timestamp)
+- review_notes: text (motivo del rechazo)
+- payment_id: text, foreign key → payments.id (se llena al aprobar)
+- created_at: integer (timestamp)
+- Flujo: el cliente reporta un pago en Bs con captura → queda `pending` → el admin aprueba (inserta en `payments` con currency `VES` y liga `paymentId`) o rechaza (con `review_notes`). Solo `paymentApproval` puede revisar.
 
 ### Tabla: exchange_rates (tasa del día)
 - id: text, primary key
@@ -188,13 +206,15 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - created_at: integer (timestamp)
 
 ### Tabla: inventory_items (inventario)
-- id: text, primary key
+- id: text, primary key (**código de producto**, ej: `ACR-001`, `GEL-001`)
 - name: text, not null
 - unit: text, default 'unidad'
 - stock: real, default 0
 - avg_cost: real, default 0 (costo promedio ponderado, se recalcula en cada entrada)
 - min_stock: real, default 0 (umbral para badge "Stock bajo")
 - is_active: integer (boolean), default 1
+- barcode: text (código de barras EAN, opcional)
+- photo_url: text (foto del producto, opcional)
 - notes: text
 - created_at: integer (timestamp)
 - `stockValue` = `stock * avg_cost` (se calcula en el API).
@@ -251,6 +271,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
 - Al crear/borrar un pago se recalcula `bills.status` con `recomputeBillStatus()`.
+- `photo_url` (obligatoria): captura de la transferencia; el API y el diálogo la exigen (400 si falta).
 
 ### Tabla: service_products (uso de inventario por servicio)
 - id: text, primary key
@@ -278,8 +299,22 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `/dashboard/settings` → Configuración (horario de trabajo por día de la semana)
 - `/dashboard/services` → Gestión de servicios (+ fotos del servicio, eliminar si no tiene uso)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
-- `/profile` → Portal de cliente (pasaporte de uñas + historial)
+- `/profile` → Portal de cliente (pasaporte de uñas + historial + "Mis pagos" con reporte de capturas)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
+
+### APIs nuevas de permisos y pagos
+- `GET /api/my-permissions` (admin autenticado) → permisos del admin actual.
+- `GET /api/exchange-rate/current` (público) → tasa del día (usa `getTodayRate`).
+- `GET /api/payment-receipts` → admin: todas (filtro `?status=`); cliente: solo las suyas.
+- `POST /api/payment-receipts` (cliente) → reporta pago en Bs con captura; valida cita propia.
+- `PATCH/DELETE /api/payment-receipts/[id]` → solo permiso `paymentApproval`; `approve` inserta en `payments` y liga `paymentId`.
+
+## 🔐 Permisos de admins
+- `users.permissions`: JSON array de claves; **null = acceso a todos los módulos** (no rompe admins existentes).
+- Superadmin (`ADMIN_EMAIL`) siempre tiene acceso total.
+- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `adminUsers`, `paymentApproval`.
+- `hasPermission(session, key)` en `src/lib/authz.ts` bloquea a no-admins y a admins sin el permiso. `adjustInventory` controla salidas/ajustes de stock; `paymentApproval` controla aprobar/rechazar capturas de pago.
+- `PATCH /api/admins` rechaza editar permisos del admin principal (`ADMIN_EMAIL`) con 403.
 
 ## 🎨 Componentes UI Clave
 - ServiceCard: card de servicio con carrusel de fotos, nombre, duración, precio, botón "Agendar"
@@ -296,13 +331,14 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - NewAppointmentDialog: crea citas para walk-ins (clientes no registrados) desde la agenda
 - BlockoutDialog: crea bloques "no disponible" desde la agenda
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
+- ReportPaymentDialog: reporta pago en Bs con captura desde "Mis pagos" del perfil de cliente
 - SettingsContent: editor del horario de trabajo por día de la semana
 - BillFormDialog: crea/edita facturas (inventario con líneas de producto o gasto fijo $/Bs) desde Compras
-- SupplierPaymentDialog: registra pagos a proveedores ($/Bs con tasa BCV) desde Cuentas por pagar
+- SupplierPaymentDialog: registra pagos a proveedores ($/Bs con tasa BCV) desde Cuentas por pagar (captura obligatoria)
 - MovementDialog: registra salidas/ajustes de stock (con motivo obligatorio en ajustes) desde Inventario
-- PurchasesContent: pestañas de facturas, proveedores y categorías en /dashboard/purchases
+- PurchasesContent: pestañas de facturas (grid maestro-detalle), proveedores y categorías en /dashboard/purchases
 - AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable
-- InventoryContent: pestañas de productos, kardex y uso por servicio en /dashboard/inventory
+- InventoryContent: pestañas de productos (grid con foto/código/barras), kardex y uso por servicio en /dashboard/inventory
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
 - ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)
 
@@ -316,9 +352,9 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `npx tsc --noEmit` → typecheck
 
 ## 🧪 Datos Demo
-- Cliente: `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` lo crea/actualiza con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas, snapshots de compra, fotos de servicios para el home, horario de trabajo por defecto (si vacío) y pagos demo (PAGO-001 $35, PAGO-002 $10). Re-ejecutable (borra y regenera las citas del demo).
+- Cliente: `clienta@email.com` / `Cliente123!` (Ana Martínez). El seed `db:seed:client` lo crea/actualiza con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas, snapshots de compra, fotos de servicios para el home, horario de trabajo por defecto (si vacío), pagos demo (PAGO-001 $35, PAGO-002 $10) y una captura de pago pendiente de aprobar (900 Bs). Re-ejecutable (borra y regenera las citas del demo).
 - Admin: el `ADMIN_EMAIL` configurado en `.env` se promueve a superadmin al iniciar sesión.
-- Finanzas: el seed `db:seed:finance` genera proveedores, bancos ($/Bs), 4 items de inventario con entradas vía factura F-1001 (parcialmente pagada), factura de alquiler en Bs y uso de productos por servicio (Acrílicas Full y Gel Semipermanente). Re-ejecutable: borra y regenera los datos de finanzas.
+- Finanzas: el seed `db:seed:finance` genera proveedores, bancos ($/Bs), 4 items de inventario con códigos (`ACR-001`, `ACR-002`, `GEL-001`, `TIP-001`) y códigos de barras, entradas vía factura F-1001 (parcialmente pagada), factura de alquiler en Bs, uso de productos por servicio (Acrílicas Full y Gel Semipermanente) y una captura de pago pendiente. Re-ejecutable: borra y regenera los datos de finanzas.
 
 ## 🚫 Fuera del Alcance (MVP)
 - Pasarelas de pago (Stripe/MercadoPago)

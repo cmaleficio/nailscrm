@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { MovementDialog } from "@/components/MovementDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -373,7 +373,8 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                   {items.map((item) => {
                     const lowStock = item.stock <= item.minStock && item.minStock > 0;
                     return (
-                      <tr key={item.id} className={`border-b border-gray-50 ${item.isActive === 0 ? "opacity-50" : ""}`}>
+                      <Fragment key={item.id}>
+                        <tr className={`border-b border-gray-50 ${item.isActive === 0 ? "opacity-50" : ""}`}>
                         <td className="px-3 py-2">
                           {item.photoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -420,6 +421,39 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                           </div>
                         </td>
                       </tr>
+                      {editingId === item.id && (
+                        <tr className="border-b border-gray-50 bg-gray-50/50">
+                          <td colSpan={10} className="px-3 py-3">
+                            <div className="flex flex-wrap items-end gap-2">
+                              <div className="min-w-0 flex-1">
+                                <label className="mb-1 block text-xs font-medium text-gray-600">Nombre</label>
+                                <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className={inputCls} />
+                              </div>
+                              <div className="w-24">
+                                <label className="mb-1 block text-xs font-medium text-gray-600">Unidad</label>
+                                <input value={editForm.unit} onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })} className={inputCls} />
+                              </div>
+                              <div className="w-24">
+                                <label className="mb-1 block text-xs font-medium text-gray-600">Stock mín.</label>
+                                <input type="number" min="0" value={editForm.minStock} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} className={inputCls} />
+                              </div>
+                              <label className="flex items-center gap-2 pb-2 text-sm text-gray-600">
+                                <input type="checkbox" checked={editForm.isActive === 1} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked ? 1 : 0 })} className="h-4 w-4" />
+                                Activo
+                              </label>
+                              <div className="flex gap-2">
+                                <button onClick={() => void saveEdit(item)} disabled={busy} className="rounded-xl bg-pink-main px-3 py-2 text-xs font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors">
+                                  Guardar
+                                </button>
+                                <button onClick={() => setEditingId(null)} disabled={busy} className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-600 hover:bg-gray-200 transition-colors">
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

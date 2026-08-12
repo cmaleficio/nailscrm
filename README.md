@@ -69,15 +69,16 @@ npx tsc --noEmit      # typecheck
 - **Reserva en 3 pasos:** elige servicio, horario y confirmas. En el último paso puedes subir fotos de referencia o elegir modelos del muro de inspiración.
 - **Muro de inspiración:** fotos finales de citas compartidas, filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo.
 - **Dashboard admin:** agenda día/semana con carrusel de modelos de referencia al abrir una cita, botón "Completar" que sube varias fotos finales (publicadas en el muro) y registra pago del momento ($/Bs con tasa del día), "Nueva cita" para walk-ins (clientes no registrados), "Bloquear tiempo" para marcar horarios no disponibles y "Cancelar" con confirmación (elimina la cita definitivamente y queda archivada en la pestaña "Canceladas"). En `/dashboard/services` hay botón "Eliminar" (solo servicios sin citas ni compras), y en `/dashboard/clients` se pueden eliminar clientes sin movimientos (sin citas, pagos ni lista de espera), tanto desde la lista como desde el panel CRM.
-- **Cuentas por cobrar** en `/dashboard/balances`: total adeudado por cliente (calculado en vivo), historial de pagos y registro/borrado de pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria. La tasa se refresca diariamente con el endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET`), que cron-job.org debe llamar a la URL pública del túnel.
-- **Compras** en `/dashboard/purchases`: facturas a proveedores (de inventario con líneas de producto que registran entradas de stock, o gastos fijos en $/Bs), proveedores y categorías de gasto.
-- **Cuentas por pagar** en `/dashboard/accounts-payable`: facturas pendientes con aviso de vencimiento, registro de pagos a proveedores en $/Bs con tasa BCV (el estado de la factura se recalcula solo) y cuentas bancarias del salón.
-- **Inventario** en `/dashboard/inventory`: existencias valorizadas (costo promedio ponderado), badge "Stock bajo", kardex de movimientos (salidas y ajustes con motivo) y uso de productos por servicio.
+- **Cuentas por cobrar** en `/dashboard/balances`: total adeudado por cliente (calculado en vivo), historial de pagos y registro/borrado de pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria. Incluye la pestaña "Pagos recibidos": cuando el cliente reporta un pago en Bs con captura desde su perfil, el admin lo aprueba (descuenta el saldo) o lo rechaza con motivo. La tasa se refresca diariamente con el endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET`), que cron-job.org debe llamar a la URL pública del túnel.
+- **Compras** en `/dashboard/purchases`: facturas a proveedores en un grid maestro-detalle (de inventario con líneas de producto que registran entradas de stock, o gastos fijos en $/Bs), proveedores y categorías de gasto.
+- **Cuentas por pagar** en `/dashboard/accounts-payable`: facturas pendientes con aviso de vencimiento, registro de pagos a proveedores en $/Bs con tasa BCV y captura de transferencia obligatoria (el estado de la factura se recalcula solo) y cuentas bancarias del salón.
+- **Inventario** en `/dashboard/inventory`: productos con código (`ACR-001`…), código de barras y foto en un grid, existencias valorizadas (costo promedio ponderado), badge "Stock bajo", kardex de movimientos (salidas y ajustes con motivo) y uso de productos por servicio. Los ajustes requieren el permiso `adjustInventory`.
 - **Estados financieros** en `/dashboard/financials`: P&L mensual con ingresos por servicio, gastos por categoría y utilidad/pérdida.
 - **Configuración de horario** en `/dashboard/settings`: horario de trabajo configurable por día de la semana.
 - **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección, stats de visitas e ingresos, saldo pendiente con registro de pagos y botón de WhatsApp.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home.
 - **Teléfono post-Google:** tras registrarse con Google se pide el teléfono en `/complete-registration`.
+- **Permisos por admin:** en `/dashboard/admin-users` (solo superadmin) se asignan permisos por módulo (`users.permissions`); un admin con `null` tiene acceso a todo y el superadmin siempre accede a todo. También aparece "Mis pagos" en el perfil del cliente para reportar pagos en Bs con captura.
 
 ## Estructura
 
@@ -85,7 +86,7 @@ npx tsc --noEmit      # typecheck
 src/
   app/                 # rutas (public, (client), (admin))
     api/               # API routes (auth, appointments, admins, gallery, services, slots, upload, suppliers, bills, inventory, financials…)
-  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, GalleryGrid, PhotoCarousel, NewAppointmentDialog, BlockoutDialog, RegisterPaymentDialog, BillFormDialog, SupplierPaymentDialog, MovementDialog, …)
+  components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, GalleryGrid, PhotoCarousel, NewAppointmentDialog, BlockoutDialog, RegisterPaymentDialog, ReportPaymentDialog, BillFormDialog, SupplierPaymentDialog, MovementDialog, …)
   db/                  # conexión SQLite + schema Drizzle
   lib/                 # auth, auth.config, authz, calendar, slots, workingHours, availability, time, bcv, upload
 ```
@@ -93,8 +94,8 @@ src/
 ## Roles
 
 - **Cliente:** reserva, próximas citas y pasaporte en `/profile`.
-- **Admin:** agenda día/semana, completar citas con fotos y pago, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar, compras, cuentas por pagar, inventario, estados financieros, servicios y horario de trabajo.
-- **Superadmin (`ADMIN_EMAIL`):** gestión de admins en `/dashboard/admin-users`.
+- **Admin:** agenda día/semana, completar citas con fotos y pago, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar (incluye aprobar/rechazar capturas de pago), compras, cuentas por pagar, inventario, estados financieros, servicios y horario de trabajo. Los accesos a cada módulo se controlan por permisos asignados en `/dashboard/admin-users`.
+- **Superadmin (`ADMIN_EMAIL`):** gestión de admins y sus permisos en `/dashboard/admin-users`.
 
 ## Mantenimiento
 

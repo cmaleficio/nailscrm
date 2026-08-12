@@ -38,9 +38,16 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Inventario en `/dashboard/inventory`: existencias con valorización, badge "Stock bajo", kardex de movimientos (entradas/salidas/ajustes con motivo obligatorio) y uso de productos por servicio (las salidas de stock se sugieren según el consumo por servicio).
 - Estados financieros en `/dashboard/financials`: P&L mensual (ingresos, gastos, utilidad/pérdida, servicios y facturas) con desglose de ingresos por servicio y gastos por categoría.
 - Seed regenerable de finanzas (`npm run db:seed:finance`): proveedores, bancos ($/Bs), 4 items de inventario con entradas vía factura F-1001 (parcialmente pagada), factura de alquiler en Bs y uso de productos por servicio. Re-ejecutable: borra y regenera los datos de finanzas.
+- Sistema de permisos por admin (`users.permissions`, JSON array; `null` = acceso a todos): `hasPermission` en `src/lib/authz.ts`, endpoint `GET /api/my-permissions`, editor de permisos en `/dashboard/admin-users` y guardas por módulo en las páginas/APIs del dashboard. Claves en `PERMISSION_KEYS` (`appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `adminUsers`, `paymentApproval`). El superadmin (`ADMIN_EMAIL`) siempre tiene acceso total.
+- Pagos con capturas de transferencia: opcional al registrar pagos de clientes y **obligatoria** en pagos a proveedores (400 si falta).
+- Reporte de pagos por el cliente desde "Mis pagos" en `/profile` (`ReportPaymentDialog`): reporta pago en Bs con captura y la tasa del día; queda `pending` hasta que el admin aprueba/rechaza desde la nueva pestaña "Pagos recibidos" en `/dashboard/balances`. Tabla `payment_receipts` y APIs `GET/POST /api/payment-receipts` y `PATCH/DELETE /api/payment-receipts/[id]` (solo permiso `paymentApproval`).
+- Tasa pública del día: `GET /api/exchange-rate/current`.
+- Inventario con código de producto como PK (`ACR-001`…), código de barras y foto: grid de productos en tabla (foto/código/barras/stock/costo/valor) y botón de ajuste condicionado al permiso `adjustInventory`.
 
 ### Cambiado
 - Cancelar una cita ahora la elimina definitivamente (hard delete, `DELETE /api/appointments/[id]` desde el dashboard y el perfil del cliente) y archiva un snapshot en la nueva tabla `cancelled_appointments`, visible en la pestaña "Canceladas" de la agenda. El `PATCH` con `status: 'cancelled'` y el endpoint `/api/appointments/[id]/cancel` quedan obsoletos.
+- Compras en `/dashboard/purchases`: la pestaña de facturas ahora es un grid maestro-detalle (nº factura/proveedor/fechas/tipo/total/estado con detalle expandible de pagado/pendiente/líneas).
+- Los items de inventario pasan de UUID a códigos de producto legibles (migración 0009 con remapeo de referencias en `bill_items`, `inventory_movements` y `service_products`).
 
 ### Corregido
 - Avatar de Google en el `Header`: `next/image` fallaba con 500 porque el host `lh3.googleusercontent.com` no estaba configurado en `next.config.ts`. Se añadió el `remotePatterns` correspondiente.
