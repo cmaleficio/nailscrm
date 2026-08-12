@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     reference,
     paidAt,
     notes,
+    photoUrl,
   } = body;
 
   if (!userId || typeof reference !== "string" || !reference.trim()) {
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
     amountVes: cur === "VES" ? amountVes : null,
     rate: cur === "VES" ? rate : null,
     reference: reference.trim(),
+    photoUrl: typeof photoUrl === "string" && photoUrl.trim() ? photoUrl.trim() : null,
     paidAt: typeof paidAt === "number" ? paidAt : now,
     notes: typeof notes === "string" ? notes : null,
     createdBy: adminId,

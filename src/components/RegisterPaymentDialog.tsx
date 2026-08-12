@@ -24,6 +24,8 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
   const [reference, setReference] = useState("");
   const [paidDate, setPaidDate] = useState(todayStr());
   const [notes, setNotes] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -33,6 +35,23 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
       .then((data) => setRate(data))
       .catch(() => {});
   }, []);
+
+  async function handleUpload(file: File) {
+    setUploading(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      if (!res.ok) throw new Error("No se pudo subir la captura");
+      const data = await res.json();
+      setPhotoUrl(data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error subiendo captura");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function submit() {
     setSaving(true);
@@ -54,6 +73,7 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
         body.amountVes = parseFloat(amountVes) || 0;
         body.rate = effectiveRate;
       }
+      if (photoUrl) body.photoUrl = photoUrl;
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -161,6 +181,25 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
             placeholder="Ej: abono, pago pendiente..."
             className={inputCls}
           />
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-medium text-gray-600">Captura (opcional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleUpload(f);
+            }}
+            className={inputCls}
+          />
+          {uploading && <p className="mt-1 text-xs text-gray-500">Subiendo...</p>}
+          {photoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt="Captura" className="mt-2 h-20 w-20 rounded-lg object-cover" />
+          )}
         </div>
 
         {error && (
