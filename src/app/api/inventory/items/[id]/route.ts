@@ -25,11 +25,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const minStock = body.minStock !== undefined && typeof body.minStock === "number" && body.minStock >= 0 ? body.minStock : existing.minStock;
   const isActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : existing.isActive;
   const notes = body.notes !== undefined ? (typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null) : existing.notes;
+  const barcode = body.barcode !== undefined
+    ? (typeof body.barcode === "string" && body.barcode.trim() ? body.barcode.trim() : null)
+    : existing.barcode;
+  const photoUrl = body.photoUrl !== undefined
+    ? (typeof body.photoUrl === "string" && body.photoUrl.trim() ? body.photoUrl.trim() : null)
+    : existing.photoUrl;
   db.update(schema.inventoryItems)
-    .set({ name, unit, minStock, isActive, notes })
+    .set({ name, unit, minStock, isActive, notes, barcode, photoUrl })
     .where(eq(schema.inventoryItems.id, id))
     .run();
-  return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes });
+  return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes, barcode, photoUrl });
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
