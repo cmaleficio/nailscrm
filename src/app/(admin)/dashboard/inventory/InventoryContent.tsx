@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type InventoryItem = {
   id: string;
+  code?: string;
   name: string;
   unit: string;
   stock: number;
@@ -13,6 +14,8 @@ type InventoryItem = {
   minStock: number;
   isActive: number;
   notes: string | null;
+  barcode: string | null;
+  photoUrl: string | null;
   stockValue: number;
   estUsos: number | null;
 };
@@ -50,7 +53,8 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   const [confirmError, setConfirmError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [newItemForm, setNewItemForm] = useState({ name: "", unit: "unidad", minStock: "0" });
+  const [newItemForm, setNewItemForm] = useState({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "" });
+  const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: "", unit: "", minStock: "0", isActive: 1 });
   const [savingUses, setSavingUses] = useState<string | null>(null);
@@ -101,6 +105,23 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   const fmtDate = (ts: number) =>
     new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "America/Caracas" }).format(new Date(ts * 1000));
 
+  async function handleUpload(file: File) {
+    setUploading(true);
+    setConfirmError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      if (!res.ok) throw new Error("No se pudo subir la foto");
+      const data = await res.json();
+      setNewItemForm((f) => ({ ...f, photoUrl: data.url }));
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "Error subiendo foto");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function createItem() {
     const name = newItemForm.name.trim();
     if (!name) return;
@@ -111,16 +132,19 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          code: newItemForm.code.trim(),
           name,
           unit: newItemForm.unit.trim(),
           minStock: Number(newItemForm.minStock) || 0,
+          barcode: newItemForm.barcode.trim(),
+          photoUrl: newItemForm.photoUrl,
         }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "No se pudo crear el producto");
       }
-      setNewItemForm({ name: "", unit: "unidad", minStock: "0" });
+      setNewItemForm({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "" });
       await loadItems();
     } catch (err) {
       setConfirmError(err instanceof Error ? err.message : "Error inesperado");
@@ -259,35 +283,63 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
         <div className="mt-6">
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="mb-3 text-sm font-semibold text-gray-900">Nuevo producto</p>
-            <div className="flex gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               <input
-                value={newItemForm.name}
-                onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
-                placeholder="Nombre"
+                value={newItemForm.code}
+                onChange={(e) => setNewItemForm({ ...newItemForm, code: e.target.value })}
+                placeholder="Código de producto * (ej: ACR-001)"
                 className={inputCls}
               />
               <input
-                value={newItemForm.unit}
-                onChange={(e) => setNewItemForm({ ...newItemForm, unit: e.target.value })}
-                placeholder="Unidad"
-                className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                value={newItemForm.name}
+                onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
+                placeholder="Nombre *"
+                className={inputCls}
               />
               <input
-                type="number"
-                min="0"
-                value={newItemForm.minStock}
-                onChange={(e) => setNewItemForm({ ...newItemForm, minStock: e.target.value })}
-                placeholder="Stock mín."
-                className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                value={newItemForm.barcode}
+                onChange={(e) => setNewItemForm({ ...newItemForm, barcode: e.target.value })}
+                placeholder="Código de barras (opcional)"
+                className={inputCls}
               />
-              <button
-                onClick={() => void createItem()}
-                disabled={busy || !newItemForm.name.trim()}
-                className="shrink-0 rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
-              >
-                + Producto
-              </button>
+              <div className="flex gap-2">
+                <input
+                  value={newItemForm.unit}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, unit: e.target.value })}
+                  placeholder="Unidad"
+                  className={inputCls}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={newItemForm.minStock}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, minStock: e.target.value })}
+                  placeholder="Stock mín."
+                  className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleUpload(f);
+                }}
+                className={inputCls}
+              />
+              {newItemForm.photoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={newItemForm.photoUrl} alt="Foto" className="h-16 w-16 rounded-lg object-cover" />
+              )}
             </div>
+            <button
+              onClick={() => void createItem()}
+              disabled={busy || uploading || !newItemForm.code.trim() || !newItemForm.name.trim()}
+              className="mt-3 shrink-0 rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
+            >
+              + Producto
+            </button>
           </div>
 
           {confirmError && !deletingItem && (
@@ -301,78 +353,77 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
               <p className="text-gray-400">Sin productos en inventario</p>
             </div>
           ) : (
-            <div className="mt-6 space-y-3">
-              {items.map((item) => {
-                const lowStock = item.stock <= item.minStock && item.minStock > 0;
-                return (
-                  <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    {editingId === item.id ? (
-                      <div className="flex flex-wrap items-end gap-2">
-                        <div className="min-w-0 flex-1">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">Nombre</label>
-                          <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className={inputCls} />
-                        </div>
-                        <div className="w-24">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">Unidad</label>
-                          <input value={editForm.unit} onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })} className={inputCls} />
-                        </div>
-                        <div className="w-24">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">Stock mín.</label>
-                          <input type="number" min="0" value={editForm.minStock} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} className={inputCls} />
-                        </div>
-                        <label className="flex items-center gap-2 pb-2 text-sm text-gray-600">
-                          <input type="checkbox" checked={editForm.isActive === 1} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked ? 1 : 0 })} className="h-4 w-4" />
-                          Activo
-                        </label>
-                        <div className="flex gap-2">
-                          <button onClick={() => void saveEdit(item)} disabled={busy} className="rounded-xl bg-pink-main px-3 py-2 text-xs font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors">
-                            Guardar
-                          </button>
-                          <button onClick={() => setEditingId(null)} disabled={busy} className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-600 hover:bg-gray-200 transition-colors">
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-gray-900">{item.name}</p>
-                            {item.isActive === 0 && <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-xs text-gray-400">Inactivo</span>}
-                            {lowStock && <span className="rounded-lg bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">Stock bajo</span>}
+            <div className="mt-6 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                    <th className="px-3 py-3">Foto</th>
+                    <th className="px-3 py-3">Código</th>
+                    <th className="px-3 py-3">Nombre</th>
+                    <th className="px-3 py-3">Cód. barras</th>
+                    <th className="px-3 py-3">Unidad</th>
+                    <th className="px-3 py-3">Stock</th>
+                    <th className="px-3 py-3">Stock mín</th>
+                    <th className="px-3 py-3">Costo avg</th>
+                    <th className="px-3 py-3">Valor</th>
+                    <th className="px-3 py-3">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const lowStock = item.stock <= item.minStock && item.minStock > 0;
+                    return (
+                      <tr key={item.id} className={`border-b border-gray-50 ${item.isActive === 0 ? "opacity-50" : ""}`}>
+                        <td className="px-3 py-2">
+                          {item.photoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.photoUrl} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
+                          ) : (
+                            <span className="block h-10 w-10 rounded-lg bg-gray-100" />
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.id}</td>
+                        <td className="px-3 py-2">
+                          <p className="font-medium text-gray-900">{item.name}</p>
+                          {item.isActive === 0 && <span className="text-xs text-gray-400">Inactivo</span>}
+                          {lowStock && <span className="ml-1 rounded-lg bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">Stock bajo</span>}
+                          {item.estUsos !== null && <span className="ml-1 text-xs text-gray-400">≈ {item.estUsos} usos</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-600">{item.barcode ?? "—"}</td>
+                        <td className="px-3 py-2 text-gray-600">{item.unit}</td>
+                        <td className="px-3 py-2 font-medium text-gray-900">{item.stock}</td>
+                        <td className="px-3 py-2 text-gray-500">{item.minStock}</td>
+                        <td className="px-3 py-2 text-gray-600">${item.avgCost.toFixed(2)}</td>
+                        <td className="px-3 py-2 font-medium text-gray-900">${item.stockValue.toFixed(2)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-1.5">
+                            <button onClick={() => setMovementItem(item)} className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                              Salida
+                            </button>
+                            {canAdjust && (
+                              <button onClick={() => setMovementItem(item)} className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-200">
+                                Ajuste
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setEditingId(item.id);
+                                setEditForm({ name: item.name, unit: item.unit, minStock: String(item.minStock), isActive: item.isActive });
+                              }}
+                              className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                            >
+                              Editar
+                            </button>
+                            <button onClick={() => setDeletingItem(item)} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-600 hover:bg-red-200">
+                              Eliminar
+                            </button>
                           </div>
-                          <p className="mt-1 text-sm text-gray-500">
-                            {item.stock} {item.unit} · Costo avg <span className="font-semibold">${item.avgCost.toFixed(2)}</span> · Valor{" "}
-                            <span className="font-semibold">${item.stockValue.toFixed(2)}</span>
-                            {item.estUsos !== null && <> · ≈ {item.estUsos} usos</>}
-                          </p>
-                          {item.notes && <p className="mt-1 text-xs text-gray-400">{item.notes}</p>}
-                        </div>
-                        <div className="flex shrink-0 gap-2">
-                          <button onClick={() => setMovementItem(item)} className="rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 transition-colors">
-                            Salida
-                          </button>
-                          <button onClick={() => setMovementItem(item)} className="rounded-xl bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-200 transition-colors">
-                            Ajuste
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingId(item.id);
-                              setEditForm({ name: item.name, unit: item.unit, minStock: String(item.minStock), isActive: item.isActive });
-                            }}
-                            className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
-                          >
-                            Editar
-                          </button>
-                          <button onClick={() => setDeletingItem(item)} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-600 hover:bg-red-200">
-                            Eliminar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
