@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "inventory"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const serviceId = req.nextUrl.searchParams.get("serviceId");
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "inventory"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();

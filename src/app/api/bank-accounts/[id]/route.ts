@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "accountsPayable"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const { id } = await params;
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "accountsPayable"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const { id } = await params;

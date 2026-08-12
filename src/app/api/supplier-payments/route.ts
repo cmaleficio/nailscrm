@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 import { recomputeBillStatus } from "@/lib/bills";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "accountsPayable"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const billId = req.nextUrl.searchParams.get("billId");
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   const adminId = session?.user?.id;
-  if (!adminId || !(await isAdmin(session))) {
+  if (!adminId || !(await hasPermission(session, "accountsPayable"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();

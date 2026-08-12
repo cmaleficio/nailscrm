@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission, canAdjustInventory } from "@/lib/authz";
 import { applyManualMovement } from "@/lib/inventory";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "inventory"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const { id } = await params;
@@ -25,13 +25,16 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const session = await auth();
   const adminId = session?.user?.id;
-  if (!adminId || !(await isAdmin(session))) {
+  if (!adminId || !(await hasPermission(session, "inventory"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const { id } = await params;
   const body = await req.json();
   const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : "";
   const kind: "out" | "adjust" = body.kind === "adjust" ? "adjust" : "out";
+  if (kind === "adjust" && !(await canAdjustInventory(session))) {
+    return NextResponse.json({ error: "No autorizado para ajustar stock" }, { status: 403 });
+  }
   if (kind === "adjust" && !notes) {
     return NextResponse.json({ error: "El motivo es obligatorio en ajustes" }, { status: 400 });
   }

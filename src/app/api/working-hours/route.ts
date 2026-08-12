@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 import { getWorkingHoursAll, parseHhMm } from "@/lib/workingHours";
 
 export async function GET() {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "settings"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   return NextResponse.json(getWorkingHoursAll());
@@ -15,7 +15,7 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "settings"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();

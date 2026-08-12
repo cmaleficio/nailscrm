@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 import { getPnL } from "@/lib/financials";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "financials"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const month = req.nextUrl.searchParams.get("month");
