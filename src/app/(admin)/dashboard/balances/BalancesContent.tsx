@@ -22,6 +22,20 @@ type Payment = {
   notes: string | null;
 };
 
+type Receipt = {
+  id: string;
+  clientId: string;
+  clientName: string | null;
+  amountVes: number;
+  rate: number;
+  amountUsd: number;
+  photoUrl: string;
+  status: string;
+  reviewNotes: string | null;
+  paymentId: string | null;
+  createdAt: number;
+};
+
 export function BalancesContent() {
   const [totalUsd, setTotalUsd] = useState(0);
   const [clients, setClients] = useState<BalanceClient[]>([]);
@@ -29,6 +43,9 @@ export function BalancesContent() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [registering, setRegistering] = useState<BalanceClient | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"balances" | "receipts">("balances");
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [receiptFilter, setReceiptFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
 
   const loadBalances = useCallback(async () => {
     setLoading(true);
@@ -42,9 +59,38 @@ export function BalancesContent() {
     }
   }, []);
 
+  const loadReceipts = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (receiptFilter !== "all") params.set("status", receiptFilter);
+    const res = await fetch(`/api/payment-receipts?${params.toString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      setReceipts(Array.isArray(data) ? data : []);
+    }
+  }, [receiptFilter]);
+
   useEffect(() => {
     void loadBalances();
   }, [loadBalances]);
+
+  useEffect(() => {
+    if (tab === "receipts") void loadReceipts();
+  }, [tab, loadReceipts]);
+
+  async function reviewReceipt(id: string, action: "approve" | "reject") {
+    const notes = action === "reject" ? window.prompt("Motivo del rechazo:") ?? "" : "";
+    const res = await fetch(`/api/payment-receipts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, notes }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error || "No se pudo revisar la captura");
+    }
+    await loadReceipts();
+    await loadBalances();
+  }
 
   async function toggleClient(clientId: string) {
     const next = expanded === clientId ? null : clientId;
@@ -83,69 +129,156 @@ export function BalancesContent() {
         </p>
       </div>
 
-      {loading && clients.length === 0 ? (
-        <p className="text-gray-400">Cargando...</p>
-      ) : clients.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
-          <p className="text-gray-400">No hay cuentas por cobrar pendientes</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {clients.map((c) => (
-            <div key={c.clientId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <button onClick={() => void toggleClient(c.clientId)} className="min-w-0 flex-1 text-left">
-                  <p className="font-medium text-gray-900">{c.name}</p>
-                  <p className="text-sm text-gray-500">{c.phone ?? "Sin teléfono"}</p>
-                  <p className="text-sm text-gray-500">{c.unpaidAppointments} cita(s) sin pagar</p>
-                </button>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <p className="rounded-lg bg-pink-light px-3 py-1.5 text-sm font-bold text-gray-900">
-                    ${c.balanceUsd.toFixed(2)}
-                  </p>
-                  <button
-                    onClick={() => setRegistering(c)}
-                    className="rounded-xl bg-pink-main px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-pink-light transition-colors"
-                  >
-                    Registrar pago
-                  </button>
-                </div>
-              </div>
+      <div className="mb-6 flex gap-2">
+        {(["balances", "receipts"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              tab === t ? "bg-pink-main text-gray-900" : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {t === "balances" ? "Cuentas por cobrar" : "Pagos recibidos"}
+          </button>
+        ))}
+      </div>
 
-              {expanded === c.clientId && (
-                <div className="mt-4 border-t border-gray-100 pt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    Historial de pagos
-                  </p>
-                  {!payments[c.clientId] || payments[c.clientId].length === 0 ? (
-                    <p className="text-sm text-gray-400">Sin pagos registrados</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {payments[c.clientId].map((p) => (
-                        <div key={p.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              ${p.amountUsd.toFixed(2)} {p.currency === "VES" && `· ${p.amountVes?.toFixed(2)} Bs`}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Ref: {p.reference} · {fmtDate(p.paidAt)}
-                            </p>
-                            {p.notes && <p className="text-xs text-gray-400">{p.notes}</p>}
-                          </div>
-                          <button
-                            onClick={() => void deletePayment(c.clientId, p.id)}
-                            className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
-                          >
-                            Eliminar
-                          </button>
+      {tab === "balances" && (
+        <>
+          {loading && clients.length === 0 ? (
+            <p className="text-gray-400">Cargando...</p>
+          ) : clients.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay cuentas por cobrar pendientes</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {clients.map((c) => (
+                <div key={c.clientId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <button onClick={() => void toggleClient(c.clientId)} className="min-w-0 flex-1 text-left">
+                      <p className="font-medium text-gray-900">{c.name}</p>
+                      <p className="text-sm text-gray-500">{c.phone ?? "Sin teléfono"}</p>
+                      <p className="text-sm text-gray-500">{c.unpaidAppointments} cita(s) sin pagar</p>
+                    </button>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <p className="rounded-lg bg-pink-light px-3 py-1.5 text-sm font-bold text-gray-900">
+                        ${c.balanceUsd.toFixed(2)}
+                      </p>
+                      <button
+                        onClick={() => setRegistering(c)}
+                        className="rounded-xl bg-pink-main px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-pink-light transition-colors"
+                      >
+                        Registrar pago
+                      </button>
+                    </div>
+                  </div>
+
+                  {expanded === c.clientId && (
+                    <div className="mt-4 border-t border-gray-100 pt-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Historial de pagos
+                      </p>
+                      {!payments[c.clientId] || payments[c.clientId].length === 0 ? (
+                        <p className="text-sm text-gray-400">Sin pagos registrados</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {payments[c.clientId].map((p) => (
+                            <div key={p.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  ${p.amountUsd.toFixed(2)} {p.currency === "VES" && `· ${p.amountVes?.toFixed(2)} Bs`}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Ref: {p.reference} · {fmtDate(p.paidAt)}
+                                </p>
+                                {p.notes && <p className="text-xs text-gray-400">{p.notes}</p>}
+                              </div>
+                              <button
+                                onClick={() => void deletePayment(c.clientId, p.id)}
+                                className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
+        </>
+      )}
+
+      {tab === "receipts" && (
+        <div>
+          <div className="mb-4 flex gap-1 rounded-xl bg-gray-100 p-1">
+            {(["pending", "approved", "rejected", "all"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setReceiptFilter(s)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  receiptFilter === s ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                }`}
+              >
+                {s === "pending" ? "Pendientes" : s === "approved" ? "Aprobadas" : s === "rejected" ? "Rechazadas" : "Todas"}
+              </button>
+            ))}
+          </div>
+
+          {receipts.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay capturas de pago aquí</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {receipts.map((r) => (
+                <div key={r.id} className="flex items-start gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  {r.photoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.photoUrl} alt="Captura" className="h-16 w-16 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">{r.clientName ?? "Cliente"}</p>
+                    <p className="text-sm text-gray-500">
+                      {r.amountVes.toFixed(2)} Bs ≈ <span className="font-semibold text-gray-900">${r.amountUsd.toFixed(2)}</span> · tasa {r.rate.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-400">{fmtDate(r.createdAt)}</p>
+                    {r.reviewNotes && <p className="mt-1 text-xs text-red-600">{r.reviewNotes}</p>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {r.status === "pending" ? (
+                      <>
+                        <button
+                          onClick={() => void reviewReceipt(r.id, "approve")}
+                          className="rounded-xl bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition-colors"
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          onClick={() => void reviewReceipt(r.id, "reject")}
+                          className="rounded-xl bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                        >
+                          Rechazar
+                        </button>
+                      </>
+                    ) : (
+                      <span
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                          r.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                        }`}
+                      >
+                        {r.status === "approved" ? "Aprobada" : "Rechazada"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
