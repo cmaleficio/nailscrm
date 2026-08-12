@@ -14,6 +14,7 @@ export const users = sqliteTable("users", {
   totalVisits: integer("total_visits").default(0),
   totalRevenue: real("total_revenue").default(0),
   role: text("role").notNull().default("client"),
+  permissions: text("permissions"),
   createdAt: integer("created_at"),
 });
 
@@ -148,6 +149,7 @@ export const payments = sqliteTable(
     amountVes: real("amount_ves"),
     rate: real("rate"),
     reference: text("reference").notNull(),
+    photoUrl: text("photo_url"),
     paidAt: integer("paid_at"),
     notes: text("notes"),
     createdBy: text("created_by")
@@ -206,6 +208,8 @@ export const inventoryItems = sqliteTable("inventory_items", {
   minStock: real("min_stock").notNull().default(0),
   isActive: integer("is_active").notNull().default(1),
   notes: text("notes"),
+  barcode: text("barcode"),
+  photoUrl: text("photo_url"),
   createdAt: integer("created_at"),
 });
 
@@ -278,6 +282,7 @@ export const supplierPayments = sqliteTable(
     rate: real("rate"),
     paymentDate: integer("payment_date"),
     reference: text("reference").notNull(),
+    photoUrl: text("photo_url"),
     notes: text("notes"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: integer("created_at"),
@@ -315,5 +320,28 @@ export const cancelledAppointments = sqliteTable(
   (t) => [
     index("cancelled_appointments_client_idx").on(t.clientId),
     index("cancelled_appointments_cancelled_at_idx").on(t.cancelledAt),
+  ]
+);
+
+export const paymentReceipts = sqliteTable(
+  "payment_receipts",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id").notNull().references(() => users.id),
+    appointmentId: text("appointment_id").references(() => appointments.id),
+    amountVes: real("amount_ves").notNull(),
+    rate: real("rate").notNull(),
+    amountUsd: real("amount_usd").notNull(),
+    photoUrl: text("photo_url").notNull(),
+    status: text("status").$type<"pending" | "approved" | "rejected">().notNull().default("pending"),
+    reviewedBy: text("reviewed_by").references(() => users.id),
+    reviewedAt: integer("reviewed_at"),
+    reviewNotes: text("review_notes"),
+    paymentId: text("payment_id").references(() => payments.id),
+    createdAt: integer("created_at"),
+  },
+  (t) => [
+    index("payment_receipts_client_idx").on(t.clientId),
+    index("payment_receipts_status_idx").on(t.status),
   ]
 );

@@ -64,6 +64,13 @@
       "when": 1786328647415,
       "tag": "0008_lively_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1786498976372,
+      "tag": "0009_breezy_black_bolt",
+      "breakpoints": true
     }
   ]
 }
