@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SignOutButton } from "@/components/SignOutButton";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Agenda", icon: "📅" },
-  { href: "/dashboard/clients", label: "Clientes", icon: "👤" },
-  { href: "/dashboard/balances", label: "Cuentas por cobrar", icon: "💰" },
-  { href: "/dashboard/purchases", label: "Compras", icon: "🛒" },
-  { href: "/dashboard/accounts-payable", label: "Cuentas por pagar", icon: "💳" },
-  { href: "/dashboard/inventory", label: "Inventario", icon: "📦" },
-  { href: "/dashboard/financials", label: "Estados financieros", icon: "📊" },
-  { href: "/dashboard/settings", label: "Configuración", icon: "⏰" },
-  { href: "/dashboard/services", label: "Servicios", icon: "💅" },
-  { href: "/dashboard/admin-users", label: "Admins", icon: "🛡️" },
+const NAV_ITEMS: { href: string; label: string; icon: string; perm?: string }[] = [
+  { href: "/dashboard", label: "Agenda", icon: "📅", perm: "appointments" },
+  { href: "/dashboard/clients", label: "Clientes", icon: "👤", perm: "clients" },
+  { href: "/dashboard/balances", label: "Cuentas por cobrar", icon: "💰", perm: "balances" },
+  { href: "/dashboard/purchases", label: "Compras", icon: "🛒", perm: "purchases" },
+  { href: "/dashboard/accounts-payable", label: "Cuentas por pagar", icon: "💳", perm: "accountsPayable" },
+  { href: "/dashboard/inventory", label: "Inventario", icon: "📦", perm: "inventory" },
+  { href: "/dashboard/financials", label: "Estados financieros", icon: "📊", perm: "financials" },
+  { href: "/dashboard/settings", label: "Configuración", icon: "⏰", perm: "settings" },
+  { href: "/dashboard/services", label: "Servicios", icon: "💅", perm: "services" },
+  { href: "/dashboard/admin-users", label: "Admins", icon: "🛡️", perm: "adminUsers" },
 ];
 
 export default function AdminLayout({
@@ -25,6 +25,21 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [visibleNav, setVisibleNav] = useState<typeof NAV_ITEMS>(NAV_ITEMS);
+
+  useEffect(() => {
+    fetch("/api/my-permissions")
+      .then((r) => r.json())
+      .then((data: { permissions?: string[] | null }) => {
+        const perms = data.permissions ?? null;
+        if (perms === null) {
+          setVisibleNav(NAV_ITEMS);
+        } else {
+          setVisibleNav(NAV_ITEMS.filter((item) => !item.perm || perms.includes(item.perm)));
+        }
+      })
+      .catch(() => setVisibleNav(NAV_ITEMS));
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-gray-soft">
@@ -58,7 +73,7 @@ export default function AdminLayout({
           </div>
 
           <nav className="flex-1 space-y-1 px-3 py-4">
-            {NAV_ITEMS.map((item) => {
+            {visibleNav.map((item) => {
               const isActive =
                 item.href === "/dashboard"
                   ? pathname === "/dashboard"

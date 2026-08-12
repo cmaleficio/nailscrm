@@ -36,7 +36,7 @@ type UseLine = { key: string; inventoryItemId: string; quantityPerService: strin
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-main focus:outline-none";
 
-export function InventoryContent() {
+export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean }) {
   const [tab, setTab] = useState<"items" | "movimientos" | "servicios">("items");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [services, setServices] = useState<Service[]>([]);
