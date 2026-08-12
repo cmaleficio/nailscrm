@@ -3,8 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { StatsBanner } from "@/components/StatsBanner";
+import { ReportPaymentDialog } from "@/components/ReportPaymentDialog";
 
 type ProfileUser = {
   name: string;
@@ -38,13 +39,38 @@ type Props = {
   user: ProfileUser;
   appointments: Appointment[];
   upcomingAppointments: UpcomingAppointment[];
+  balanceUsd: number;
 };
 
-export function ProfileContent({ user, appointments, upcomingAppointments }: Props) {
+type Receipt = {
+  id: string;
+  amountVes: number;
+  rate: number;
+  amountUsd: number;
+  status: string;
+  photoUrl: string;
+  reviewNotes: string | null;
+  createdAt: number;
+};
+
+export function ProfileContent({ user, appointments, upcomingAppointments, balanceUsd }: Props) {
   const router = useRouter();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
+  const [showReport, setShowReport] = useState(false);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+
+  const loadReceipts = useCallback(() => {
+    fetch("/api/payment-receipts")
+      .then((r) => r.json())
+      .then((data) => setReceipts(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadReceipts();
+  }, [loadReceipts]);
 
   async function handleCancel(id: string) {
     setCancellingId(id);
@@ -204,6 +230,68 @@ export function ProfileContent({ user, appointments, upcomingAppointments }: Pro
         )}
       </section>
 
+      {/* Mis pagos */}
+      <section className="mb-10">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">Mis pagos</h2>
+          {balanceUsd > 0 && (
+            <button
+              onClick={() => setShowReport(true)}
+              className="rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light transition-colors"
+            >
+              Reportar pago
+            </button>
+          )}
+        </div>
+        {balanceUsd > 0 ? (
+          <p className="mb-3 text-sm text-gray-500">
+            Debes{" "}
+            <span className="font-semibold text-gray-900">${balanceUsd.toFixed(2)}</span>.
+            Paga en Bs y adjunta la captura; el salón la aprobará.
+          </p>
+        ) : (
+          <p className="mb-3 text-sm text-gray-500">No tienes saldo pendiente.</p>
+        )}
+        {receipts.length === 0 ? (
+          <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
+            <p className="text-gray-400">Aún no has reportado pagos</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {receipts.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                {r.photoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.photoUrl} alt="Captura" className="h-12 w-12 rounded-lg object-cover" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    {r.amountVes.toFixed(2)} Bs ≈ ${r.amountUsd.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "America/Caracas" }).format(new Date(r.createdAt * 1000))}
+                  </p>
+                  {r.status === "rejected" && r.reviewNotes && (
+                    <p className="text-xs text-red-600">Motivo: {r.reviewNotes}</p>
+                  )}
+                </div>
+                <span
+                  className={`rounded-lg px-2 py-1 text-xs font-medium ${
+                    r.status === "approved"
+                      ? "bg-green-100 text-green-700"
+                      : r.status === "rejected"
+                        ? "bg-red-100 text-red-600"
+                        : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {r.status === "approved" ? "Aprobado" : r.status === "rejected" ? "Rechazado" : "Pendiente"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Timeline */}
       <section>
         <h2 className="mb-6 text-lg font-semibold text-gray-900">
@@ -293,6 +381,23 @@ export function ProfileContent({ user, appointments, upcomingAppointments }: Pro
           </div>
         )}
       </section>
+
+      {showReport && (
+        <ReportPaymentDialog
+          balanceUsd={balanceUsd}
+          appointments={appointments.map((a) => ({
+            id: a.id,
+            serviceName: a.serviceName,
+            startTime: a.startTime,
+          }))}
+          onClose={() => setShowReport(false)}
+          onSaved={() => {
+            setShowReport(false);
+            loadReceipts();
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

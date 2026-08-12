@@ -80,6 +80,21 @@ export default async function ProfilePage() {
     .orderBy(schema.appointments.startTime)
     .all();
 
+  const due = db
+    .select({ s: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)` })
+    .from(schema.servicePurchases)
+    .innerJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
+    .where(and(eq(schema.servicePurchases.userId, user.id), eq(schema.appointments.status, "completed")))
+    .get()?.s ?? 0;
+
+  const paid = db
+    .select({ s: sql<number>`coalesce(sum(${schema.payments.amountUsd}), 0)` })
+    .from(schema.payments)
+    .where(eq(schema.payments.userId, user.id))
+    .get()?.s ?? 0;
+
+  const balanceUsd = Math.round((due - paid) * 100) / 100;
+
   return (
     <ProfileContent
       user={{
@@ -107,6 +122,7 @@ export default async function ProfilePage() {
         reviewText: a.reviewText,
         serviceName: a.serviceName,
       }))}
+      balanceUsd={balanceUsd}
     />
   );
 }
