@@ -8,10 +8,10 @@ import { FilterPills } from "./FilterPills";
 type GalleryItem = {
   id: string;
   url: string;
-  clientName: string;
-  serviceName: string;
-  serviceId: string;
-  appointmentId: string;
+  clientName: string | null;
+  serviceName: string | null;
+  serviceId: string | null;
+  appointmentId: string | null;
 };
 
 export function GalleryGrid() {
@@ -77,13 +77,17 @@ export function GalleryGrid() {
                 fill
                 sizes="(max-width: 640px) 50vw, 33vw"
                 src={item.url}
-                alt={`Uñas de ${item.clientName}`}
+                alt={item.clientName ? `Uñas de ${item.clientName}` : "Inspiración de uñas"}
                 className="object-cover"
               />
             </div>
             <div className="p-3">
-              <p className="text-sm font-medium text-gray-900">{item.clientName}</p>
-              <p className="text-xs text-gray-500">{item.serviceName}</p>
+              <p className="text-sm font-medium text-gray-900">
+                {item.clientName ?? item.serviceName ?? "Inspiración"}
+              </p>
+              {item.clientName && item.serviceName && (
+                <p className="text-xs text-gray-500">{item.serviceName}</p>
+              )}
             </div>
           </button>
         ))}
@@ -109,14 +113,18 @@ export function GalleryGrid() {
                 fill
                 sizes="(max-width: 640px) 100vw, 448px"
                 src={selected.url}
-                alt={`Uñas de ${selected.clientName}`}
+                alt={selected.clientName ? `Uñas de ${selected.clientName}` : "Inspiración de uñas"}
                 className="object-cover"
               />
             </div>
             <div className="p-5">
-              <p className="font-medium text-gray-900">¿Agendar un servicio similar con este modelo?</p>
+              <p className="font-medium text-gray-900">
+                {selected.serviceId ? "¿Agendar un servicio similar con este modelo?" : "Inspiración"}
+              </p>
               <p className="mt-1 text-sm text-gray-500">
-                {selected.serviceName} · modelo de {selected.clientName}
+                {selected.clientName
+                  ? `${selected.serviceName ?? ""} · modelo de ${selected.clientName}`
+                  : selected.serviceName ?? "Foto destacada del salón"}
               </p>
               <div className="mt-4 flex gap-3">
                 <button
@@ -125,13 +133,15 @@ export function GalleryGrid() {
                 >
                   Cerrar
                 </button>
-                <Link
-                  href={`/book?serviceId=${selected.serviceId}&referencePhotoUrl=${encodeURIComponent(selected.url)}`}
-                  onClick={() => setSelected(null)}
-                  className="flex-1 rounded-xl bg-pink-main px-4 py-2 text-center text-sm font-medium text-gray-900 hover:bg-pink-light transition-colors"
-                >
-                  Agendar
-                </Link>
+                {selected.serviceId && (
+                  <Link
+                    href={`/book?serviceId=${selected.serviceId}&referencePhotoUrl=${encodeURIComponent(selected.url)}`}
+                    onClick={() => setSelected(null)}
+                    className="flex-1 rounded-xl bg-pink-main px-4 py-2 text-center text-sm font-medium text-gray-900 hover:bg-pink-light transition-colors"
+                  >
+                    Agendar
+                  </Link>
+                )}
               </div>
             </div>
           </div>

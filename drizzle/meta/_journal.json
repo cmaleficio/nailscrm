@@ -71,6 +71,20 @@
       "when": 1786498976372,
       "tag": "0009_breezy_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787360868552,
+      "tag": "0010_aspiring_gressill",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1787362799056,
+      "tag": "0011_marvelous_misty_knight",
+      "breakpoints": true
     }
   ]
 }

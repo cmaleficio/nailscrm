@@ -40,6 +40,17 @@ export async function getPermissions(session: Session | null): Promise<string[] 
   return parsePermissions(user?.permissions ?? null);
 }
 
+export async function hasAnyPermission(
+  session: Session | null,
+  perms: string[]
+): Promise<boolean> {
+  if (await isSuperAdmin(session)) return true;
+  if (!(await isAdmin(session))) return false;
+  const userPerms = await getPermissions(session);
+  if (userPerms === null) return true;
+  return perms.some((p) => userPerms.includes(p));
+}
+
 export async function hasPermission(session: Session | null, perm: string): Promise<boolean> {
   if (await isSuperAdmin(session)) return true;
   if (!(await isAdmin(session))) return false;

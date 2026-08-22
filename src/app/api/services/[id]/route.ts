@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: RouteParams
 ) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "services"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -90,7 +90,7 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "services"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

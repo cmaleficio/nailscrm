@@ -107,6 +107,16 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - position: integer, default 0
 - created_at: integer (timestamp)
 
+### Tabla: gallery_photos (fotos sueltas del muro, subidas por admin sin cita)
+- id: text, primary key
+- url: text, not null (archivo en /public/uploads/gallery)
+- service_id: text, foreign key → services.id (opcional; si existe, la foto permite "agendar similar")
+- caption: text (descripción opcional)
+- position: integer, default 0
+- created_by: text, foreign key → users.id (admin que la subió)
+- created_at: integer (timestamp)
+- Se fusionan con las fotos finales de citas en `GET /api/gallery` (ordenadas por fecha desc).
+
 ### Tabla: service_purchases (snapshot del servicio al comprar, inmutable)
 - id: text, primary key
 - user_id: text, foreign key → users.id
@@ -121,8 +131,9 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 ### Tabla: waitlist
 - id: text, primary key
 - client_id: text, foreign key → users.id
-- preferred_date: integer (timestamp)
+- preferred_date: integer (timestamp, inicio del día preferido)
 - notified: integer (boolean), default 0
+- created_at: integer (timestamp)
 
 ### Tabla: blockouts
 - id: text, primary key
@@ -289,7 +300,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `/review/[id]` → Formulario de reseña post-cita
 
 ### Protegidas (requieren auth)
-- `/dashboard` → Panel admin (agenda del día/semana + pestaña "Canceladas" con el archivo de citas canceladas)
+- `/dashboard` → Panel admin (agenda del día/semana, pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
 - `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
 - `/dashboard/balances` → Cuentas por cobrar (total adeudado, pagos por cliente)
 - `/dashboard/purchases` → Compras (facturas, proveedores y categorías de gasto)
@@ -298,6 +309,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `/dashboard/financials` → Estados financieros (P&L mensual)
 - `/dashboard/settings` → Configuración (horario de trabajo por día de la semana)
 - `/dashboard/services` → Gestión de servicios (+ fotos del servicio, eliminar si no tiene uso)
+- `/dashboard/gallery` → Muro de inspiración (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
 - `/profile` → Portal de cliente (pasaporte de uñas + historial + "Mis pagos" con reporte de capturas)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
@@ -308,13 +320,23 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `GET /api/payment-receipts` → admin: todas (filtro `?status=`); cliente: solo las suyas.
 - `POST /api/payment-receipts` (cliente) → reporta pago en Bs con captura; valida cita propia.
 - `PATCH/DELETE /api/payment-receipts/[id]` → solo permiso `paymentApproval`; `approve` inserta en `payments` y liga `paymentId`.
+- `GET/POST /api/gallery-photos` (admin) → lista/sube fotos sueltas del muro (`gallery_photos`, archivos en `/public/uploads/gallery`; POST acepta `serviceId` y `caption` opcionales).
+- `DELETE /api/gallery-photos/[id]` (admin) → borra la fila y el archivo.
+- `GET /api/gallery` (público) ahora fusiona fotos finales de citas compartidas + fotos sueltas de `gallery_photos` (orden por fecha desc, cursor).
+- `GET/POST /api/appointments/[id]/review` (público por id de cita): GET devuelve datos mínimos (servicio, fecha, nombre de pila, reseña existente); POST guarda `review_rating` (1-5 obligatorio) + `review_text` (opcional, máx 500) solo en citas `completed`; 409 si ya tiene reseña.
+- `GET /api/waitlist` (admin) → lista la lista de espera con nombre/teléfono del cliente.
+- `POST /api/waitlist` (usuario autenticado) → se une con `preferredDate` (timestamp inicio de día); dedupe por cliente+fecha (409); rechaza fechas pasadas (400).
+- `PATCH /api/waitlist/[id]` (admin) → marca `notified`.
+- `DELETE /api/waitlist/[id]` → dueño de la entrada o admin.
 
 ## 🔐 Permisos de admins
 - `users.permissions`: JSON array de claves; **null = acceso a todos los módulos** (no rompe admins existentes).
 - Superadmin (`ADMIN_EMAIL`) siempre tiene acceso total.
-- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `adminUsers`, `paymentApproval`.
-- `hasPermission(session, key)` en `src/lib/authz.ts` bloquea a no-admins y a admins sin el permiso. `adjustInventory` controla salidas/ajustes de stock; `paymentApproval` controla aprobar/rechazar capturas de pago.
+- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `gallery`, `adminUsers`, `paymentApproval`.
+- `hasPermission(session, key)` en `src/lib/authz.ts` bloquea a no-admins y a admins sin el permiso. `hasAnyPermission(session, keys)` acepta varios módulos. `adjustInventory` controla salidas/ajustes de stock; `paymentApproval` controla aprobar/rechazar/eliminar capturas de pago.
+- Guardas auditadas por endpoint: servicios (`services*` → `services`), snapshot de compras por cita (`/api/purchases*` → `appointments`), clientes (`/api/clients*` → `clients` **o** `appointments` porque el CRM panel y walk-ins viven en la agenda), blockouts y waitlist admin (`appointments`), muro (`gallery`), facturas/proveedores/categorías (`purchases`), pagos proveedor/bancos (`accountsPayable`), balances/pagos de clientes (`balances`), P&L (`financials`), horario (`settings`), admins (`adminUsers`), inventario y usos (`inventory`). `/api/upload` exige sesión. Públicos por diseño: catálogo activo, slots, galería, tasa actual, registro, auth, reseñas por id.
 - `PATCH /api/admins` rechaza editar permisos del admin principal (`ADMIN_EMAIL`) con 403.
+- En `/dashboard/admin-users` hay select "Copiar de…" para replicar permisos de otro admin (se aplican al guardar).
 
 ## 🎨 Componentes UI Clave
 - ServiceCard: card de servicio con carrusel de fotos, nombre, duración, precio, botón "Agendar"
@@ -322,9 +344,9 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables
 - PhotoCarousel: carrusel de fotos de referencia al abrir una cita en la agenda
 - CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro) y registrar pago del momento ($/Bs con tasa del día).
-- GalleryGrid: grid masonry/pinterest para muro de inspiración con clic → agendar similar
+- GalleryGrid: grid masonry/pinterest para muro de inspiración con clic → agendar similar (soporta fotos de citas y fotos sueltas del admin)
 - FilterPills: pills horizontales para filtrar galería (Todas, Acrílicas, Gel, etc)
-- BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro)
+- BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro y CTA "Unirme a la lista de espera" cuando el día no tiene slots disponibles)
 - CompleteRegistrationForm: formulario para pedir teléfono tras registrarse con Google
 - StatsBanner: banner con total_visits y total_revenue del cliente
 - LoginForm: formulario de login/registro por correo y contraseña
@@ -340,6 +362,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable
 - InventoryContent: pestañas de productos (grid con foto/código/barras), kardex y uso por servicio en /dashboard/inventory
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
+- GalleryContent: gestor del muro de inspiración en /dashboard/gallery (subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación)
 - ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)
 
 ## 🚀 Comandos

@@ -3,13 +3,13 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, like, or, and } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasAnyPermission } from "@/lib/authz";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasAnyPermission(session, ["clients", "appointments"]))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasAnyPermission(session, ["clients", "appointments"]))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();

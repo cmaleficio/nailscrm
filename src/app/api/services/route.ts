@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 
 function withPhotos<T extends { id: string }>(rows: T[]) {
   const photos = db.select().from(schema.servicePhotos).all();
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   if (includeInactive) {
     const session = await auth();
-    if (!(await isAdmin(session))) {
+    if (!(await hasPermission(session, "services"))) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
     return NextResponse.json(
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "services"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

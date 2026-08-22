@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; photoId: string }> }
 ) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "services"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const { id, photoId } = await params;
@@ -24,3 +24,4 @@ export async function DELETE(
   db.delete(schema.servicePhotos).where(eq(schema.servicePhotos.id, photoId)).run();
   return NextResponse.json({ success: true });
 }
+

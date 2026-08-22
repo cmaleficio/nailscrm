@@ -98,6 +98,18 @@ export function AdminUsersContent() {
     }
   }
 
+  function handleCopyPermissions(targetEmail: string, sourceEmail: string) {
+    const source = admins.find((a) => a.email === sourceEmail);
+    if (!source) return;
+    const copied =
+      (source.permissions ?? null) === null
+        ? [...PERMISSION_KEYS]
+        : [...new Set(source.permissions ?? [])];
+    setAdmins((prev) =>
+      prev.map((a) => (a.email === targetEmail ? { ...a, permissions: copied } : a))
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">
@@ -196,7 +208,7 @@ export function AdminUsersContent() {
                   {(admin.permissions ?? null) === null && (
                     <p className="mt-2 text-xs text-gray-400">Acceso a todos los módulos (por defecto).</p>
                   )}
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => {
                         setAdmins((prev) =>
@@ -217,6 +229,28 @@ export function AdminUsersContent() {
                     >
                       Ninguno
                     </button>
+                    {admins.length > 1 && (
+                      <div className="flex items-center gap-1">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) handleCopyPermissions(admin.email, e.target.value);
+                            e.target.value = "";
+                          }}
+                          className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-600"
+                        >
+                          <option value="">Copiar de…</option>
+                          {admins
+                            .filter((a) => a.email !== admin.email)
+                            .map((a) => (
+                              <option key={a.email} value={a.email}>
+                                {a.name || a.email}
+                                {(a.permissions ?? null) === null ? " (todos)" : ""}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                     <button
                       onClick={() => void handleSavePermissions(admin)}
                       disabled={savingPerms === admin.email}

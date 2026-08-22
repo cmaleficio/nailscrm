@@ -26,6 +26,16 @@ type Appointment = {
 
 type Blockout = { id: string; startTime: number; endTime: number; reason: string | null };
 
+type WaitlistEntry = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  clientPhone: string | null;
+  preferredDate: number;
+  notified: number;
+  createdAt: number | null;
+};
+
 type Props = {
   today: string;
 };
@@ -54,7 +64,7 @@ export function DashboardContent({ today }: Props) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
-  const [view, setView] = useState<"day" | "week" | "cancelled">("day");
+  const [view, setView] = useState<"day" | "week" | "waitlist" | "cancelled">("day");
   const [weekDates, setWeekDates] = useState<Date[]>(() =>
     datesOfWeek(new Date())
   );
@@ -81,6 +91,7 @@ export function DashboardContent({ today }: Props) {
       actorRole: string;
     }[]
   >([]);
+  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -101,11 +112,20 @@ export function DashboardContent({ today }: Props) {
     setCancelledList(Array.isArray(data) ? data : []);
   }, []);
 
+  const fetchWaitlist = useCallback(async () => {
+    const res = await fetch("/api/waitlist");
+    if (res.ok) {
+      const data = await res.json();
+      setWaitlist(Array.isArray(data) ? data : []);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAppointments();
     fetchBlockouts();
     fetchCancelled();
-  }, [fetchAppointments, fetchBlockouts, fetchCancelled]);
+    fetchWaitlist();
+  }, [fetchAppointments, fetchBlockouts, fetchCancelled, fetchWaitlist]);
 
   const fetchWeek = useCallback(async (dates: Date[]) => {
     const entries: Record<string, Appointment[]> = {};
@@ -205,7 +225,7 @@ export function DashboardContent({ today }: Props) {
       </div>
 
       <div className="mb-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
-        {(["day", "week", "cancelled"] as const).map((v) => (
+        {(["day", "week", "waitlist", "cancelled"] as const).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -215,7 +235,13 @@ export function DashboardContent({ today }: Props) {
                 : "text-gray-500 hover:bg-gray-50"
             }`}
           >
-            {v === "day" ? "Día" : v === "week" ? "Semana" : "Canceladas"}
+            {v === "day"
+              ? "Día"
+              : v === "week"
+                ? "Semana"
+                : v === "waitlist"
+                  ? `Espera${waitlist.length > 0 ? ` (${waitlist.length})` : ""}`
+                  : "Canceladas"}
           </button>
         ))}
       </div>
@@ -373,6 +399,94 @@ export function DashboardContent({ today }: Props) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {view === "waitlist" && (
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-gray-500">
+            Lista de espera (clientes que quieren un espacio si se libera)
+          </h2>
+          {waitlist.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay clientes en lista de espera</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {waitlist.map((w) => (
+                <div
+                  key={w.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">
+                      {w.clientName}{" "}
+                      <span className="text-xs font-normal text-gray-400">
+                        desde{" "}
+                        {w.createdAt
+                          ? new Intl.DateTimeFormat("es-ES", {
+                              dateStyle: "short",
+                              timeZone: "America/Caracas",
+                            }).format(new Date(w.createdAt * 1000))
+                          : "—"}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Prefiere:{" "}
+                      {new Intl.DateTimeFormat("es-ES", {
+                        dateStyle: "full",
+                        timeZone: "America/Caracas",
+                      }).format(new Date(w.preferredDate * 1000))}
+                      {" · "}
+                      {w.clientPhone ?? "sin teléfono"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {w.notified === 1 && (
+                      <span className="rounded-lg bg-green-50 px-2 py-1 text-xs font-medium text-green-600">
+                        Notificado
+                      </span>
+                    )}
+                    {w.clientPhone && (
+                      <a
+                        href={`https://wa.me/${w.clientPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                          `Hola ${w.clientName?.trim().split(/\s+/)[0] ?? ""}, se liberó un espacio en el salón. ¿Te interesa agendar para el ${new Intl.DateTimeFormat("es-ES", {
+                            dateStyle: "long",
+                            timeZone: "America/Caracas",
+                          }).format(new Date(w.preferredDate * 1000))}?`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          if (w.notified !== 1) {
+                            fetch(`/api/waitlist/${w.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ notified: true }),
+                            })
+                              .then(() => fetchWaitlist())
+                              .catch(() => {});
+                          }
+                        }}
+                        className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-100 transition-colors"
+                      >
+                        WhatsApp
+                      </a>
+                    )}
+                    <button
+                      onClick={async () => {
+                        await fetch(`/api/waitlist/${w.id}`, { method: "DELETE" });
+                        refreshAll();
+                      }}
+                      className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

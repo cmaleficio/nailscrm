@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // NextAuth v5 detecta la URL desde la cabecera Host de la petición
+  // Cuando NO hay NEXTAUTH_URL, usa el origin de la petición entrante
+  // Esto permite que funcione en localhost, IP servidor, y túneles Cloudflare
 };
 
 export default nextConfig;

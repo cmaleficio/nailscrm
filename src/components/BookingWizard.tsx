@@ -51,6 +51,8 @@ export function BookingWizard() {
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [wlStatus, setWlStatus] = useState<"idle" | "joining" | "joined" | "already">("idle");
+  const [wlError, setWlError] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return now.getMonth();
@@ -109,7 +111,37 @@ export function BookingWizard() {
   function handleDateSelect(date: string) {
     setSelectedDate(date);
     setSelectedSlot(null);
+    setWlStatus("idle");
+    setWlError("");
     fetchSlots(date);
+  }
+
+  async function handleJoinWaitlist() {
+    if (!selectedDate) return;
+    const dayStart = Math.floor(
+      new Date(selectedDate + "T00:00:00-04:00").getTime() / 1000
+    );
+    setWlStatus("joining");
+    setWlError("");
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferredDate: dayStart }),
+      });
+      if (res.status === 409) {
+        setWlStatus("already");
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo unir a la lista de espera");
+      }
+      setWlStatus("joined");
+    } catch (e) {
+      setWlStatus("idle");
+      setWlError(e instanceof Error ? e.message : "Error inesperado");
+    }
   }
 
   function handleSlotSelect(hour: number) {
@@ -375,10 +407,36 @@ export function BookingWizard() {
               </h3>
               {loadingSlots ? (
                 <p className="text-sm text-gray-400">Cargando horarios...</p>
-              ) : slots.length === 0 ? (
-                <p className="text-sm text-gray-400">
-                  No hay horarios disponibles para este día
-                </p>
+              ) : slots.length === 0 || !slots.some((s) => s.available) ? (
+                <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
+                  <p className="text-sm text-gray-500">
+                    No hay horarios disponibles para este día
+                  </p>
+                  {wlStatus === "joined" || wlStatus === "already" ? (
+                    <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                      {wlStatus === "already"
+                        ? "Ya estás en la lista de espera para este día. Te avisaremos si se libera un espacio."
+                        : "¡Listo! Te avisaremos por WhatsApp si se libera un espacio."}
+                    </p>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleJoinWaitlist}
+                        disabled={wlStatus === "joining"}
+                        className="mt-3 rounded-xl bg-pink-main px-5 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
+                      >
+                        {wlStatus === "joining"
+                          ? "Uniéndote..."
+                          : "Unirme a la lista de espera"}
+                      </button>
+                      {wlError && (
+                        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                          {wlError}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {slots.map((slot) => (

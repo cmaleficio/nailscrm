@@ -7,6 +7,11 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 ## [Sin publicar]
 
 ### Añadido
+- Sistema de permisos completo: nueva clave `gallery` (Muro de inspiración); auditoría y corrección de guardas en todos los endpoints (`services*`, snapshot `/api/purchases*` → agenda, `clients*` → clients o appointments, blockouts/waitlist → appointments, `upload` ahora exige sesión, DELETE de capturas → `paymentApproval`). Nuevo helper `hasAnyPermission`. En `/dashboard/admin-users`, select "Copiar de…" para replicar permisos de otro admin.
+- Lista de espera: cuando el día elegido en el wizard no tiene horarios disponibles aparece "Unirme a la lista de espera" (dedupe por cliente+fecha, rechaza fechas pasadas). El admin la gestiona en la nueva pestaña "Espera" de la agenda: contacto directo por WhatsApp (marca la entrada como notificada) y eliminar. APIs `GET/POST /api/waitlist` y `PATCH/DELETE /api/waitlist/[id]`.
+- Reseñas post-cita: página pública `/review/[id]` con formulario de estrellas (1-5) y comentario opcional (máx 500), APIs `GET/POST /api/appointments/[id]/review` (solo citas `completed`, 409 si ya tiene reseña) y botón "Dejar reseña" en el pasaporte de uñas para citas completadas sin reseña.
+- Pre-llenado del muro de inspiración: nueva tabla `gallery_photos` para fotos sueltas subidas por el admin sin cita asociada. Página `/dashboard/gallery` con subida múltiple, servicio asociado opcional (habilita "Agendar similar" desde la foto) y descripción; eliminar con confirmación (borra fila y archivo).
+- APIs del muro: `GET/POST /api/gallery-photos` y `DELETE /api/gallery-photos/[id]` (solo rol admin; archivos en `/public/uploads/gallery`). `GET /api/gallery` (público) ahora fusiona fotos finales de citas compartidas con las fotos sueltas del admin (orden por fecha desc, paginación por cursor).
 - Login por correo/contraseña (Credentials provider de Auth.js) además de Google: página `/login` con `LoginForm`, registro en `/api/auth/register` y columna `password_hash` en `users`.
 - Enlace "Entrar" en el `Header` y "Entrar o crear cuenta con correo" en el wizard de reserva para usuarios sin sesión (además del botón Google).
 - Seed regenerable del cliente demo (`npm run db:seed:client`): crea/actualiza `clienta@email.com` (contraseña `Cliente123!`) con dirección, notas técnicas, citas próximas y completadas, fotos de referencia/finales, reseñas y snapshots de compra. Re-ejecutable: borra y regenera las citas del demo.
@@ -45,6 +50,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Inventario con código de producto como PK (`ACR-001`…), código de barras y foto: grid de productos en tabla (foto/código/barras/stock/costo/valor) y botón de ajuste condicionado al permiso `adjustInventory`.
 
 ### Cambiado
+- Autenticación Google multi-dispositivo: se eliminó `NEXTAUTH_URL` de `.env.template`; NextAuth v5 detecta el host automáticamente desde la cabecera `Host` de la petición, así el login funciona desde localhost, la IP del servidor o el túnel de Cloudflare sin cambiar configuración.
+- El muro público (`GalleryGrid`) muestra fotos sin cliente (subidas por el admin): muestra servicio/descripción en lugar del nombre de la clienta y solo ofrece "Agendar" si la foto tiene servicio asociado.
 - Cancelar una cita ahora la elimina definitivamente (hard delete, `DELETE /api/appointments/[id]` desde el dashboard y el perfil del cliente) y archiva un snapshot en la nueva tabla `cancelled_appointments`, visible en la pestaña "Canceladas" de la agenda. El `PATCH` con `status: 'cancelled'` y el endpoint `/api/appointments/[id]/cancel` quedan obsoletos.
 - Compras en `/dashboard/purchases`: la pestaña de facturas ahora es un grid maestro-detalle (nº factura/proveedor/fechas/tipo/total/estado con detalle expandible de pagado/pendiente/líneas).
 - Los items de inventario pasan de UUID a códigos de producto legibles (migración 0009 con remapeo de referencias en `bill_items`, `inventory_movements` y `service_products`).

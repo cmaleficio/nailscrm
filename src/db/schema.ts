@@ -98,6 +98,16 @@ export const servicePhotos = sqliteTable("service_photos", {
   createdAt: integer("created_at"),
 });
 
+export const galleryPhotos = sqliteTable("gallery_photos", {
+  id: text("id").primaryKey(),
+  url: text("url").notNull(),
+  serviceId: text("service_id").references(() => services.id),
+  caption: text("caption"),
+  position: integer("position").notNull().default(0),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: integer("created_at"),
+});
+
 export const servicePurchases = sqliteTable("service_purchases", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
@@ -118,6 +128,7 @@ export const waitlist = sqliteTable("waitlist", {
   clientId: text("client_id").notNull().references(() => users.id),
   preferredDate: integer("preferred_date"),
   notified: integer("notified").default(0),
+  createdAt: integer("created_at"),
 });
 
 export const blockouts = sqliteTable("blockouts", {

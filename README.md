@@ -31,12 +31,12 @@ Copiar `.env.template` a `.env` y completar:
 | `AUTH_FACEBOOK_ID` | App ID de Facebook (opcional) |
 | `AUTH_FACEBOOK_SECRET` | App Secret de Facebook (opcional) |
 | `NEXTAUTH_SECRET` | Secreto para firmar sesiones |
-| `NEXTAUTH_URL` | URL pública de la app (en producción) |
 | `ADMIN_EMAIL` | Email del admin principal (superadmin) |
 | `CRON_SECRET` | Secreto para el refresh diario de la tasa BCV (cron-job.org) |
 | `NEXT_PUBLIC_SALON_NAME` | Nombre mostrado del salón |
 
 > **Nota:** Auth.js v5 lee las credenciales como `AUTH_<PROVIDER>_ID` / `AUTH_<PROVIDER>_SECRET`. No usar los nombres antiguos `GOOGLE_CLIENT_ID`.
+> **Acceso multi-dispositivo:** no hace falta `NEXTAUTH_URL`; Auth.js v5 detecta el host desde la petición, así el login con Google funciona desde localhost, la IP del servidor o el túnel.
 
 ## Ejecución
 
@@ -66,8 +66,9 @@ npx tsc --noEmit      # typecheck
 
 ## Funcionalidades principales
 
-- **Reserva en 3 pasos:** elige servicio, horario y confirmas. En el último paso puedes subir fotos de referencia o elegir modelos del muro de inspiración.
-- **Muro de inspiración:** fotos finales de citas compartidas, filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo.
+- **Reserva en 3 pasos:** elige servicio, horario y confirmas. En el último paso puedes subir fotos de referencia o elegir modelos del muro de inspiración. Si el día no tiene horarios disponibles, puedes unirte a la lista de espera con un clic.
+- **Lista de espera:** los clientes que se unen aparecen en la pestaña "Espera" del dashboard; el admin los contacta por WhatsApp (queda marcado como notificado) o elimina la entrada.
+- **Muro de inspiración:** fotos finales de citas compartidas y fotos destacadas subidas por el admin desde `/dashboard/gallery` (pre-llenado del muro sin necesidad de completar una cita), filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo (si la foto tiene servicio asociado).
 - **Dashboard admin:** agenda día/semana con carrusel de modelos de referencia al abrir una cita, botón "Completar" que sube varias fotos finales (publicadas en el muro) y registra pago del momento ($/Bs con tasa del día), "Nueva cita" para walk-ins (clientes no registrados), "Bloquear tiempo" para marcar horarios no disponibles y "Cancelar" con confirmación (elimina la cita definitivamente y queda archivada en la pestaña "Canceladas"). En `/dashboard/services` hay botón "Eliminar" (solo servicios sin citas ni compras), y en `/dashboard/clients` se pueden eliminar clientes sin movimientos (sin citas, pagos ni lista de espera), tanto desde la lista como desde el panel CRM.
 - **Cuentas por cobrar** en `/dashboard/balances`: total adeudado por cliente (calculado en vivo), historial de pagos y registro/borrado de pagos en $ o Bs con la tasa del día del BCV (scrapeada de bcv.org.ve), abonos parciales y referencia obligatoria. Incluye la pestaña "Pagos recibidos": cuando el cliente reporta un pago en Bs con captura desde su perfil, el admin lo aprueba (descuenta el saldo) o lo rechaza con motivo. La tasa se refresca diariamente con el endpoint `GET /api/exchange-rate/refresh` (protegido por `CRON_SECRET`), que cron-job.org debe llamar a la URL pública del túnel.
 - **Compras** en `/dashboard/purchases`: facturas a proveedores en un grid maestro-detalle (de inventario con líneas de producto que registran entradas de stock, o gastos fijos en $/Bs), proveedores y categorías de gasto.
@@ -76,9 +77,11 @@ npx tsc --noEmit      # typecheck
 - **Estados financieros** en `/dashboard/financials`: P&L mensual con ingresos por servicio, gastos por categoría y utilidad/pérdida.
 - **Configuración de horario** en `/dashboard/settings`: horario de trabajo configurable por día de la semana.
 - **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección, stats de visitas e ingresos, saldo pendiente con registro de pagos y botón de WhatsApp.
+- **Reseñas post-cita:** tras completar una cita, la clienta puede dejar su reseña (estrellas + comentario) desde `/review/[id]` o el botón "Dejar reseña" en su perfil.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home.
+- **Muro del admin:** en `/dashboard/gallery` se suben fotos sueltas al muro (múltiples a la vez, con servicio asociado opcional y descripción).
 - **Teléfono post-Google:** tras registrarse con Google se pide el teléfono en `/complete-registration`.
-- **Permisos por admin:** en `/dashboard/admin-users` (solo superadmin) se asignan permisos por módulo (`users.permissions`); un admin con `null` tiene acceso a todo y el superadmin siempre accede a todo. También aparece "Mis pagos" en el perfil del cliente para reportar pagos en Bs con captura.
+- **Permisos por admin:** en `/dashboard/admin-users` (solo superadmin) se asignan permisos por módulo (`users.permissions`); un admin con `null` tiene acceso a todo y el superadmin siempre accede a todo. Hay select "Copiar de…" para replicar los permisos de otro admin. También aparece "Mis pagos" en el perfil del cliente para reportar pagos en Bs con captura.
 
 ## Estructura
 

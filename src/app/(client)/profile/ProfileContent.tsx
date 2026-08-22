@@ -375,6 +375,15 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
                       )}
                     </div>
                   )}
+
+                  {!appt.reviewRating && (
+                    <Link
+                      href={`/review/${appt.id}`}
+                      className="mt-3 inline-block rounded-xl bg-pink-light px-4 py-2 text-sm font-medium text-gray-700 hover:bg-pink-main transition-colors"
+                    >
+                      Dejar reseña
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
