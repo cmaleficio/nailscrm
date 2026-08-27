@@ -75,9 +75,10 @@ npx tsc --noEmit      # typecheck
 - **Cuentas por pagar** en `/dashboard/accounts-payable`: facturas pendientes con aviso de vencimiento, registro de pagos a proveedores en $/Bs con tasa BCV y captura de transferencia obligatoria (el estado de la factura se recalcula solo) y cuentas bancarias del salón.
 - **Inventario** en `/dashboard/inventory`: productos con código (`ACR-001`…), código de barras y foto en un grid, existencias valorizadas (costo promedio ponderado), badge "Stock bajo", kardex de movimientos (salidas y ajustes con motivo) y uso de productos por servicio. Los ajustes requieren el permiso `adjustInventory`. Los esmaltes se organizan por **categoría** (ej: "Esmalte") y **subcategoría** (ej: "Max Glow"), con **máximo de usos** por producto; se muestra el badge "Agotado" (manual o automático al alcanzar el máximo) y los usos consumidos/restantes.
 - **Uso por cita:** al completar una cita desde la agenda se eligen qué esmaltes se usaron (agrupados por categoría → subcategoría); el registro descuenta stock, genera un movimiento "Uso en cita" en el kardex y alimenta el contador de usos de cada producto.
-- **Estados financieros** en `/dashboard/financials`: P&L mensual con ingresos por servicio, gastos por categoría y utilidad/pérdida.
+- **Estados financieros** en `/dashboard/financials`: P&L mensual con dos vistas — **Recaudación** (ingresos por pagos cobrados en el mes) y **Producción** (ingresos por servicios completados en el mes), cada uno con desglose por servicio, además de gastos por categoría y utilidad.
 - **Configuración de horario** en `/dashboard/settings`: horario de trabajo configurable por día de la semana.
 - **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección, stats de visitas e ingresos, saldo pendiente con registro de pagos y botón de WhatsApp.
+- **Cursos y servicios grupales:** los servicios pueden marcarse como "curso/grupo" (`is_group`) y el admin crea sesiones de curso desde la agenda seleccionando fecha/hora y varios alumnos; cada alumno inscrito genera su propia compra/CXC individual, la sesión aparece como bloque en la agenda (badge "Curso · N alumnos") y en `/dashboard/balances` se ve el desglose por ítem con badge de estado financiero y filtro por estado.
 - **Reseñas post-cita:** tras completar una cita, la clienta puede dejar su reseña (estrellas + comentario) desde `/review/[id]` o el botón "Dejar reseña" en su perfil.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home.
 - **Muro del admin:** en `/dashboard/gallery` se suben fotos sueltas al muro (múltiples a la vez, con servicio asociado opcional y descripción).
@@ -98,7 +99,7 @@ src/
 ## Roles
 
 - **Cliente:** reserva, próximas citas y pasaporte en `/profile`.
-- **Admin:** agenda día/semana, completar citas con fotos y pago, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar (incluye aprobar/rechazar capturas de pago), compras, cuentas por pagar, inventario, estados financieros, servicios y horario de trabajo. Los accesos a cada módulo se controlan por permisos asignados en `/dashboard/admin-users`.
+- **Admin:** agenda día/semana, completar citas con fotos y pago (opcional, la deuda queda pendiente si no se marca), crear sesiones de curso grupal, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar con desglose por ítem y filtro de estado, compras, cuentas por pagar, inventario, estados financieros (Recaudación + Producción), servicios y horario de trabajo. Los accesos a cada módulo se controlan por permisos asignados en `/dashboard/admin-users`.
 - **Superadmin (`ADMIN_EMAIL`):** gestión de admins y sus permisos en `/dashboard/admin-users`.
 
 ## Mantenimiento
