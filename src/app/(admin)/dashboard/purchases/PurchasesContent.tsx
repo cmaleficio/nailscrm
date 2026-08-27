@@ -109,6 +109,7 @@ export function PurchasesContent() {
         dueDate: data.dueDate ?? null,
         items: data.items ?? [],
       });
+      setShowForm(true);
     }
   }
 

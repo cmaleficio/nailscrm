@@ -124,3 +124,64 @@ export function reverseBillMovements(billId: string, createdBy: string): void {
       .run();
   }
 }
+
+export function setExhausted(itemId: string, exhausted: boolean, createdBy: string): void {
+  const item = db.select().from(schema.inventoryItems).where(eq(schema.inventoryItems.id, itemId)).get();
+  if (!item) throw new Error("Item de inventario no encontrado");
+  if (exhausted && !item.isExhausted) {
+    db.update(schema.inventoryItems).set({ isExhausted: 1, stock: 0 }).where(eq(schema.inventoryItems.id, itemId)).run();
+    if (item.stock > 0.004) {
+      applyManualMovement(itemId, "adjust", 0, "Agotado (stock a 0)", createdBy);
+    }
+  } else if (!exhausted && item.isExhausted) {
+    db.update(schema.inventoryItems).set({ isExhausted: 0 }).where(eq(schema.inventoryItems.id, itemId)).run();
+  }
+}
+
+export function recordUsage(
+  appointmentId: string,
+  usage: { inventoryItemId: string; quantity: number }[],
+  createdBy: string
+): void {
+  const now = Math.floor(Date.now() / 1000);
+  for (const u of usage) {
+    const item = db.select().from(schema.inventoryItems).where(eq(schema.inventoryItems.id, u.inventoryItemId)).get();
+    if (!item) throw new Error("Item de inventario no encontrado");
+    const qty = Number(u.quantity);
+    if (!Number.isFinite(qty) || qty < 0) throw new Error("Cantidad inválida");
+
+    db.insert(schema.appointmentUsage)
+      .values({ id: crypto.randomUUID(), appointmentId, inventoryItemId: u.inventoryItemId, quantity: qty })
+      .onConflictDoUpdate({
+        target: [schema.appointmentUsage.appointmentId, schema.appointmentUsage.inventoryItemId],
+        set: { quantity: qty },
+      })
+      .run();
+
+    const newStock = Math.max(0, Math.round((item.stock - qty) * 100) / 100);
+    const newUses = (item.usesConsumed ?? 0) + 1;
+    db.update(schema.inventoryItems)
+      .set({
+        stock: newStock,
+        usesConsumed: newUses,
+        isExhausted: item.maxUses != null && newUses >= item.maxUses ? 1 : item.isExhausted,
+      })
+      .where(eq(schema.inventoryItems.id, u.inventoryItemId))
+      .run();
+
+    db.insert(schema.inventoryMovements)
+      .values({
+        id: crypto.randomUUID(),
+        inventoryItemId: u.inventoryItemId,
+        kind: "out",
+        quantity: qty > 0 ? -qty : 0,
+        unitCostUsd: null,
+        refType: "usage",
+        refId: appointmentId,
+        notes: "Uso en cita",
+        createdBy,
+        createdAt: now,
+      })
+      .run();
+  }
+}

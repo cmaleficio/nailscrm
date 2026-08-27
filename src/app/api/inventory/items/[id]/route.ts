@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { setExhausted } from "@/lib/inventory";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -31,11 +32,23 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const photoUrl = body.photoUrl !== undefined
     ? (typeof body.photoUrl === "string" && body.photoUrl.trim() ? body.photoUrl.trim() : null)
     : existing.photoUrl;
+  if (body.exhausted === true || body.exhausted === false) {
+    setExhausted(id, body.exhausted, session!.user!.id);
+  }
+  const category = body.category !== undefined
+    ? (typeof body.category === "string" && body.category.trim() ? body.category.trim() : null)
+    : existing.category;
+  const subcategory = body.subcategory !== undefined
+    ? (typeof body.subcategory === "string" && body.subcategory.trim() ? body.subcategory.trim() : null)
+    : existing.subcategory;
+  const maxUses = body.maxUses !== undefined
+    ? (typeof body.maxUses === "number" && body.maxUses > 0 ? Math.floor(body.maxUses) : null)
+    : existing.maxUses;
   db.update(schema.inventoryItems)
-    .set({ name, unit, minStock, isActive, notes, barcode, photoUrl })
+    .set({ name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses })
     .where(eq(schema.inventoryItems.id, id))
     .run();
-  return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes, barcode, photoUrl });
+  return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses });
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {

@@ -8,6 +8,7 @@ import {
   getAdminUserId,
   deleteEventOnPrimaryCalendar,
 } from "@/lib/calendar";
+import { recordUsage } from "@/lib/inventory";
 
 export async function PATCH(
   req: NextRequest,
@@ -130,6 +131,18 @@ export async function PATCH(
         })
         .where(eq(schema.appointments.id, id))
         .run();
+    }
+
+    const usage: { inventoryItemId: string; quantity: number }[] = Array.isArray(body.usage)
+      ? body.usage
+          .filter((x: unknown) => x && typeof (x as { inventoryItemId?: unknown }).inventoryItemId === "string")
+          .map((x: unknown) => ({
+            inventoryItemId: (x as { inventoryItemId: string }).inventoryItemId,
+            quantity: Number((x as { quantity?: unknown }).quantity) || 1,
+          }))
+      : [];
+    if (usage.length > 0) {
+      recordUsage(id, usage, session?.user?.id ?? "");
     }
   }
 

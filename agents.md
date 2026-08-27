@@ -217,7 +217,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - created_at: integer (timestamp)
 
 ### Tabla: inventory_items (inventario)
-- id: text, primary key (**código de producto**, ej: `ACR-001`, `GEL-001`)
+- id: text, primary key (**código de producto**, ej: `ACR-001`, `GEL-001` o `PRD-001` autogenerado si se crea sin código)
 - name: text, not null
 - unit: text, default 'unidad'
 - stock: real, default 0
@@ -226,9 +226,24 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - is_active: integer (boolean), default 1
 - barcode: text (código de barras EAN, opcional)
 - photo_url: text (foto del producto, opcional)
+- category: text (categoría principal del producto, ej: "Esmalte"; los productos sin categoría no cuentan como esmalte)
+- subcategory: text (subcategoría/tipo exacto, ej: "Max Glow", "Emerald")
+- max_uses: integer (máximo de usos configurable por producto; al alcanzarlo se marca agotado)
+- uses_consumed: integer, default 0 (usos reales consumidos en citas)
+- is_exhausted: integer (boolean), default 0 (agotado manual o automático; al marcar se pone stock en 0)
 - notes: text
 - created_at: integer (timestamp)
 - `stockValue` = `stock * avg_cost` (se calcula en el API).
+- `usosRestantes` = `max_uses − uses_consumed` (badge "Agotado" si `uses_consumed >= max_uses` o `is_exhausted=1`).
+- Si se crea un producto sin `code` (desde inventario o desde el diálogo de compras), `POST /api/inventory/items` genera el siguiente código ascendente `PRD-<n>`.
+
+### Tabla: appointment_usage (uso de productos por cita)
+- id: text, primary key
+- appointment_id: text, foreign key → appointments.id (on delete cascade)
+- inventory_item_id: text, foreign key → inventory_items.id
+- quantity: real, not null, default 1
+- unique index (appointment_id, inventory_item_id).
+- Se llena al completar una cita con `recordUsage(...)`: descuenta stock, crea un `inventory_movements` kind 'out' con `ref_type='usage'`/`ref_id=appointment_id` e incrementa `inventory_items.uses_consumed` (agotando si supera `max_uses`).
 
 ### Tabla: inventory_movements (kardex)
 - id: text, primary key
@@ -236,8 +251,8 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - kind: text, not null ('in' | 'out' | 'adjust')
 - quantity: real, not null (positivo para in, negativo para out/adjust)
 - unit_cost_usd: real (solo en entradas)
-- ref_type: text, default 'manual' ('bill' | 'manual')
-- ref_id: text (id de la factura si ref_type='bill')
+- ref_type: text, default 'manual' ('bill' | 'usage' | 'manual')
+- ref_id: text (id de la factura si ref_type='bill', id de la cita si ref_type='usage')
 - notes: text
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
@@ -343,7 +358,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - AppointmentCard: card de cita con hora, cliente, servicio, foto referencia
 - ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables
 - PhotoCarousel: carrusel de fotos de referencia al abrir una cita en la agenda
-- CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro) y registrar pago del momento ($/Bs con tasa del día).
+- CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro), registrar pago del momento ($/Bs con tasa del día) y marcar qué **esmaltes** (productos con categoría) se usaron en la cita, agrupados por categoría → subcategoría. Al confirmar envía `usage` que llaman a `recordUsage()`.
 - GalleryGrid: grid masonry/pinterest para muro de inspiración con clic → agendar similar (soporta fotos de citas y fotos sueltas del admin)
 - FilterPills: pills horizontales para filtrar galería (Todas, Acrílicas, Gel, etc)
 - BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro y CTA "Unirme a la lista de espera" cuando el día no tiene slots disponibles)
@@ -355,12 +370,12 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
 - ReportPaymentDialog: reporta pago en Bs con captura desde "Mis pagos" del perfil de cliente
 - SettingsContent: editor del horario de trabajo por día de la semana
-- BillFormDialog: crea/edita facturas (inventario con líneas de producto o gasto fijo $/Bs) desde Compras
+- BillFormDialog: crea/edita facturas (inventario con líneas de producto o gasto fijo $/Bs) desde Compras. Al crear un producto sin código, `POST /api/inventory/items` genera el código automáticamente.
 - SupplierPaymentDialog: registra pagos a proveedores ($/Bs con tasa BCV) desde Cuentas por pagar (captura obligatoria)
 - MovementDialog: registra salidas/ajustes de stock (con motivo obligatorio en ajustes) desde Inventario
-- PurchasesContent: pestañas de facturas (grid maestro-detalle), proveedores y categorías en /dashboard/purchases
+- PurchasesContent: pestañas de facturas (grid maestro-detalle editable), proveedores y categorías en /dashboard/purchases
 - AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable
-- InventoryContent: pestañas de productos (grid con foto/código/barras), kardex y uso por servicio en /dashboard/inventory
+- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`).
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
 - GalleryContent: gestor del muro de inspiración en /dashboard/gallery (subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación)
 - ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)

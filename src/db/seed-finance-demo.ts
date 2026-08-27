@@ -85,7 +85,7 @@ db.insert(schema.bankAccounts).values([bankUsd, bankVes]).run();
 
 const itemMon = { id: "ACR-001", name: "Monómero acrílico", unit: "ml", stock: 0, avgCost: 0, minStock: 200, isActive: 1, notes: null, barcode: "7701000000001", photoUrl: null, createdAt: now };
 const itemPow = { id: "ACR-002", name: "Polvo acrílico", unit: "g", stock: 0, avgCost: 0, minStock: 150, isActive: 1, notes: null, barcode: "7701000000002", photoUrl: null, createdAt: now };
-const itemGel = { id: "GEL-001", name: "Esmalte semipermanente", unit: "ml", stock: 0, avgCost: 0, minStock: 100, isActive: 1, notes: null, barcode: "7701000000003", photoUrl: null, createdAt: now };
+const itemGel = { id: "GEL-001", name: "Esmalte semipermanente", unit: "ml", stock: 0, avgCost: 0, minStock: 100, isActive: 1, notes: null, barcode: "7701000000003", photoUrl: null, category: "Esmalte", subcategory: "Semipermanente", maxUses: 30, usesConsumed: 0, isExhausted: 0, createdAt: now };
 const itemTips = { id: "TIP-001", name: "Tips pack", unit: "pack", stock: 0, avgCost: 0, minStock: 10, isActive: 1, notes: null, barcode: "7701000000004", photoUrl: null, createdAt: now };
 db.insert(schema.inventoryItems).values([itemMon, itemPow, itemGel, itemTips]).run();
 

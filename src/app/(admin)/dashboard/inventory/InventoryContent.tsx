@@ -18,6 +18,11 @@ type InventoryItem = {
   photoUrl: string | null;
   stockValue: number;
   estUsos: number | null;
+  category: string | null;
+  subcategory: string | null;
+  maxUses: number | null;
+  usesConsumed: number;
+  isExhausted: number;
 };
 
 type Movement = {
@@ -53,10 +58,10 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   const [confirmError, setConfirmError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [newItemForm, setNewItemForm] = useState({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "" });
+  const [newItemForm, setNewItemForm] = useState({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "", category: "", subcategory: "", maxUses: "" });
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", unit: "", minStock: "0", isActive: 1 });
+  const [editForm, setEditForm] = useState({ name: "", unit: "", minStock: "0", isActive: 1, category: "", subcategory: "", maxUses: "" });
   const [savingUses, setSavingUses] = useState<string | null>(null);
 
   const loadItems = useCallback(async () => {
@@ -138,13 +143,16 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
           minStock: Number(newItemForm.minStock) || 0,
           barcode: newItemForm.barcode.trim(),
           photoUrl: newItemForm.photoUrl,
+          category: newItemForm.category.trim(),
+          subcategory: newItemForm.subcategory.trim(),
+          maxUses: newItemForm.maxUses ? Number(newItemForm.maxUses) : null,
         }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "No se pudo crear el producto");
       }
-      setNewItemForm({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "" });
+      setNewItemForm({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "", category: "", subcategory: "", maxUses: "" });
       await loadItems();
     } catch (err) {
       setConfirmError(err instanceof Error ? err.message : "Error inesperado");
@@ -165,6 +173,9 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
           unit: editForm.unit.trim(),
           minStock: Number(editForm.minStock) || 0,
           isActive: editForm.isActive === 1,
+          category: editForm.category.trim(),
+          subcategory: editForm.subcategory.trim(),
+          maxUses: editForm.maxUses ? Number(editForm.maxUses) : null,
         }),
       });
       if (!res.ok) {
@@ -180,9 +191,30 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
     }
   }
 
-  async function confirmDeleteItem() {
-    if (!deletingItem) return;
+  async function toggleExhausted(item: InventoryItem) {
     setBusy(true);
+    setConfirmError("");
+    try {
+      const res = await fetch(`/api/inventory/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exhausted: item.isExhausted === 1 ? false : true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo actualizar el estado");
+      }
+      setEditingId(null);
+      await loadItems();
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDeleteItem() {
+    if (!deletingItem) return;    setBusy(true);
     setConfirmError("");
     try {
       const res = await fetch(`/api/inventory/items/${deletingItem.id}`, { method: "DELETE" });
@@ -287,13 +319,33 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
               <input
                 value={newItemForm.code}
                 onChange={(e) => setNewItemForm({ ...newItemForm, code: e.target.value })}
-                placeholder="Código de producto * (ej: ACR-001)"
+                placeholder="Código (opcional, se genera solo)"
                 className={inputCls}
               />
               <input
                 value={newItemForm.name}
                 onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
                 placeholder="Nombre *"
+                className={inputCls}
+              />
+              <input
+                value={newItemForm.category}
+                onChange={(e) => setNewItemForm({ ...newItemForm, category: e.target.value })}
+                placeholder="Categoría (ej: Esmalte)"
+                className={inputCls}
+              />
+              <input
+                value={newItemForm.subcategory}
+                onChange={(e) => setNewItemForm({ ...newItemForm, subcategory: e.target.value })}
+                placeholder="Subcategoría (ej: Max Glow)"
+                className={inputCls}
+              />
+              <input
+                value={newItemForm.maxUses}
+                onChange={(e) => setNewItemForm({ ...newItemForm, maxUses: e.target.value })}
+                placeholder="Máx. usos"
+                type="number"
+                min="0"
                 className={inputCls}
               />
               <input
@@ -335,7 +387,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
             </div>
             <button
               onClick={() => void createItem()}
-              disabled={busy || uploading || !newItemForm.code.trim() || !newItemForm.name.trim()}
+              disabled={busy || uploading || !newItemForm.name.trim()}
               className="mt-3 shrink-0 rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
             >
               + Producto
@@ -387,8 +439,19 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                         <td className="px-3 py-2">
                           <p className="font-medium text-gray-900">{item.name}</p>
                           {item.isActive === 0 && <span className="text-xs text-gray-400">Inactivo</span>}
+                          {item.isExhausted === 1 && <span className="ml-1 rounded-lg bg-red-600 px-2 py-0.5 text-xs font-medium text-white">Agotado</span>}
                           {lowStock && <span className="ml-1 rounded-lg bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">Stock bajo</span>}
                           {item.estUsos !== null && <span className="ml-1 text-xs text-gray-400">≈ {item.estUsos} usos</span>}
+                          {item.category && (
+                            <span className="ml-1 text-xs text-gray-400">
+                              {item.category}{item.subcategory ? ` / ${item.subcategory}` : ""}
+                            </span>
+                          )}
+                          {item.maxUses != null && (
+                            <span className="ml-1 text-xs text-gray-400">
+                              · {item.usesConsumed}/{item.maxUses} usos
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-xs text-gray-600">{item.barcode ?? "—"}</td>
                         <td className="px-3 py-2 text-gray-600">{item.unit}</td>
@@ -409,7 +472,15 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                             <button
                               onClick={() => {
                                 setEditingId(item.id);
-                                setEditForm({ name: item.name, unit: item.unit, minStock: String(item.minStock), isActive: item.isActive });
+                                setEditForm({
+                                  name: item.name,
+                                  unit: item.unit,
+                                  minStock: String(item.minStock),
+                                  isActive: item.isActive,
+                                  category: item.category ?? "",
+                                  subcategory: item.subcategory ?? "",
+                                  maxUses: item.maxUses != null ? String(item.maxUses) : "",
+                                });
                               }}
                               className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
                             >
@@ -437,6 +508,18 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                                 <label className="mb-1 block text-xs font-medium text-gray-600">Stock mín.</label>
                                 <input type="number" min="0" value={editForm.minStock} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} className={inputCls} />
                               </div>
+                              <div className="min-w-0 flex-1">
+                                <label className="mb-1 block text-xs font-medium text-gray-600">Categoría</label>
+                                <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} placeholder="Ej: Esmalte" className={inputCls} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <label className="mb-1 block text-xs font-medium text-gray-600">Subcategoría</label>
+                                <input value={editForm.subcategory} onChange={(e) => setEditForm({ ...editForm, subcategory: e.target.value })} placeholder="Ej: Max Glow" className={inputCls} />
+                              </div>
+                              <div className="w-28">
+                                <label className="mb-1 block text-xs font-medium text-gray-600">Máx. usos</label>
+                                <input type="number" min="0" value={editForm.maxUses} onChange={(e) => setEditForm({ ...editForm, maxUses: e.target.value })} className={inputCls} />
+                              </div>
                               <label className="flex items-center gap-2 pb-2 text-sm text-gray-600">
                                 <input type="checkbox" checked={editForm.isActive === 1} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked ? 1 : 0 })} className="h-4 w-4" />
                                 Activo
@@ -444,6 +527,9 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                               <div className="flex gap-2">
                                 <button onClick={() => void saveEdit(item)} disabled={busy} className="rounded-xl bg-pink-main px-3 py-2 text-xs font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors">
                                   Guardar
+                                </button>
+                                <button onClick={() => void toggleExhausted(item)} disabled={busy} className="rounded-xl bg-red-100 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-200 disabled:opacity-50 transition-colors">
+                                  {item.isExhausted === 1 ? "Reabrir" : "Marcar agotado"}
                                 </button>
                                 <button onClick={() => setEditingId(null)} disabled={busy} className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-600 hover:bg-gray-200 transition-colors">
                                   Cancelar

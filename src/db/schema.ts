@@ -221,6 +221,11 @@ export const inventoryItems = sqliteTable("inventory_items", {
   notes: text("notes"),
   barcode: text("barcode"),
   photoUrl: text("photo_url"),
+  category: text("category"),
+  subcategory: text("subcategory"),
+  maxUses: integer("max_uses"),
+  usesConsumed: integer("uses_consumed").notNull().default(0),
+  isExhausted: integer("is_exhausted").notNull().default(0),
   createdAt: integer("created_at"),
 });
 
@@ -232,7 +237,7 @@ export const inventoryMovements = sqliteTable(
     kind: text("kind").$type<"in" | "out" | "adjust">().notNull(),
     quantity: real("quantity").notNull(),
     unitCostUsd: real("unit_cost_usd"),
-    refType: text("ref_type").$type<"bill" | "manual">().notNull().default("manual"),
+    refType: text("ref_type").$type<"bill" | "manual" | "usage">().notNull().default("manual"),
     refId: text("ref_id"),
     notes: text("notes"),
     createdBy: text("created_by").notNull().references(() => users.id),
@@ -361,3 +366,14 @@ export const brandSettings = sqliteTable("brand_settings", {
   key: text("key").primaryKey(),
   value: text("value"),
 });
+
+export const appointmentUsage = sqliteTable(
+  "appointment_usage",
+  {
+    id: text("id").primaryKey(),
+    appointmentId: text("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+    inventoryItemId: text("inventory_item_id").notNull().references(() => inventoryItems.id),
+    quantity: real("quantity").notNull().default(1),
+  },
+  (t) => [uniqueIndex("appointment_usage_unique_idx").on(t.appointmentId, t.inventoryItemId)]
+);

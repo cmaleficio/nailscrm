@@ -40,11 +40,20 @@ export function CompleteAppointmentDialog({
   const [manualRate, setManualRate] = useState("");
   const [reference, setReference] = useState("");
   const [paidDate, setPaidDate] = useState(todayStr());
+  const [esmalters, setEsmalters] = useState<{ id: string; name: string; category: string | null; subcategory: string | null; stock: number; isExhausted: number }[]>([]);
+  const [usageSel, setUsageSel] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/exchange-rate")
       .then((r) => r.json())
       .then((data) => setRate(data))
+      .catch(() => {});
+    fetch("/api/inventory/items")
+      .then((r) => r.json())
+      .then((data) => {
+        const arr = Array.isArray(data) ? data : [];
+        setEsmalters(arr.filter((i: { category?: string | null }) => !!i.category));
+      })
       .catch(() => {});
   }, []);
 
@@ -74,10 +83,13 @@ export function CompleteAppointmentDialog({
         const data = await up.json();
         urls.push(data.url);
       }
+      const usage = Object.entries(usageSel)
+        .filter((entry) => Number(entry[1]) > 0)
+        .map(([inventoryItemId, quantity]) => ({ inventoryItemId, quantity: Number(quantity) }));
       const res = await fetch(`/api/appointments/${appointmentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "completed", finalPhotos: urls }),
+        body: JSON.stringify({ status: "completed", finalPhotos: urls, usage }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -161,6 +173,57 @@ export function CompleteAppointmentDialog({
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        <div className="mt-5 rounded-xl border border-gray-200 p-4">
+          <p className="mb-1 text-sm font-medium text-gray-700">Productos usados (esmaltes)</p>
+          <p className="mb-3 text-xs text-gray-400">
+            Marca qué esmaltes se usaron en esta cita para saber cuántos usos te duran.
+          </p>
+          {esmalters.length === 0 ? (
+            <p className="text-sm text-gray-400">No hay esmaltes con categoría registrados.</p>
+          ) : (
+            (() => {
+              const byCat: Record<string, { id: string; name: string; subcategory: string | null; stock: number; isExhausted: number }[]> = {};
+              for (const e of esmalters) {
+                const key = e.category ?? "Otros";
+                (byCat[key] ??= []).push(e);
+              }
+              return Object.entries(byCat).map(([cat, items]) => (
+                <div key={cat} className="mb-3">
+                  <p className="mb-1 text-xs font-semibold uppercase text-gray-500">{cat}</p>
+                  {items.map((e) => (
+                    <div key={e.id} className="mb-1 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={usageSel[e.id] !== undefined}
+                        onChange={(ev) => {
+                          const next = { ...usageSel };
+                          if (ev.target.checked) next[e.id] = "1";
+                          else delete next[e.id];
+                          setUsageSel(next);
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-pink-main focus:ring-pink-main"
+                      />
+                      <span className="min-w-0 flex-1 text-sm text-gray-700">
+                        {e.subcategory ? `${e.subcategory} — ` : ""}{e.name}
+                        {e.isExhausted === 1 ? <span className="ml-1 text-xs text-red-500">Agotado</span> : null}
+                      </span>
+                      {usageSel[e.id] !== undefined && (
+                        <input
+                          type="number"
+                          min="0"
+                          value={usageSel[e.id]}
+                          onChange={(ev) => setUsageSel((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                          className="w-16 rounded-xl border border-gray-200 px-2 py-1 text-sm"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()
           )}
         </div>
 

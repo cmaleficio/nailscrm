@@ -7,6 +7,11 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 ## [Sin publicar]
 
 ### Añadido
+- Usos reales por cita: al completar una cita se puede marcar qué esmaltes (productos con categoría) se usaron, agrupados por categoría principal mostrando las subcategorías. Cada producto de esmalte admite una `category` (ej: "Esmalte") y una `subcategory` (ej: "Max Glow", "Emerald"). El registro descuenta stock, genera un movimiento de salida "Uso en cita" en el kardex e incrementa `uses_consumed`.
+- Máximo de usos por producto: nuevo campo `max_uses` configurable. `usos_restantes = max_uses − usos_consumidos` y se muestra en la tabla de inventario. Al alcanzar (o superar) el máximo se marca el producto como "Agotado" automáticamente.
+- Marcar producto agotado manualmente: botón "Marcar agotado"/"Reabrir" en la edición de un producto de inventario (pone `is_exhausted=1` y stock a 0 con movimiento de ajuste; "Reabrir" lo revierte).
+- Código de producto automático: al crear un producto sin código, se genera solo el siguiente código ascendente (`PRD-<n>`), también desde el diálogo de compras ("Nuevo producto" ya no pide el código).
+- Nueva tabla `appointment_usage` (`appointment_id`, `inventory_item_id`, `quantity`) para registrar qué productos se usaron en cada cita. Campos nuevos en `inventory_items`: `category`, `subcategory`, `max_uses`, `uses_consumed`, `is_exhausted`; `inventory_movements.ref_type` admite `usage`.
 - Sistema de permisos completo: nueva clave `gallery` (Muro de inspiración); auditoría y corrección de guardas en todos los endpoints (`services*`, snapshot `/api/purchases*` → agenda, `clients*` → clients o appointments, blockouts/waitlist → appointments, `upload` ahora exige sesión, DELETE de capturas → `paymentApproval`). Nuevo helper `hasAnyPermission`. En `/dashboard/admin-users`, select "Copiar de…" para replicar permisos de otro admin.
 - Lista de espera: cuando el día elegido en el wizard no tiene horarios disponibles aparece "Unirme a la lista de espera" (dedupe por cliente+fecha, rechaza fechas pasadas). El admin la gestiona en la nueva pestaña "Espera" de la agenda: contacto directo por WhatsApp (marca la entrada como notificada) y eliminar. APIs `GET/POST /api/waitlist` y `PATCH/DELETE /api/waitlist/[id]`.
 - Reseñas post-cita: página pública `/review/[id]` con formulario de estrellas (1-5) y comentario opcional (máx 500), APIs `GET/POST /api/appointments/[id]/review` (solo citas `completed`, 409 si ya tiene reseña) y botón "Dejar reseña" en el pasaporte de uñas para citas completadas sin reseña.
@@ -57,6 +62,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Los items de inventario pasan de UUID a códigos de producto legibles (migración 0009 con remapeo de referencias en `bill_items`, `inventory_movements` y `service_products`).
 
 ### Corregido
+- Edición de facturas en `/dashboard/purchases`: el botón "Editar" cargaba los datos pero nunca abría el diálogo (faltaba `setShowForm(true)`), por lo que no se podía editar ninguna factura aunque se tuviera permiso de administrador.
 - Avatar de Google en el `Header`: `next/image` fallaba con 500 porque el host `lh3.googleusercontent.com` no estaba configurado en `next.config.ts`. Se añadió el `remotePatterns` correspondiente.
 - Fotos de los seeds (`picsum.photos`) en las tarjetas de servicio: `next/image` fallaba con 500 porque el host no estaba en `images.remotePatterns` de `next.config.ts`. Se añadió el patrón correspondiente.
 - Lint: eliminados los 21 warnings pre-existentes (variables sin usar, dependencia faltante en un `useEffect` y migración de todas las etiquetas `<img>` a `next/image` con `fill`). Nota visual: el muro de inspiración y los modelos del booking ahora muestran imágenes en celdas cuadradas uniformes (`aspect-square`).
