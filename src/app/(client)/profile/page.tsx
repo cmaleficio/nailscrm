@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db/index";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and, gte, ne, sql } from "drizzle-orm";
 import { ProfileContent } from "./ProfileContent";
 
 export default async function ProfilePage() {
@@ -83,9 +83,23 @@ export default async function ProfilePage() {
   const due = db
     .select({ s: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)` })
     .from(schema.servicePurchases)
-    .innerJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
-    .where(and(eq(schema.servicePurchases.userId, user.id), eq(schema.appointments.status, "completed")))
+    .where(and(eq(schema.servicePurchases.userId, user.id), ne(schema.servicePurchases.financialStatus, "void")))
     .get()?.s ?? 0;
+
+  const statementItems = db
+    .select({
+      id: schema.servicePurchases.id,
+      serviceName: schema.servicePurchases.serviceName,
+      price: schema.servicePurchases.servicePrice,
+      financialStatus: schema.servicePurchases.financialStatus,
+      completionDate: schema.servicePurchases.completionDate,
+      startTime: schema.appointments.startTime,
+    })
+    .from(schema.servicePurchases)
+    .leftJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
+    .where(and(eq(schema.servicePurchases.userId, user.id), ne(schema.servicePurchases.financialStatus, "void")))
+    .orderBy(schema.servicePurchases.createdAt)
+    .all();
 
   const paid = db
     .select({ s: sql<number>`coalesce(sum(${schema.payments.amountUsd}), 0)` })
@@ -123,6 +137,14 @@ export default async function ProfilePage() {
         serviceName: a.serviceName,
       }))}
       balanceUsd={balanceUsd}
+      statementItems={statementItems.map((s) => ({
+        id: s.id,
+        serviceName: s.serviceName,
+        price: s.price,
+        financialStatus: s.financialStatus,
+        completionDate: s.completionDate,
+        startTime: s.startTime,
+      }))}
     />
   );
 }
