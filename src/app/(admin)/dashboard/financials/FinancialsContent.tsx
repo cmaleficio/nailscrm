@@ -2,14 +2,28 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+type PnLBreakdownItem = {
+  serviceName: string;
+  amount: number;
+  count: number;
+};
+
 type PnLResult = {
   month: string;
-  income: number;
+  recaudacion: {
+    income: number;
+    servicesCount: number;
+    incomeByService: PnLBreakdownItem[];
+  };
+  produccion: {
+    income: number;
+    servicesCount: number;
+    incomeByService: PnLBreakdownItem[];
+  };
   expenses: number;
-  profit: number;
-  servicesCount: number;
+  profitRecaudacion: number;
+  profitProduccion: number;
   invoicesCount: number;
-  incomeByService: { serviceName: string; amount: number; count: number }[];
   expensesByCategory: { categoryName: string; amount: number }[];
 };
 
@@ -18,6 +32,50 @@ const defaultMonth = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "2-digit",
 }).format(new Date());
+
+function PnLPanel({
+  title,
+  income,
+  profit,
+  servicesCount,
+  incomeByService,
+  emptyMessage,
+}: {
+  title: string;
+  income: number;
+  profit: number;
+  servicesCount: number;
+  incomeByService: PnLBreakdownItem[];
+  emptyMessage: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="text-sm font-semibold text-gray-900">{title}</p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <p className="text-2xl font-bold text-green-600">${income.toFixed(2)}</p>
+        <p className={`text-sm font-semibold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+          Utilidad ${profit.toFixed(2)}
+        </p>
+        <p className="text-xs text-gray-400">{servicesCount} servicios</p>
+      </div>
+      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-400">Ingresos por servicio</p>
+      {incomeByService.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-400">{emptyMessage}</p>
+      ) : (
+        <div className="mt-2 space-y-2">
+          {incomeByService.map((s) => (
+            <div key={s.serviceName} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+              <p className="text-sm text-gray-700">
+                {s.serviceName} <span className="text-xs text-gray-400">({s.count})</span>
+              </p>
+              <p className="text-sm font-semibold text-gray-900">${s.amount.toFixed(2)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function FinancialsContent() {
   const [month, setMonth] = useState(defaultMonth);
@@ -69,24 +127,27 @@ export function FinancialsContent() {
         </div>
       ) : data ? (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <div className={cardCls}>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Ingresos</p>
-              <p className="mt-1 text-xl font-bold text-green-600">${data.income.toFixed(2)}</p>
-            </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className={cardCls}>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Gastos</p>
               <p className="mt-1 text-xl font-bold text-red-600">${data.expenses.toFixed(2)}</p>
+              <p className="mt-1 text-xs text-gray-400">{data.invoicesCount} facturas</p>
             </div>
             <div className={cardCls}>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Utilidad/Pérdida</p>
-              <p className={`mt-1 text-xl font-bold ${data.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                ${data.profit.toFixed(2)}
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Utilidad (recaudación)</p>
+              <p
+                className={`mt-1 text-xl font-bold ${data.profitRecaudacion >= 0 ? "text-green-600" : "text-red-600"}`}
+              >
+                ${data.profitRecaudacion.toFixed(2)}
               </p>
             </div>
             <div className={cardCls}>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Servicios</p>
-              <p className="mt-1 text-xl font-bold text-gray-900">{data.servicesCount}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Utilidad (producción)</p>
+              <p
+                className={`mt-1 text-xl font-bold ${data.profitProduccion >= 0 ? "text-green-600" : "text-red-600"}`}
+              >
+                ${data.profitProduccion.toFixed(2)}
+              </p>
             </div>
             <div className={cardCls}>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Facturas</p>
@@ -94,25 +155,26 @@ export function FinancialsContent() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className={cardCls}>
-              <p className="mb-3 text-sm font-semibold text-gray-900">Ingresos por servicio</p>
-              {data.incomeByService.length === 0 ? (
-                <p className="text-sm text-gray-400">Sin ingresos en este mes</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.incomeByService.map((s) => (
-                    <div key={s.serviceName} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-                      <p className="text-sm text-gray-700">
-                        {s.serviceName} <span className="text-xs text-gray-400">({s.count})</span>
-                      </p>
-                      <p className="text-sm font-semibold text-gray-900">${s.amount.toFixed(2)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <PnLPanel
+              title="Recaudación (caja)"
+              income={data.recaudacion.income}
+              profit={data.profitRecaudacion}
+              servicesCount={data.recaudacion.servicesCount}
+              incomeByService={data.recaudacion.incomeByService}
+              emptyMessage="Sin ingresos en este mes"
+            />
+            <PnLPanel
+              title="Producción (completadas)"
+              income={data.produccion.income}
+              profit={data.profitProduccion}
+              servicesCount={data.produccion.servicesCount}
+              incomeByService={data.produccion.incomeByService}
+              emptyMessage="Sin servicios completados en este mes"
+            />
+          </div>
 
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div className={cardCls}>
               <p className="mb-3 text-sm font-semibold text-gray-900">Gastos por categoría</p>
               {data.expensesByCategory.length === 0 ? (
