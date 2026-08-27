@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
- import { db, schema } from "@/db/index";
- import { and, eq, isNull } from "drizzle-orm";
+import { db, schema } from "@/db/index";
+import { and, eq, isNull } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 import {
   updateAppointmentEvent,
