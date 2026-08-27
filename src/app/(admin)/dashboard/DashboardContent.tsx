@@ -6,6 +6,7 @@ import { ClientCRMPanel } from "@/components/ClientCRMPanel";
 import { ReschedulePicker } from "@/components/ReschedulePicker";
 import { CompleteAppointmentDialog } from "@/components/CompleteAppointmentDialog";
 import { NewAppointmentDialog } from "@/components/NewAppointmentDialog";
+import { CourseSessionDialog } from "@/components/CourseSessionDialog";
 import { BlockoutDialog } from "@/components/BlockoutDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { dateToDayStartTs } from "@/lib/time";
@@ -22,6 +23,8 @@ type Appointment = {
   serviceName: string;
   serviceId: string;
   servicePrice: number | null;
+  isGroup: number;
+  studentCount: number;
 };
 
 type Blockout = { id: string; startTime: number; endTime: number; reason: string | null };
@@ -75,6 +78,7 @@ export function DashboardContent({ today }: Props) {
   const [cancellingBusy, setCancellingBusy] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [showNewAppointment, setShowNewAppointment] = useState(false);
+  const [showCourseSession, setShowCourseSession] = useState(false);
   const [showBlockout, setShowBlockout] = useState(false);
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
   const [weekBlockouts, setWeekBlockouts] = useState<Record<string, Blockout[]>>({});
@@ -217,6 +221,12 @@ export function DashboardContent({ today }: Props) {
           + Nueva cita
         </button>
         <button
+          onClick={() => setShowCourseSession(true)}
+          className="rounded-xl border border-pink-main bg-white px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-light transition-colors"
+        >
+          + Nueva sesión de curso
+        </button>
+        <button
           onClick={() => setShowBlockout(true)}
           className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
         >
@@ -296,6 +306,8 @@ export function DashboardContent({ today }: Props) {
                   serviceName={appt.serviceName}
                   referencePhotoUrl={appt.referencePhotoUrl}
                   status={appt.status}
+                  isGroup={appt.isGroup === 1}
+                  studentCount={appt.studentCount}
                   onComplete={() => handleComplete(appt)}
                   onCancel={() => setCancelling(appt)}
                   onSelect={() => handleSelectAppointment(appt)}
@@ -616,6 +628,17 @@ export function DashboardContent({ today }: Props) {
           onClose={() => setShowNewAppointment(false)}
           onCreated={() => {
             setShowNewAppointment(false);
+            refreshAll();
+          }}
+        />
+      )}
+
+      {showCourseSession && (
+        <CourseSessionDialog
+          open={showCourseSession}
+          onOpenChange={setShowCourseSession}
+          onCreated={() => {
+            setShowCourseSession(false);
             refreshAll();
           }}
         />

@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
       servicePrice: schema.servicePurchases.servicePrice,
       serviceId: schema.services.id,
+      isGroup: schema.services.isGroup,
     })
     .from(schema.appointments)
     .innerJoin(schema.users, eq(schema.appointments.clientId, schema.users.id))
@@ -56,7 +57,21 @@ export async function GET(req: NextRequest) {
     .orderBy(sql`${schema.appointments.startTime} ASC`)
     .all();
 
-  return NextResponse.json(appointments);
+  const enrollCounts = new Map(
+    db
+      .select({ appointmentId: schema.courseEnrollments.appointmentId, n: sql<number>`count(*)` })
+      .from(schema.courseEnrollments)
+      .groupBy(schema.courseEnrollments.appointmentId)
+      .all()
+      .map((r) => [r.appointmentId, r.n] as const)
+  );
+
+  return NextResponse.json(
+    appointments.map((appt) => ({
+      ...appt,
+      studentCount: enrollCounts.get(appt.id) ?? (appt.isGroup === 1 ? 1 : 0),
+    }))
+  );
 }
 
 export async function POST(req: NextRequest) {

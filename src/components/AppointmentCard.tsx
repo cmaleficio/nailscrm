@@ -10,6 +10,8 @@ type Props = {
   serviceName: string;
   referencePhotoUrl: string | null;
   status: string;
+  isGroup?: boolean;
+  studentCount?: number;
   onComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onSelect: (clientId: string) => void;
@@ -24,6 +26,8 @@ export function AppointmentCard({
   serviceName,
   referencePhotoUrl,
   status,
+  isGroup,
+  studentCount,
   onComplete,
   onCancel,
   onSelect,
@@ -60,6 +64,13 @@ export function AppointmentCard({
           <p className="font-medium text-gray-900 truncate">{clientName}</p>
           <p className="text-sm text-gray-500 truncate">{serviceName}</p>
         </button>
+        {isGroup && (
+          <p className="mt-1">
+            <span className="inline-block rounded-lg bg-pink-main px-2 py-0.5 text-xs font-medium text-gray-900">
+              Curso · {studentCount ?? 0} alumnos
+            </span>
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2">
