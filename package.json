@@ -13,6 +13,7 @@
     "db:seed:client": "tsx src/db/seed-client-demo.ts",
     "db:seed:finance": "tsx src/db/seed-finance-demo.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
+    "db:reset": "tsx src/db/reset-fresh.ts",
     "setup": "npm run db:setup"
   },
   "dependencies": {

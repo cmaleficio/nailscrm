@@ -356,3 +356,8 @@ export const paymentReceipts = sqliteTable(
     index("payment_receipts_status_idx").on(t.status),
   ]
 );
+
+export const brandSettings = sqliteTable("brand_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+});

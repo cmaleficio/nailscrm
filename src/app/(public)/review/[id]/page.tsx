@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { ReviewForm } from "./ReviewForm";
+import { getSalonName } from "@/lib/brand";
 
 export default async function ReviewPage({
   params,
@@ -27,7 +28,7 @@ export default async function ReviewPage({
     .where(eq(schema.appointments.id, id))
     .get();
 
-  const salonName = process.env.NEXT_PUBLIC_SALON_NAME || "Nails Salon";
+  const salonName = getSalonName();
 
   return (
     <div className="mx-auto max-w-md px-4 py-12">

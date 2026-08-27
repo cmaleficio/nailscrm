@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { GoogleSignInButton } from "./GoogleSignInButton";
 import { SignOutButton } from "./SignOutButton";
+import { getSalonName, getSalonLogo } from "@/lib/brand";
 
 type HeaderProps = {
   user: {
@@ -13,12 +14,23 @@ type HeaderProps = {
 };
 
 export function Header({ user }: HeaderProps) {
-  const salonName = process.env.NEXT_PUBLIC_SALON_NAME || "Nails Salon";
+  const salonName = getSalonName();
+  const salonLogo = getSalonLogo();
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-lg font-semibold text-gray-900">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+          {salonLogo ? (
+            <div className="relative h-8 w-8 overflow-hidden rounded-lg">
+              <Image
+                src={salonLogo}
+                alt={salonName}
+                fill
+                className="object-contain"
+              />
+            </div>
+          ) : null}
           {salonName}
         </Link>
         <div className="flex items-center gap-3">
