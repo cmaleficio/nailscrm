@@ -55,6 +55,7 @@ export const services = sqliteTable("services", {
   price: real("price").notNull(),
   durationMins: integer("duration_mins").notNull(),
   isActive: integer("is_active").default(1),
+  isGroup: integer("is_group").notNull().default(0),
 });
 
 export const appointments = sqliteTable(
@@ -117,6 +118,11 @@ export const servicePurchases = sqliteTable("service_purchases", {
   serviceDescription: text("service_description"),
   servicePrice: real("service_price").notNull(),
   serviceDurationMins: integer("service_duration_mins").notNull(),
+  financialStatus: text("financial_status")
+    .$type<"pending" | "partial" | "paid" | "void">()
+    .notNull()
+    .default("pending"),
+  completionDate: integer("completion_date"),
   createdAt: integer("created_at"),
 }, (t) => [
   index("service_purchases_user_idx").on(t.userId),
@@ -376,4 +382,20 @@ export const appointmentUsage = sqliteTable(
     quantity: real("quantity").notNull().default(1),
   },
   (t) => [uniqueIndex("appointment_usage_unique_idx").on(t.appointmentId, t.inventoryItemId)]
+);
+
+export const courseEnrollments = sqliteTable(
+  "course_enrollments",
+  {
+    id: text("id").primaryKey(),
+    appointmentId: text("appointment_id")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull().references(() => users.id),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("course_enrollments_unique_idx").on(t.appointmentId, t.clientId),
+    index("course_enrollments_client_idx").on(t.clientId),
+  ]
 );
