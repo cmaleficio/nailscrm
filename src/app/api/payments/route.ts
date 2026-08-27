@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { recomputeFinancialStatus } from "@/lib/financial-status";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -100,5 +101,6 @@ export async function POST(req: NextRequest) {
   };
 
   db.insert(schema.payments).values(payment).run();
+  recomputeFinancialStatus(payment.userId);
   return NextResponse.json(payment);
 }
