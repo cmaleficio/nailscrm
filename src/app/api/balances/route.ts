@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, ne } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 
 export async function GET() {
@@ -17,11 +17,7 @@ export async function GET() {
       unpaid: sql<number>`count(*)`,
     })
     .from(schema.servicePurchases)
-    .innerJoin(
-      schema.appointments,
-      eq(schema.appointments.id, schema.servicePurchases.appointmentId)
-    )
-    .where(eq(schema.appointments.status, "completed"))
+    .where(ne(schema.servicePurchases.financialStatus, "void"))
     .groupBy(schema.servicePurchases.userId)
     .all();
 
