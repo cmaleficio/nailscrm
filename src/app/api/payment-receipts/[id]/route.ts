@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { recomputeFinancialStatus } from "@/lib/financial-status";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -49,6 +50,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         .where(eq(schema.paymentReceipts.id, id))
         .run();
     });
+    recomputeFinancialStatus(receipt.clientId);
     return NextResponse.json({ success: true, paymentId });
   }
 
