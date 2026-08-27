@@ -3,12 +3,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 
+type BalanceItem = {
+  id: string;
+  serviceName: string;
+  price: number;
+  financialStatus: string;
+  completionDate: number | null;
+  startTime: number | null;
+};
+
 type BalanceClient = {
   clientId: string;
   name: string;
   phone: string | null;
   balanceUsd: number;
   unpaidAppointments: number;
+  items: BalanceItem[];
 };
 
 type Payment = {
@@ -42,6 +52,7 @@ export function BalancesContent() {
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [registering, setRegistering] = useState<BalanceClient | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"balances" | "receipts">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -119,6 +130,18 @@ export function BalancesContent() {
       ? new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "America/Caracas" }).format(new Date(ts * 1000))
       : "—";
 
+  const statusLabel = (status: string) =>
+    status === "partial" ? "Abonado" : status === "paid" ? "Pagado" : "Pendiente";
+
+  const statusBadgeClass = (status: string) => {
+    if (status === "paid") return "bg-green-100 text-green-700";
+    if (status === "partial") return "bg-amber-100 text-amber-700";
+    return "bg-red-100 text-red-600";
+  };
+
+  const filteredItems = (items: BalanceItem[]) =>
+    statusFilter === "all" ? items : items.filter((i) => i.financialStatus === statusFilter);
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6">
@@ -145,6 +168,19 @@ export function BalancesContent() {
 
       {tab === "balances" && (
         <>
+          <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
+            {(["all", "pending", "partial", "paid"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  statusFilter === s ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {s === "all" ? "Todas" : s === "pending" ? "Pendientes" : s === "partial" ? "Abonadas" : "Pagadas"}
+              </button>
+            ))}
+          </div>
           {loading && clients.length === 0 ? (
             <p className="text-gray-400">Cargando...</p>
           ) : clients.length === 0 ? (
@@ -172,6 +208,32 @@ export function BalancesContent() {
                         Registrar pago
                       </button>
                     </div>
+                  </div>
+
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Detalle de servicios
+                    </p>
+                    {filteredItems(c.items).length === 0 ? (
+                      <p className="text-sm text-gray-400">Sin servicios en este estado</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredItems(c.items).map((i) => (
+                          <div key={i.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-gray-900">{i.serviceName}</p>
+                              <p className="text-xs text-gray-500">{fmtDate(i.startTime ?? i.completionDate)}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className={`rounded-lg px-2 py-1 text-xs font-medium ${statusBadgeClass(i.financialStatus)}`}>
+                                {statusLabel(i.financialStatus)}
+                              </span>
+                              <span className="text-sm font-semibold text-gray-900">${i.price.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {expanded === c.clientId && (

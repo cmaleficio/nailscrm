@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, sql, ne } from "drizzle-orm";
+import { eq, sql, ne, and } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 
 export async function GET() {
@@ -39,6 +39,14 @@ export async function GET() {
     phone: string | null;
     balanceUsd: number;
     unpaidAppointments: number;
+    items: {
+      id: string;
+      serviceName: string;
+      price: number;
+      financialStatus: string;
+      completionDate: number | null;
+      startTime: number | null;
+    }[];
   }[] = [];
 
   let totalUsd = 0;
@@ -50,12 +58,27 @@ export async function GET() {
       .from(schema.users)
       .where(eq(schema.users.id, d.userId))
       .get();
+    const items = db
+      .select({
+        id: schema.servicePurchases.id,
+        serviceName: schema.servicePurchases.serviceName,
+        price: schema.servicePurchases.servicePrice,
+        financialStatus: schema.servicePurchases.financialStatus,
+        completionDate: schema.servicePurchases.completionDate,
+        startTime: schema.appointments.startTime,
+      })
+      .from(schema.servicePurchases)
+      .leftJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
+      .where(and(eq(schema.servicePurchases.userId, d.userId), ne(schema.servicePurchases.financialStatus, "void")))
+      .orderBy(schema.servicePurchases.createdAt)
+      .all();
     clients.push({
       clientId: d.userId,
       name: user?.name ?? "Desconocido",
       phone: user?.phone ?? null,
       balanceUsd: balance,
       unpaidAppointments: d.unpaid ?? 0,
+      items,
     });
     totalUsd = Math.round((totalUsd + balance) * 100) / 100;
   }
