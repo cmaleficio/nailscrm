@@ -42,6 +42,20 @@ export function CompleteAppointmentDialog({
   const [paidDate, setPaidDate] = useState(todayStr());
   const [esmalters, setEsmalters] = useState<{ id: string; name: string; category: string | null; subcategory: string | null; stock: number; isExhausted: number }[]>([]);
   const [usageSel, setUsageSel] = useState<Record<string, string>>({});
+  const [paidTotal, setPaidTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (clientId) {
+      fetch(`/api/payments?userId=${clientId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const arr = Array.isArray(data) ? data : [];
+          const sum = arr.reduce((acc, p: { amountUsd: number }) => acc + (Number(p.amountUsd) || 0), 0);
+          setPaidTotal(sum);
+        })
+        .catch(() => setPaidTotal(null));
+    }
+  }, [clientId]);
 
   useEffect(() => {
     fetch("/api/exchange-rate")
@@ -312,6 +326,19 @@ export function CompleteAppointmentDialog({
                   className={inputCls}
                 />
               </div>
+            </div>
+          )}
+          {paidTotal !== null && (
+            <div className="mt-4 rounded-xl bg-pink-50 p-3">
+              <p className="text-sm text-gray-700">
+                Pagado por el cliente en total:{" "}
+                <span className="font-semibold text-pink-main">${paidTotal.toFixed(2)}</span>
+              </p>
+              {paidTotal >= servicePrice && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Esta caja parece ya cubierta por abonos.
+                </p>
+              )}
             </div>
           )}
         </div>
