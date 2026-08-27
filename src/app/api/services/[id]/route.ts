@@ -70,8 +70,11 @@ export async function PATCH(
         : 0
       : existing.isActive;
 
+  const isGroup =
+    body.isGroup !== undefined ? (body.isGroup ? 1 : 0) : existing.isGroup;
+
   db.update(schema.services)
-    .set({ name, price, durationMins, description, isActive })
+    .set({ name, price, durationMins, description, isActive, isGroup })
     .where(eq(schema.services.id, id))
     .run();
 
@@ -82,6 +85,7 @@ export async function PATCH(
     durationMins,
     description,
     isActive,
+    isGroup,
   });
 }
 

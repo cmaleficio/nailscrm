@@ -11,6 +11,7 @@ type Service = {
   price: number;
   durationMins: number;
   isActive: number;
+  isGroup: number;
   photos: { id: string; url: string; position: number }[];
 };
 
@@ -20,6 +21,7 @@ type EditingState = {
   description: string;
   price: string;
   durationMins: string;
+  isGroup: boolean;
 };
 
 const EMPTY_FORM = {
@@ -27,6 +29,7 @@ const EMPTY_FORM = {
   description: "",
   price: "",
   durationMins: "",
+  isGroup: false,
 };
 
 export function ServicesContent() {
@@ -76,6 +79,7 @@ export function ServicesContent() {
           description: form.description,
           price: parseFloat(form.price),
           durationMins: parseInt(form.durationMins, 10),
+          isGroup: form.isGroup,
         }),
       });
       if (!res.ok) {
@@ -106,6 +110,7 @@ export function ServicesContent() {
           description: editing.description,
           price: parseFloat(editing.price),
           durationMins: parseInt(editing.durationMins, 10),
+          isGroup: editing.isGroup,
         }),
       });
       if (!res.ok) {
@@ -228,6 +233,7 @@ export function ServicesContent() {
       description: service.description ?? "",
       price: String(service.price),
       durationMins: String(service.durationMins),
+      isGroup: service.isGroup === 1,
     });
   }
 
@@ -315,6 +321,19 @@ export function ServicesContent() {
               className={inputCls}
             />
           </div>
+          <div className="sm:col-span-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.isGroup}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, isGroup: e.target.checked }))
+                }
+                className="h-4 w-4"
+              />
+              Es curso/grupo
+            </label>
+          </div>
         </div>
         <button
           onClick={handleCreate}
@@ -397,6 +416,21 @@ export function ServicesContent() {
                       }
                       className={inputCls}
                     />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={editing.isGroup}
+                        onChange={(e) =>
+                          setEditing((prev) =>
+                            prev ? { ...prev, isGroup: e.target.checked } : prev
+                          )
+                        }
+                        className="h-4 w-4"
+                      />
+                      Es curso/grupo
+                    </label>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-2">

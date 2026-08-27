@@ -85,9 +85,10 @@ export async function POST(req: NextRequest) {
     name,
     description:
       typeof body.description === "string" ? body.description.trim() : null,
-    price,
+price,
     durationMins,
     isActive: body.isActive === false ? 0 : 1,
+    isGroup: body.isGroup ? 1 : 0,
   };
 
   db.insert(schema.services).values(service).run();
