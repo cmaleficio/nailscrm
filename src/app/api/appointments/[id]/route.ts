@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db, schema } from "@/db/index";
-import { eq } from "drizzle-orm";
+ import { db, schema } from "@/db/index";
+ import { and, eq, isNull } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 import {
   updateAppointmentEvent,
@@ -9,6 +9,7 @@ import {
   deleteEventOnPrimaryCalendar,
 } from "@/lib/calendar";
 import { recordUsage } from "@/lib/inventory";
+import { recomputeFinancialStatus } from "@/lib/financial-status";
 
 export async function PATCH(
   req: NextRequest,
@@ -91,19 +92,21 @@ export async function PATCH(
       .get();
 
     if (client) {
-      const service = db
-        .select()
-        .from(schema.services)
-        .where(eq(schema.services.id, appointment.serviceId))
-        .get();
-
       db.update(schema.users)
         .set({
           totalVisits: (client.totalVisits ?? 0) + 1,
-          totalRevenue: (client.totalRevenue ?? 0) + (service?.price ?? 0),
         })
         .where(eq(schema.users.id, client.id))
         .run();
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    db.update(schema.servicePurchases)
+      .set({ completionDate: now })
+      .where(and(eq(schema.servicePurchases.appointmentId, id), isNull(schema.servicePurchases.completionDate)))
+      .run();
+    if (client) {
+      recomputeFinancialStatus(client.id);
     }
 
     const finalPhotos: string[] = Array.isArray(body.finalPhotos)
@@ -207,6 +210,12 @@ export async function DELETE(
     .where(eq(schema.services.id, appointment.serviceId))
     .get();
 
+  const purchaseRows = db
+    .select({ userId: schema.servicePurchases.userId })
+    .from(schema.servicePurchases)
+    .where(eq(schema.servicePurchases.appointmentId, id))
+    .all();
+
   db.transaction((tx) => {
     tx.insert(schema.cancelledAppointments)
       .values({
@@ -225,6 +234,11 @@ export async function DELETE(
         cancelledAt: Math.floor(Date.now() / 1000),
         reason: null,
       })
+      .run();
+
+    tx.update(schema.servicePurchases)
+      .set({ financialStatus: "void" })
+      .where(eq(schema.servicePurchases.appointmentId, id))
       .run();
 
     tx.delete(schema.appointments)
@@ -247,6 +261,8 @@ export async function DELETE(
       );
     }
   }
+
+  for (const p of purchaseRows) recomputeFinancialStatus(p.userId);
 
   return NextResponse.json({ success: true, deleted: true });
 }
