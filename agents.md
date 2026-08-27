@@ -43,8 +43,8 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - password_hash: text (login por correo/contraseña)
 - google_id: text (para OAuth)
 - tech_notes: text (notas de la manicurista sobre el cliente)
-- total_visits: integer, default 0
-- total_revenue: real, default 0
+- total_visits: integer, default 0 (servicios completados)
+- total_revenue: real, default 0 (recaudado = suma de pagos; lo recalcula `applyPaidToClient`)
 - role: text, default 'client' (client | admin)
 - permissions: text (JSON array de permisos de módulos; null = acceso a todos)
 - created_at: integer (timestamp)
@@ -59,6 +59,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - price: real, not null
 - duration_mins: integer, not null
 - is_active: integer (boolean), default 1
+- is_group: integer (boolean), default 0 (1 = curso/servicio grupal; las sesiones de curso se detectan por esta flag, NUNCA por el nombre)
 
 ### Tabla: appointments
 - id: text, primary key
@@ -100,6 +101,13 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - kind: text, default 'reference' ('reference' | 'final'): las fotos 'final' alimentan el muro de inspiración
 - created_at: integer (timestamp)
 
+### Tabla: course_enrollments (alumnos de una sesión de curso)
+- id: text, primary key
+- appointment_id: text, foreign key → appointments.id (on delete cascade)
+- client_id: text, foreign key → users.id (solo clientes registrados, no walk-ins)
+- created_at: integer (timestamp)
+- unique index (appointment_id, client_id). Cada alumno genera su propia `service_purchases` (mismo `appointment_id`) con su CXC individual.
+
 ### Tabla: service_photos
 - id: text, primary key
 - service_id: text, foreign key → services.id (on delete cascade)
@@ -120,12 +128,14 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 ### Tabla: service_purchases (snapshot del servicio al comprar, inmutable)
 - id: text, primary key
 - user_id: text, foreign key → users.id
-- appointment_id: text, foreign key → appointments.id (on delete cascade)
+- appointment_id: text, foreign key → appointments.id (on delete cascade; al cancelar se marca `void` pero la columna vuelve a borrarse por CASCADE — el archivo de la cancelación vive en `cancelled_appointments`)
 - service_id: text, foreign key → services.id
 - service_name: text, not null
 - service_description: text
 - service_price: real, not null
 - service_duration_mins: integer, not null
+- financial_status: text, default 'pending' (pending | partial | paid | void) — lo recalcula `recomputeFinancialStatus` según los pagos del cliente
+- completion_date: integer (timestamp, fecha de producción; se setea al completar la cita)
 - created_at: integer (timestamp)
 
 ### Tabla: waitlist
@@ -161,7 +171,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - notes: text
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
-- El saldo se calcula en vivo: `Σ service_purchases.service_price de citas completed − Σ payments.amount_usd`.
+- El saldo se calcula en vivo: `Σ service_purchases.service_price de purchases no-void − Σ payments.amount_usd`.
 - `photo_url` (opcional): captura de la transferencia al registrar un pago de cliente.
 
 ### Tabla: payment_receipts (capturas de pago reportadas por el cliente)
@@ -315,18 +325,18 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `/review/[id]` → Formulario de reseña post-cita
 
 ### Protegidas (requieren auth)
-- `/dashboard` → Panel admin (agenda del día/semana, pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
+- `/dashboard` → Panel admin (agenda del día/semana con sesiones de curso grupal, pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
 - `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
-- `/dashboard/balances` → Cuentas por cobrar (total adeudado, pagos por cliente)
+- `/dashboard/balances` → Cuentas por cobrar (total adeudado, desglose por ítem con estado financiero, pagos por cliente)
 - `/dashboard/purchases` → Compras (facturas, proveedores y categorías de gasto)
 - `/dashboard/accounts-payable` → Cuentas por pagar (facturas pendientes, pagos a proveedores y bancos)
 - `/dashboard/inventory` → Inventario (existencias, kardex y uso por servicio)
-- `/dashboard/financials` → Estados financieros (P&L mensual)
+- `/dashboard/financials` → Estados financieros (P&L mensual base de caja + producción)
 - `/dashboard/settings` → Configuración (horario de trabajo por día de la semana)
-- `/dashboard/services` → Gestión de servicios (+ fotos del servicio, eliminar si no tiene uso)
+- `/dashboard/services` → Gestión de servicios (flag "Es curso/grupo", fotos del servicio, eliminar si no tiene uso)
 - `/dashboard/gallery` → Muro de inspiración (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
-- `/profile` → Portal de cliente (pasaporte de uñas + historial + "Mis pagos" con reporte de capturas)
+- `/profile` → Portal de cliente (pasaporte de uñas + historial + estado de cuenta + "Mis pagos" con reporte de capturas)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
 
 ### APIs nuevas de permisos y pagos
@@ -343,6 +353,8 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - `POST /api/waitlist` (usuario autenticado) → se une con `preferredDate` (timestamp inicio de día); dedupe por cliente+fecha (409); rechaza fechas pasadas (400).
 - `PATCH /api/waitlist/[id]` (admin) → marca `notified`.
 - `DELETE /api/waitlist/[id]` → dueño de la entrada o admin.
+- `POST/GET /api/course-sessions` (admin, `appointments`): crea una sesión de curso grupal (1 `appointments` + N `course_enrollments` + N `service_purchases` pending, validando `services.is_group=1` y disponibilidad) y lista las sesiones con alumnos y saldo por alumno.
+- `POST/DELETE /api/course-sessions/[id]/enrollments` (admin, `appointments`): inscribe/desinscribe un alumno registrado pre-completar (crea/borra su enrollment + `service_purchases`; 409 si ya está inscrito; 400 si la sesión está completada).
 
 ## 🔐 Permisos de admins
 - `users.permissions`: JSON array de claves; **null = acceso a todos los módulos** (no rompe admins existentes).
@@ -366,6 +378,7 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - StatsBanner: banner con total_visits y total_revenue del cliente
 - LoginForm: formulario de login/registro por correo y contraseña
 - NewAppointmentDialog: crea citas para walk-ins (clientes no registrados) desde la agenda
+- CourseSessionDialog: crea sesiones de curso grupal desde la agenda (elige servicio `is_group`, fecha/hora con slots y multi-selección de alumnos de `/api/clients`; muestra precio por alumno y total; llama `POST /api/course-sessions`)
 - BlockoutDialog: crea bloques "no disponible" desde la agenda
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
 - ReportPaymentDialog: reporta pago en Bs con captura desde "Mis pagos" del perfil de cliente

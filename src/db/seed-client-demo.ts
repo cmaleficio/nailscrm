@@ -212,6 +212,8 @@ for (const a of appointments) {
       serviceDescription: a.service.description,
       servicePrice: a.service.price,
       serviceDurationMins: a.service.durationMins,
+      financialStatus: a.status === "completed" ? "paid" : "pending",
+      completionDate: a.status === "completed" ? startTime : null,
       createdAt: startTime - 3600,
     })
     .run();
