@@ -62,9 +62,6 @@ export async function POST(req: NextRequest) {
     }
     usd = Math.round(body.amountUsd * 100) / 100;
   }
-  if (typeof body.reference !== "string" || !body.reference.trim()) {
-    return NextResponse.json({ error: "La referencia es requerida" }, { status: 400 });
-  }
   if (typeof body.photoUrl !== "string" || !body.photoUrl.trim()) {
     return NextResponse.json({ error: "La captura del pago es requerida" }, { status: 400 });
   }
@@ -78,7 +75,7 @@ export async function POST(req: NextRequest) {
     amountVes: currency === "VES" ? body.amountVes : null,
     rate: currency === "VES" ? body.rate : null,
     paymentDate: typeof body.paymentDate === "number" ? body.paymentDate : now,
-    reference: body.reference.trim(),
+    reference: typeof body.reference === "string" && body.reference.trim() ? body.reference.trim() : null,
     photoUrl: body.photoUrl.trim(),
     notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
     createdBy: adminId,

@@ -67,10 +67,6 @@ export function SupplierPaymentDialog({ bill, onClose, onSaved }: Props) {
   }
 
   async function submit() {
-    if (!reference.trim()) {
-      setError("La referencia es requerida");
-      return;
-    }
     if (!photoUrl) {
       setError("La captura del pago es requerida");
       return;
@@ -179,7 +175,7 @@ export function SupplierPaymentDialog({ bill, onClose, onSaved }: Props) {
           <input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            placeholder="Referencia (ej: TRF-0001)"
+            placeholder="Referencia (opcional)"
             className={inputCls}
           />
           <input

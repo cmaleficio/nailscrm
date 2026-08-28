@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
     photoUrl,
   } = body;
 
-  if (!userId || typeof reference !== "string" || !reference.trim()) {
-    return NextResponse.json({ error: "userId y reference son requeridos" }, { status: 400 });
+  if (!userId || typeof userId !== "string" || !userId.trim()) {
+    return NextResponse.json({ error: "userId es requerido" }, { status: 400 });
   }
 
   const client = db
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     currency: cur,
     amountVes: cur === "VES" ? amountVes : null,
     rate: cur === "VES" ? effectiveRate : null,
-    reference: reference.trim(),
+    reference: typeof reference === "string" && reference.trim() ? reference.trim() : null,
     photoUrl: typeof photoUrl === "string" && photoUrl.trim() ? photoUrl.trim() : null,
     paidAt: typeof paidAt === "number" ? paidAt : now,
     notes: typeof notes === "string" ? notes : null,

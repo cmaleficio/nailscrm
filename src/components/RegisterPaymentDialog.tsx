@@ -163,7 +163,7 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
         </div>
 
         <div className="mt-4">
-          <label className="mb-1 block text-xs font-medium text-gray-600">Número de referencia *</label>
+          <label className="mb-1 block text-xs font-medium text-gray-600">Número de referencia</label>
           <input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
