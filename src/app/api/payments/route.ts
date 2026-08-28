@@ -4,6 +4,13 @@ import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { getRateByDate } from "@/lib/bcv";
+import { todayStr } from "@/lib/time";
+
+function paidAtToDateStr(paidAt: number): string {
+  const d = new Date(paidAt * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -68,14 +75,23 @@ export async function POST(req: NextRequest) {
 
   const cur: "USD" | "VES" = currency === "VES" ? "VES" : "USD";
   let usd = 0;
+  let effectiveRate: number | null = null;
   if (cur === "VES") {
-    if (typeof amountVes !== "number" || typeof rate !== "number" || rate <= 0 || amountVes <= 0) {
-      return NextResponse.json(
-        { error: "amountVes y rate son requeridos para pagos en Bs" },
-        { status: 400 }
-      );
+    if (typeof amountVes !== "number" || amountVes <= 0) {
+      return NextResponse.json({ error: "amountVes es requerido para pagos en Bs" }, { status: 400 });
     }
-    usd = Math.round((amountVes / rate) * 100) / 100;
+    effectiveRate = typeof rate === "number" && rate > 0 ? rate : null;
+    if (!effectiveRate) {
+      const paidDateStr = typeof paidAt === "number" ? paidAtToDateStr(paidAt) : todayStr();
+      const fetched = await getRateByDate(paidDateStr);
+      effectiveRate = fetched.rate;
+    }
+    if (!effectiveRate || effectiveRate <= 0) {
+      return NextResponse.json({
+        error: `No hay tasa BCV para la fecha ${paidAt ? paidAtToDateStr(paidAt) : todayStr()}. Regístalas en /dashboard/exchange-rates`,
+      }, { status: 400 });
+    }
+    usd = Math.round((amountVes / effectiveRate) * 100) / 100;
   } else {
     if (typeof amountUsd !== "number" || amountUsd <= 0) {
       return NextResponse.json({ error: "amountUsd es requerido" }, { status: 400 });
@@ -91,7 +107,7 @@ export async function POST(req: NextRequest) {
     amountUsd: usd,
     currency: cur,
     amountVes: cur === "VES" ? amountVes : null,
-    rate: cur === "VES" ? rate : null,
+    rate: cur === "VES" ? effectiveRate : null,
     reference: reference.trim(),
     photoUrl: typeof photoUrl === "string" && photoUrl.trim() ? photoUrl.trim() : null,
     paidAt: typeof paidAt === "number" ? paidAt : now,

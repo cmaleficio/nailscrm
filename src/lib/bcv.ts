@@ -110,6 +110,20 @@ export async function refreshTodayRate(): Promise<{
   return { date, rate: res.rate, valueDate: res.valueDate, source: "bcv" };
 }
 
+export async function getRateByDate(dateStr: string): Promise<{
+  date: string;
+  rate: number | null;
+  source: "bcv" | "manual" | null;
+}> {
+  const cached = db
+    .select()
+    .from(schema.exchangeRates)
+    .where(eq(schema.exchangeRates.date, dateStr))
+    .get();
+  if (cached) return { date: dateStr, rate: cached.rate, source: cached.source };
+  return { date: dateStr, rate: null, source: null };
+}
+
 export async function getTodayRate(): Promise<{
   date: string;
   rate: number | null;

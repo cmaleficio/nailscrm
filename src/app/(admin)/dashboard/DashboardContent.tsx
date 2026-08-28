@@ -67,7 +67,7 @@ export function DashboardContent({ today }: Props) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
-  const [view, setView] = useState<"day" | "week" | "waitlist" | "cancelled">("day");
+  const [view, setView] = useState<"day" | "week" | "waitlist" | "cancelled" | "summary">("day");
   const [weekDates, setWeekDates] = useState<Date[]>(() =>
     datesOfWeek(new Date())
   );
@@ -96,6 +96,8 @@ export function DashboardContent({ today }: Props) {
     }[]
   >([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
+  const [summaryList, setSummaryList] = useState<Appointment[]>([]);
+  const [summaryTotalRevenue, setSummaryTotalRevenue] = useState(0);
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -123,6 +125,21 @@ export function DashboardContent({ today }: Props) {
       setWaitlist(Array.isArray(data) ? data : []);
     }
   }, []);
+
+  const fetchSummary = useCallback(async () => {
+    const res = await fetch("/api/appointments?all=1");
+    const data = await res.json();
+    if (res.ok) {
+      setSummaryList(Array.isArray(data) ? data : []);
+      setSummaryTotalRevenue(Array.isArray(data) ? data.reduce((sum: number, appt: Appointment) => sum + (appt.servicePrice || 0), 0) : 0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === "summary") {
+      fetchSummary();
+    }
+  }, [view, fetchSummary]);
 
   useEffect(() => {
     fetchAppointments();
@@ -182,6 +199,7 @@ export function DashboardContent({ today }: Props) {
     fetchBlockouts();
     fetchCancelled();
     if (view === "week") fetchWeek(weekDates);
+    if (view === "summary") fetchSummary();
   }
 
   function handleSelectAppointment(appt: Appointment) {
@@ -235,7 +253,7 @@ export function DashboardContent({ today }: Props) {
       </div>
 
       <div className="mb-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
-        {(["day", "week", "waitlist", "cancelled"] as const).map((v) => (
+        {(["day", "week", "summary", "waitlist", "cancelled"] as const).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -249,9 +267,11 @@ export function DashboardContent({ today }: Props) {
               ? "Día"
               : v === "week"
                 ? "Semana"
-                : v === "waitlist"
-                  ? `Espera${waitlist.length > 0 ? ` (${waitlist.length})` : ""}`
-                  : "Canceladas"}
+                : v === "summary"
+                  ? "Resumen"
+                  : v === "waitlist"
+                    ? `Espera${waitlist.length > 0 ? ` (${waitlist.length})` : ""}`
+                    : "Canceladas"}
           </button>
         ))}
       </div>
@@ -550,6 +570,65 @@ export function DashboardContent({ today }: Props) {
                           timeStyle: "short",
                           timeZone: "America/Caracas",
                         }).format(new Date(c.cancelledAt * 1000))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === "summary" && (
+        <div>
+          <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs font-medium uppercase text-gray-500">Ingresos estimados</p>
+              <p className="mt-1 text-2xl font-bold text-pink-600">${summaryTotalRevenue.toFixed(2)}</p>
+              <p className="mt-1 text-xs text-gray-400">Suma de precios de servicios</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs font-medium uppercase text-gray-500">Clientes pendientes</p>
+              <p className="mt-1 text-2xl font-bold text-pink-600">{summaryList.length}</p>
+              <p className="mt-1 text-xs text-gray-400">Citas activas</p>
+            </div>
+          </div>
+
+          <h2 className="mb-3 text-sm font-medium text-gray-500">
+            Todas las citas (próximas → lejanas)
+          </h2>
+          {summaryList.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay citas registradas</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Servicio</th>
+                    <th className="px-4 py-3">Costo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {summaryList.map((appt) => (
+                    <tr key={appt.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        {new Intl.DateTimeFormat("es-ES", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                          timeZone: "America/Caracas",
+                        }).format(new Date(appt.startTime * 1000))}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {appt.clientName}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{appt.serviceName}</td>
+                      <td className="px-4 py-3 text-pink-600 font-medium">
+                        ${(appt.servicePrice || 0).toFixed(2)}
                       </td>
                     </tr>
                   ))}

@@ -10,16 +10,12 @@ type Props = {
   onSaved: () => void;
 };
 
-type Rate = { rate: number | null; source: string | null };
-
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-main focus:outline-none";
 
 export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }: Props) {
-  const [currency, setCurrency] = useState<"USD" | "VES">("USD");
-  const [amountUsd, setAmountUsd] = useState("");
   const [amountVes, setAmountVes] = useState("");
-  const [rate, setRate] = useState<Rate>({ rate: null, source: null });
+  const [dateRate, setDateRate] = useState<{ rate: number | null; source: string | null }>({ rate: null, source: null });
   const [manualRate, setManualRate] = useState("");
   const [reference, setReference] = useState("");
   const [paidDate, setPaidDate] = useState(todayStr());
@@ -30,11 +26,18 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/exchange-rate")
+    if (!paidDate) return;
+    const dateStr = paidDate;
+    fetch(`/api/exchange-rate/by-date?date=${dateStr}`)
       .then((r) => r.json())
-      .then((data) => setRate(data))
-      .catch(() => {});
-  }, []);
+      .then((data) => {
+        setDateRate({ rate: data.rate ?? null, source: data.source ?? null });
+        if (data.rate === null) {
+          setManualRate("");
+        }
+      })
+      .catch(() => setDateRate({ rate: null, source: null }));
+  }, [paidDate]);
 
   async function handleUpload(file: File) {
     setUploading(true);
@@ -57,22 +60,22 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
     setSaving(true);
     setError("");
     try {
-      const effectiveRate = currency === "VES" ? parseFloat(manualRate || String(rate.rate || "")) : null;
-      if (currency === "VES" && (!effectiveRate || effectiveRate <= 0)) {
-        throw new Error("Escribe la tasa del día");
+      const effectiveRate = dateRate.rate !== null ? dateRate.rate : (parseFloat(manualRate) || null);
+      if (!effectiveRate || effectiveRate <= 0) {
+        throw new Error("No hay tasa BCV para esta fecha. Ingrésala en Tasas.");
+      }
+      if (!amountVes || parseFloat(amountVes) <= 0) {
+        throw new Error("Ingresa el monto en Bs");
       }
       const body: Record<string, unknown> = {
         userId: clientId,
-        currency,
+        currency: "VES",
+        amountVes: parseFloat(amountVes),
+        rate: effectiveRate,
         reference,
         paidAt: Math.floor(new Date(`${paidDate}T00:00:00-04:00`).getTime() / 1000),
         notes,
       };
-      if (currency === "USD") body.amountUsd = parseFloat(amountUsd) || 0;
-      else {
-        body.amountVes = parseFloat(amountVes) || 0;
-        body.rate = effectiveRate;
-      }
       if (photoUrl) body.photoUrl = photoUrl;
       const res = await fetch("/api/payments", {
         method: "POST",
@@ -97,61 +100,67 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
         <h3 className="text-lg font-semibold text-gray-900">Registrar pago</h3>
         <p className="mt-1 text-sm text-gray-500">{clientName}</p>
 
-        <div className="mt-4 flex gap-2">
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value as "USD" | "VES")}
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-medium text-gray-600">Fecha del pago</label>
+          <input
+            type="date"
+            value={paidDate}
+            onChange={(e) => setPaidDate(e.target.value)}
             className={inputCls}
-          >
-            <option value="USD">$</option>
-            <option value="VES">Bs</option>
-          </select>
-          {currency === "USD" ? (
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={amountUsd}
-              onChange={(e) => setAmountUsd(e.target.value)}
-              placeholder="Monto en $"
-              className={inputCls}
-            />
-          ) : (
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={amountVes}
-              onChange={(e) => setAmountVes(e.target.value)}
-              placeholder="Monto en Bs"
-              className={inputCls}
-            />
-          )}
+          />
         </div>
 
-        {currency === "VES" && (
-          <div className="mt-4">
-            <label className="mb-1 block text-xs font-medium text-gray-600">Tasa del día</label>
-            {rate.rate ? (
-              <p className="mb-1 text-xs text-gray-500">
-                Tasa BCV: {rate.rate.toFixed(2)} Bs/US$ (puedes corregirla)
-              </p>
-            ) : (
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-medium text-gray-600">Monto en Bs</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountVes}
+            onChange={(e) => setAmountVes(e.target.value)}
+            placeholder="Monto en Bs"
+            className={inputCls}
+          />
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-medium text-gray-600">Tasa del día</label>
+          {dateRate.rate !== null ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <span className="font-semibold text-pink-main">
+                {dateRate.rate.toFixed(2)} Bs/US$
+              </span>
+              <span className="ml-2 text-xs text-gray-500">
+                (BCV {paidDate} · {dateRate.source})
+              </span>
+            </div>
+          ) : (
+            <>
               <p className="mb-1 text-xs text-amber-600">
-                No se pudo obtener la tasa automática. Escribe la tasa manualmente.
+                Sin tasa BCV registrada para esta fecha. Ingrésala manualmente:
               </p>
-            )}
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={manualRate}
-              onChange={(e) => setManualRate(e.target.value)}
-              placeholder={String(rate.rate ?? "Tasa Bs/US$")}
-              className={inputCls}
-            />
-          </div>
-        )}
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={manualRate}
+                onChange={(e) => setManualRate(e.target.value)}
+                placeholder="Tasa Bs/US$"
+                className={inputCls}
+              />
+            </>
+          )}
+          {dateRate.rate !== null && parseFloat(amountVes) > 0 && (
+            <p className="mt-1 text-xs text-gray-500">
+              Total: <span className="font-semibold text-gray-700">${(parseFloat(amountVes) / dateRate.rate).toFixed(2)}</span>
+            </p>
+          )}
+          {dateRate.rate === null && parseFloat(manualRate) > 0 && parseFloat(amountVes) > 0 && (
+            <p className="mt-1 text-xs text-gray-500">
+              Total: <span className="font-semibold text-gray-700">${(parseFloat(amountVes) / parseFloat(manualRate)).toFixed(2)}</span>
+            </p>
+          )}
+        </div>
 
         <div className="mt-4">
           <label className="mb-1 block text-xs font-medium text-gray-600">Número de referencia *</label>
@@ -159,16 +168,6 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             placeholder="Ej: 00012345"
-            className={inputCls}
-          />
-        </div>
-
-        <div className="mt-4">
-          <label className="mb-1 block text-xs font-medium text-gray-600">Fecha del pago</label>
-          <input
-            type="date"
-            value={paidDate}
-            onChange={(e) => setPaidDate(e.target.value)}
             className={inputCls}
           />
         </div>

@@ -15,6 +15,7 @@ const NAV_ITEMS: { href: string; label: string; icon: string; perm?: string }[] 
   { href: "/dashboard/financials", label: "Estados financieros", icon: "📊", perm: "financials" },
   { href: "/dashboard/brand", label: "Identidad", icon: "✨", perm: "settings" },
   { href: "/dashboard/settings", label: "Horario", icon: "⏰", perm: "settings" },
+  { href: "/dashboard/exchange-rates", label: "Tasas", icon: "💵", perm: "settings" },
   { href: "/dashboard/services", label: "Servicios", icon: "💅", perm: "services" },
   { href: "/dashboard/gallery", label: "Muro", icon: "🖼️", perm: "gallery" },
   { href: "/dashboard/admin-users", label: "Admins", icon: "🛡️", perm: "adminUsers" },

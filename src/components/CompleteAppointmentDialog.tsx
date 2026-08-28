@@ -14,8 +14,6 @@ type Props = {
   onCompleted: () => void;
 };
 
-type Rate = { rate: number | null; source: string | null };
-
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-main focus:outline-none";
 
@@ -33,10 +31,8 @@ export function CompleteAppointmentDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [paid, setPaid] = useState(false);
-  const [currency, setCurrency] = useState<"USD" | "VES">("USD");
-  const [amountUsd, setAmountUsd] = useState(String(servicePrice));
   const [amountVes, setAmountVes] = useState("");
-  const [rate, setRate] = useState<Rate>({ rate: null, source: null });
+  const [dateRate, setDateRate] = useState<{ rate: number | null; source: string | null }>({ rate: null, source: null });
   const [manualRate, setManualRate] = useState("");
   const [reference, setReference] = useState("");
   const [paidDate, setPaidDate] = useState(todayStr());
@@ -58,10 +54,6 @@ export function CompleteAppointmentDialog({
   }, [clientId]);
 
   useEffect(() => {
-    fetch("/api/exchange-rate")
-      .then((r) => r.json())
-      .then((data) => setRate(data))
-      .catch(() => {});
     fetch("/api/inventory/items")
       .then((r) => r.json())
       .then((data) => {
@@ -70,6 +62,20 @@ export function CompleteAppointmentDialog({
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!paid) return;
+    const dateStr = paidDate || new Date().toISOString().slice(0, 10);
+    fetch(`/api/exchange-rate/by-date?date=${dateStr}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setDateRate({ rate: data.rate ?? null, source: data.source ?? null });
+        if (data.rate === null) {
+          setManualRate("");
+        }
+      })
+      .catch(() => setDateRate({ rate: null, source: null }));
+  }, [paid, paidDate]);
 
   function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
@@ -111,24 +117,24 @@ export function CompleteAppointmentDialog({
       }
 
       if (paid) {
-        const effectiveRate = currency === "VES" ? parseFloat(manualRate || String(rate.rate || "")) : null;
-        if (currency === "VES" && (!effectiveRate || effectiveRate <= 0)) {
-          throw new Error("Escribe la tasa del día");
+        const effectiveRate = dateRate.rate !== null ? dateRate.rate : (parseFloat(manualRate) || null);
+        if (!effectiveRate || effectiveRate <= 0) {
+          throw new Error("No hay tasa BCV para esta fecha. Ingrésala en Tasas.");
+        }
+        if (!amountVes || parseFloat(amountVes) <= 0) {
+          throw new Error("Ingresa el monto en Bs");
         }
         const body: Record<string, unknown> = {
           userId: clientId,
           appointmentId,
-          currency,
+          currency: "VES",
+          amountVes: parseFloat(amountVes),
+          rate: effectiveRate,
           reference,
           paidAt: Math.floor(
             new Date(`${paidDate}T00:00:00-04:00`).getTime() / 1000
           ),
         };
-        if (currency === "USD") body.amountUsd = parseFloat(amountUsd) || 0;
-        else {
-          body.amountVes = parseFloat(amountVes) || 0;
-          body.rate = effectiveRate;
-        }
         const payRes = await fetch("/api/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -253,59 +259,65 @@ export function CompleteAppointmentDialog({
           </label>
           {paid && (
             <div className="mt-4 space-y-3">
-              <div className="flex gap-2">
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value as "USD" | "VES")}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Fecha del pago</label>
+                <input
+                  type="date"
+                  value={paidDate}
+                  onChange={(e) => setPaidDate(e.target.value)}
                   className={inputCls}
-                >
-                  <option value="USD">$</option>
-                  <option value="VES">Bs</option>
-                </select>
-                {currency === "USD" ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={amountUsd}
-                    onChange={(e) => setAmountUsd(e.target.value)}
-                    className={inputCls}
-                  />
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Monto en Bs</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amountVes}
+                  onChange={(e) => setAmountVes(e.target.value)}
+                  placeholder="Monto en Bs"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Tasa del día</label>
+                {dateRate.rate !== null ? (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    <span className="font-semibold text-pink-main">
+                      {dateRate.rate.toFixed(2)} Bs/US$
+                    </span>
+                    <span className="ml-2 text-xs text-gray-500">
+                      (BCV {paidDate} · {dateRate.source})
+                    </span>
+                  </div>
                 ) : (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={amountVes}
-                    onChange={(e) => setAmountVes(e.target.value)}
-                    placeholder="Monto en Bs"
-                    className={inputCls}
-                  />
+                  <>
+                    <p className="mb-1 text-xs text-amber-600">
+                      Sin tasa BCV registrada para esta fecha. Ingrésala manualmente:
+                    </p>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={manualRate}
+                      onChange={(e) => setManualRate(e.target.value)}
+                      placeholder="Tasa Bs/US$"
+                      className={inputCls}
+                    />
+                  </>
+                )}
+                {dateRate.rate !== null && parseFloat(amountVes) > 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Total: <span className="font-semibold text-gray-700">${(parseFloat(amountVes) / dateRate.rate).toFixed(2)}</span>
+                  </p>
+                )}
+                {dateRate.rate === null && parseFloat(manualRate) > 0 && parseFloat(amountVes) > 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Total: <span className="font-semibold text-gray-700">${(parseFloat(amountVes) / parseFloat(manualRate)).toFixed(2)}</span>
+                  </p>
                 )}
               </div>
-              {currency === "VES" && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Tasa del día</label>
-                  {rate.rate ? (
-                    <p className="mb-1 text-xs text-gray-500">
-                      Tasa BCV: {rate.rate.toFixed(2)} Bs/US$ (puedes corregirla)
-                    </p>
-                  ) : (
-                    <p className="mb-1 text-xs text-amber-600">
-                      No se pudo obtener la tasa automática. Escribe la tasa manualmente.
-                    </p>
-                  )}
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={manualRate}
-                    onChange={(e) => setManualRate(e.target.value)}
-                    placeholder={String(rate.rate ?? "Tasa Bs/US$")}
-                    className={inputCls}
-                  />
-                </div>
-              )}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Número de referencia *
@@ -314,15 +326,6 @@ export function CompleteAppointmentDialog({
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
                   placeholder="Ej: 00012345"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Fecha del pago</label>
-                <input
-                  type="date"
-                  value={paidDate}
-                  onChange={(e) => setPaidDate(e.target.value)}
                   className={inputCls}
                 />
               </div>

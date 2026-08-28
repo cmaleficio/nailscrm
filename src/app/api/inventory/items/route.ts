@@ -44,7 +44,12 @@ function nextAutoCode(): string {
     const m = /PRD-(\d+)/.exec(r.id);
     if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
   }
-  return `PRD-${maxN + 1}`;
+  let candidate = `PRD-${maxN + 1}`;
+  while (db.select().from(schema.inventoryItems).where(eq(schema.inventoryItems.id, candidate)).get()) {
+    maxN++;
+    candidate = `PRD-${maxN + 1}`;
+  }
+  return candidate;
 }
 
 export async function POST(req: NextRequest) {

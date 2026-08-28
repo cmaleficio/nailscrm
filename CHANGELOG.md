@@ -70,6 +70,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 - Los items de inventario pasan de UUID a códigos de producto legibles (migración 0009 con remapeo de referencias en `bill_items`, `inventory_movements` y `service_products`).
 
 ### Corregido
+- Crear producto desde el diálogo de facturas en `/dashboard/purchases`: `nextAutoCode()` ahora itera hasta encontrar un código disponible (antes podía colisionar si `PRD-{n}` ya existía, devolviendo 400 silenciosamente). Además, `addItem()` ahora muestra el error de la API al usuario en lugar de fallar en silencio.
 - Edición de facturas en `/dashboard/purchases`: el botón "Editar" cargaba los datos pero nunca abría el diálogo (faltaba `setShowForm(true)`), por lo que no se podía editar ninguna factura aunque se tuviera permiso de administrador.
 - Avatar de Google en el `Header`: `next/image` fallaba con 500 porque el host `lh3.googleusercontent.com` no estaba configurado en `next.config.ts`. Se añadió el `remotePatterns` correspondiente.
 - Fotos de los seeds (`picsum.photos`) en las tarjetas de servicio: `next/image` fallaba con 500 porque el host no estaba en `images.remotePatterns` de `next.config.ts`. Se añadió el patrón correspondiente.

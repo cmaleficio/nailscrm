@@ -3,6 +3,7 @@
 import { Fragment, useState, useEffect, useCallback } from "react";
 import { MovementDialog } from "@/components/MovementDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { newId } from "@/lib/id";
 
 type InventoryItem = {
   id: string;
@@ -87,7 +88,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
       for (const p of products) {
         if (!map[p.serviceId]) map[p.serviceId] = [];
         map[p.serviceId].push({
-          key: crypto.randomUUID(),
+          key: newId(),
           inventoryItemId: p.inventoryItemId,
           quantityPerService: String(p.quantityPerService),
         });
@@ -234,7 +235,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   function addUseLine(serviceId: string) {
     setUses((prev) => ({
       ...prev,
-      [serviceId]: [...(prev[serviceId] ?? []), { key: crypto.randomUUID(), inventoryItemId: "", quantityPerService: "1" }],
+      [serviceId]: [...(prev[serviceId] ?? []), { key: newId(), inventoryItemId: "", quantityPerService: "1" }],
     }));
   }
 

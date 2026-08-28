@@ -13,16 +13,9 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
+  const all = searchParams.get("all");
 
-  if (!date) {
-    return NextResponse.json({ error: "date is required" }, { status: 400 });
-  }
-
-  const dateObj = new Date(date + "T00:00:00-04:00");
-  const dayStart = Math.floor(dateObj.getTime() / 1000);
-  const dayEnd = dayStart + 24 * 3600;
-
-  const appointments = db
+  const baseQuery = db
     .select({
       id: schema.appointments.id,
       startTime: schema.appointments.startTime,
@@ -47,15 +40,52 @@ export async function GET(req: NextRequest) {
       schema.servicePurchases,
       eq(schema.servicePurchases.appointmentId, schema.appointments.id)
     )
-    .where(
-      and(
-        gte(schema.appointments.startTime, dayStart),
-        lt(schema.appointments.startTime, dayEnd),
-        ne(schema.appointments.status, "cancelled")
+    .where(ne(schema.appointments.status, "cancelled"));
+
+  let appointments;
+  if (all === "1") {
+    appointments = baseQuery.orderBy(sql`${schema.appointments.startTime} ASC`).all();
+  } else if (!date) {
+    return NextResponse.json({ error: "date is required (or use all=1)" }, { status: 400 });
+  } else {
+    const dateObj = new Date(date + "T00:00:00-04:00");
+    const dayStart = Math.floor(dateObj.getTime() / 1000);
+    const dayEnd = dayStart + 24 * 3600;
+    const dayQuery = db
+      .select({
+        id: schema.appointments.id,
+        startTime: schema.appointments.startTime,
+        endTime: schema.appointments.endTime,
+        status: schema.appointments.status,
+        referencePhotoUrl: schema.appointments.referencePhotoUrl,
+        clientName: schema.users.name,
+        clientId: schema.users.id,
+        clientPhone: schema.users.phone,
+        serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
+        servicePrice: schema.servicePurchases.servicePrice,
+        serviceId: schema.services.id,
+        isGroup: schema.services.isGroup,
+      })
+      .from(schema.appointments)
+      .innerJoin(schema.users, eq(schema.appointments.clientId, schema.users.id))
+      .innerJoin(
+        schema.services,
+        eq(schema.appointments.serviceId, schema.services.id)
       )
-    )
-    .orderBy(sql`${schema.appointments.startTime} ASC`)
-    .all();
+      .leftJoin(
+        schema.servicePurchases,
+        eq(schema.servicePurchases.appointmentId, schema.appointments.id)
+      )
+      .where(
+        and(
+          ne(schema.appointments.status, "cancelled"),
+          gte(schema.appointments.startTime, dayStart),
+          lt(schema.appointments.startTime, dayEnd)
+        )
+      )
+      .orderBy(sql`${schema.appointments.startTime} ASC`);
+    appointments = dayQuery.all();
+  }
 
   const enrollCounts = new Map(
     db

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { todayStr, dateTimeToTs } from "@/lib/time";
+import { newId } from "@/lib/id";
 
 type ItemLine = {
   key: string;
@@ -65,7 +66,7 @@ export function BillFormDialog({ bill, onClose, onSaved }: Props) {
   const [lines, setLines] = useState<ItemLine[]>(
     bill?.items?.length
       ? bill.items.map((it) => ({
-          key: crypto.randomUUID(),
+          key: newId(),
           inventoryItemId: it.inventoryItemId ?? "",
           description: it.description ?? "",
           quantity: String(it.quantity),
@@ -127,10 +128,14 @@ export function BillFormDialog({ bill, onClose, onSaved }: Props) {
       setInventoryItems((prev) => [...prev, created]);
       setLines((prev) => [
         ...prev,
-        { key: crypto.randomUUID(), inventoryItemId: created.id, description: "", quantity: "1", unitCostUsd: "" },
+        { key: newId(), inventoryItemId: created.id, description: "", quantity: "1", unitCostUsd: "" },
       ]);
       setNewItemName("");
       setNewItemUnit("unidad");
+      setError("");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo crear el producto");
     }
   }
 
@@ -404,7 +409,7 @@ export function BillFormDialog({ bill, onClose, onSaved }: Props) {
                 onClick={() =>
                   setLines((prev) => [
                     ...prev,
-                    { key: crypto.randomUUID(), inventoryItemId: "", description: "", quantity: "1", unitCostUsd: "" },
+                    { key: newId(), inventoryItemId: "", description: "", quantity: "1", unitCostUsd: "" },
                   ])
                 }
                 className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
