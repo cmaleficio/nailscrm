@@ -26,7 +26,7 @@ type BillPayload = {
   totalUsd: number;
   notes: string | null;
   paidUsd: number;
-  items: { id: string; inventoryItemId: string | null; description: string | null; quantity: number; unitCostUsd: number; totalUsd: number }[];
+  items: { id: string; inventoryItemId: string | null; inventoryItemName?: string | null; description: string | null; quantity: number; unitCostUsd: number; totalUsd: number }[];
 };
 
 type Props = {

@@ -17,7 +17,22 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   if (!bill) {
     return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
   }
-  const items = db.select().from(schema.billItems).where(eq(schema.billItems.billId, id)).orderBy(schema.billItems.id).all();
+  const items = db
+    .select({
+      id: schema.billItems.id,
+      billId: schema.billItems.billId,
+      inventoryItemId: schema.billItems.inventoryItemId,
+      inventoryItemName: schema.inventoryItems.name,
+      description: schema.billItems.description,
+      quantity: schema.billItems.quantity,
+      unitCostUsd: schema.billItems.unitCostUsd,
+      totalUsd: schema.billItems.totalUsd,
+    })
+    .from(schema.billItems)
+    .leftJoin(schema.inventoryItems, eq(schema.billItems.inventoryItemId, schema.inventoryItems.id))
+    .where(eq(schema.billItems.billId, id))
+    .orderBy(schema.billItems.id)
+    .all();
   const payments = db
     .select({
       id: schema.supplierPayments.id,

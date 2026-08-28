@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   const paidMap = new Map<string, number>();
   const itemsByBill = new Map<
     string,
-    { id: string; billId: string; inventoryItemId: string | null; description: string | null; quantity: number; unitCostUsd: number; totalUsd: number }[]
+    { id: string; billId: string; inventoryItemId: string | null; inventoryItemName: string | null; description: string | null; quantity: number; unitCostUsd: number; totalUsd: number }[]
   >();
   if (ids.length > 0) {
     const paidRows = db
@@ -70,7 +70,21 @@ export async function GET(req: NextRequest) {
       .groupBy(schema.supplierPayments.billId)
       .all();
     for (const p of paidRows) paidMap.set(p.billId, p.s ?? 0);
-    const allItems = db.select().from(schema.billItems).where(inArray(schema.billItems.billId, ids)).all();
+    const allItems = db
+      .select({
+        id: schema.billItems.id,
+        billId: schema.billItems.billId,
+        inventoryItemId: schema.billItems.inventoryItemId,
+        inventoryItemName: schema.inventoryItems.name,
+        description: schema.billItems.description,
+        quantity: schema.billItems.quantity,
+        unitCostUsd: schema.billItems.unitCostUsd,
+        totalUsd: schema.billItems.totalUsd,
+      })
+      .from(schema.billItems)
+      .leftJoin(schema.inventoryItems, eq(schema.billItems.inventoryItemId, schema.inventoryItems.id))
+      .where(inArray(schema.billItems.billId, ids))
+      .all();
     for (const it of allItems) {
       const arr = itemsByBill.get(it.billId) ?? [];
       arr.push(it);

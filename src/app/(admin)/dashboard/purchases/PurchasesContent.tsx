@@ -24,6 +24,7 @@ type Bill = {
   items: {
     id: string;
     inventoryItemId: string | null;
+    inventoryItemName?: string | null;
     description: string | null;
     quantity: number;
     unitCostUsd: number;
@@ -296,7 +297,7 @@ export function PurchasesContent() {
                                     <tbody>
                                       {b.items.map((it) => (
                                         <tr key={it.id} className="border-b border-gray-50">
-                                          <td className="px-3 py-2 text-gray-700">{it.description ?? "Item de inventario"}</td>
+                                          <td className="px-3 py-2 text-gray-700">{it.description || it.inventoryItemName || "Item de inventario"}</td>
                                           <td className="px-3 py-2 text-gray-600">{it.quantity}</td>
                                           <td className="px-3 py-2 text-gray-600">${it.unitCostUsd.toFixed(2)}</td>
                                           <td className="px-3 py-2 font-medium text-gray-900">${it.totalUsd.toFixed(2)}</td>
