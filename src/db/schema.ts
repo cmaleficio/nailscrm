@@ -112,7 +112,7 @@ export const galleryPhotos = sqliteTable("gallery_photos", {
 export const servicePurchases = sqliteTable("service_purchases", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
-  appointmentId: text("appointment_id").notNull().references(() => appointments.id, { onDelete: "cascade" }),
+  appointmentId: text("appointment_id").references(() => appointments.id, { onDelete: "cascade" }),
   serviceId: text("service_id").references(() => services.id),
   serviceName: text("service_name").notNull(),
   serviceDescription: text("service_description"),

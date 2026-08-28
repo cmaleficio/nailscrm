@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull, or } from "drizzle-orm";
 import { hasAnyPermission } from "@/lib/authz";
 
 export async function PATCH(
@@ -54,13 +54,16 @@ export async function GET(
       due: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)`,
     })
     .from(schema.servicePurchases)
-    .innerJoin(
+    .leftJoin(
       schema.appointments,
       eq(schema.appointments.id, schema.servicePurchases.appointmentId)
     )
     .where(
       and(
-        eq(schema.appointments.status, "completed"),
+        or(
+          eq(schema.appointments.status, "completed"),
+          isNull(schema.servicePurchases.appointmentId)
+        ),
         eq(schema.servicePurchases.userId, id)
       )
     )

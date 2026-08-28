@@ -48,3 +48,14 @@ public/uploads/*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# superpowers workspace artifacts
+.superpowers/
+
+# graphify output
+graphify-out/
+
+# local agent skills
+.agents/
+SKILLS.md
+skills-lock.json
