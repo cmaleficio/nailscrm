@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, or, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus, applyPaidToClient } from "@/lib/financial-status";
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();
-  const { userId, serviceId, completionDate, price, notes } = body;
+    const { userId, serviceId, completionDate, price, notes } = body;
   if (!userId || typeof userId !== "string" || !userId.trim()) {
     return NextResponse.json({ error: "userId es requerido" }, { status: 400 });
   }
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
     userId,
     appointmentId: null,
     serviceId,
-    serviceName: service.name,
-    serviceDescription: service.description ?? null,
+      serviceName: service.name,
+      serviceDescription: (typeof notes === "string" && notes.trim() ? notes.trim() : service.description ?? null),
     servicePrice: finalPrice,
     serviceDurationMins: service.durationMins,
     financialStatus: "pending",
