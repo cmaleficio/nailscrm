@@ -141,7 +141,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 ### Tabla: service_purchases (snapshot del servicio al comprar, inmutable)
 - id: text, primary key
 - user_id: text, foreign key → users.id
-- appointment_id: text, foreign key → appointments.id (on delete cascade; al cancelar se marca `void` pero la columna vuelve a borrarse por CASCADE — el archivo de la cancelación vive en `cancelled_appointments`)
+- appointment_id: text, foreign key → appointments.id (on delete cascade; al cancelar se marca `void` pero la columna vuelve a borrarse por CASCADE — el archivo de la cancelación vive en `cancelled_appointments`; **opcional** — las compras huérfanas generadas por "Servicio ya realizado" tienen `appointment_id = null`; el índice `service_purchases_appointment_idx` sigue funcionando con valores no nulos)
 - service_id: text, foreign key → services.id
 - service_name: text, not null
 - service_description: text
@@ -179,8 +179,8 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - currency: text, default 'USD' (USD | VES)
 - amount_ves: real
 - rate: real (tasa Bs/US$ usada para pagos en Bs)
-- reference: text, not null (obligatorio)
-- paid_at: integer (timestamp)
+- reference: text (opcional para admins; obligatorio solo en la práctica para admins que pagan con transferencia; null cuando no se provee)
+- paid_at: integer (timestamp) integer (timestamp)
 - notes: text
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
@@ -271,12 +271,12 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 ### Tabla: inventory_movements (kardex)
 - id: text, primary key
 - inventory_item_id: text, foreign key → inventory_items.id
-- kind: text, not null ('in' | 'out' | 'adjust')
-- quantity: real, not null (positivo para in, negativo para out/adjust)
-- unit_cost_usd: real (solo en entradas)
+- kind: text, not null ('in' | 'out' | 'adjust' | 'cost_adjust')
+- quantity: real, not null (positivo para in, negativo para out/adjust; 0 para cost_adjust)
+- unit_cost_usd: real (entradas y ajustes de costo; null para out/adjust de stock)
 - ref_type: text, default 'manual' ('bill' | 'usage' | 'manual')
 - ref_id: text (id de la factura si ref_type='bill', id de la cita si ref_type='usage')
-- notes: text
+- notes: text (obligatorio para 'adjust' y 'cost_adjust')
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
 
@@ -315,7 +315,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - amount_ves: real
 - rate: real
 - payment_date: integer (timestamp)
-- reference: text, not null (obligatorio)
+- reference: text (opcional para admins que registran pagos a proveedores; null cuando no se provee)
 - notes: text
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
@@ -391,6 +391,8 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - StatsBanner: banner con total_visits y total_revenue del cliente
 - LoginForm: formulario de login/registro por correo y contraseña
 - NewAppointmentDialog: crea citas para walk-ins (clientes no registrados) desde la agenda
+- AddServiceDialog: diálogo "Servicio realizado" para registrar un servicio ya hecho sin cita previa (walk-in retrospectivo o ajuste manual de CXC) — campos: cliente, servicio, fecha/hora (default hoy, permite pasado), precio (default `service.price`, editable hasta 150%) y notas. Llama `POST /api/purchases` con `appointmentId: null`. Disponible desde la agenda (`+ Servicio realizado`), `/dashboard/balances` (por cliente) y el panel CRM.
+- EditCostDialog: mini-diálogo para corregir manualmente el `avg_cost` de un producto de inventario. Pide nuevo costo (USD) y motivo obligatorio (≥3 chars). Visible en la fila de cada producto de la tabla de inventario solo si el admin tiene el permiso `adjustInventory`. Crea una fila en el kardex con `kind: "cost_adjust"`, `quantity: 0` y `unit_cost_usd: nuevo valor`.
 - CourseSessionDialog: crea sesiones de curso grupal desde la agenda (elige servicio `is_group`, fecha/hora con slots y multi-selección de alumnos de `/api/clients`; muestra precio por alumno y total; llama `POST /api/course-sessions`)
 - BlockoutDialog: crea bloques "no disponible" desde la agenda
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
@@ -401,7 +403,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - MovementDialog: registra salidas/ajustes de stock (con motivo obligatorio en ajustes) desde Inventario
 - PurchasesContent: pestañas de facturas (grid maestro-detalle editable), proveedores y categorías en /dashboard/purchases
 - AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable
-- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`).
+- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`). Cada producto tiene botón "Editar costo" (`EditCostDialog`, requiere `adjustInventory`) que crea una fila `kind: "cost_adjust"` en el kardex con motivo obligatorio; el kardex muestra la fila con badge púrpura "Costo" y el valor `unit_cost_usd`.
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
 - GalleryContent: gestor del muro de inspiración en /dashboard/gallery (subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación)
 - ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)
