@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
+import { AddServiceDialog } from "@/components/AddServiceDialog";
 
 type BalanceItem = {
   id: string;
@@ -52,6 +53,7 @@ export function BalancesContent() {
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [registering, setRegistering] = useState<BalanceClient | null>(null);
+  const [addingFor, setAddingFor] = useState<BalanceClient | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"balances" | "receipts">("balances");
@@ -207,6 +209,12 @@ export function BalancesContent() {
                       >
                         Registrar pago
                       </button>
+                      <button
+                        onClick={() => setAddingFor(c)}
+                        className="rounded-xl bg-pink-100 px-2 py-1 text-xs font-medium text-pink-700 hover:bg-pink-200"
+                      >
+                        Servicio realizado
+                      </button>
                     </div>
                   </div>
 
@@ -351,6 +359,18 @@ export function BalancesContent() {
           onClose={() => setRegistering(null)}
           onSaved={() => {
             setRegistering(null);
+            void loadBalances();
+          }}
+        />
+      )}
+
+      {addingFor && (
+        <AddServiceDialog
+          clientId={addingFor.clientId}
+          clientName={addingFor.name}
+          onClose={() => setAddingFor(null)}
+          onSaved={() => {
+            setAddingFor(null);
             void loadBalances();
           }}
         />

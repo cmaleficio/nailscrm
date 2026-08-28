@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { AddServiceDialog } from "@/components/AddServiceDialog";
 
 type ClientData = {
   id: string;
@@ -67,6 +68,7 @@ export function ClientCRMPanel({
   const [editingContact, setEditingContact] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showAddService, setShowAddService] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -271,6 +273,12 @@ export function ClientCRMPanel({
               className="rounded-lg bg-pink-main px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-pink-light transition-colors"
             >
               Registrar pago
+            </button>
+            <button
+              onClick={() => setShowAddService(true)}
+              className="rounded-xl bg-pink-100 px-2 py-1 text-xs font-medium text-pink-700 hover:bg-pink-200"
+            >
+              Registrar servicio
             </button>
           </div>
           <p className="mt-2 text-2xl font-bold text-gray-900">
@@ -543,6 +551,24 @@ export function ClientCRMPanel({
           onClose={() => setShowPayment(false)}
           onSaved={() => {
             setShowPayment(false);
+            fetch(`/api/clients/${clientId}`)
+              .then((r) => r.json())
+              .then((data) => {
+                setClient(data);
+                setTechNotes(data.techNotes || "");
+                setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "" });
+              });
+          }}
+        />
+      )}
+
+      {showAddService && (
+        <AddServiceDialog
+          clientId={client.id}
+          clientName={client.name}
+          onClose={() => setShowAddService(false)}
+          onSaved={() => {
+            setShowAddService(false);
             fetch(`/api/clients/${clientId}`)
               .then((r) => r.json())
               .then((data) => {

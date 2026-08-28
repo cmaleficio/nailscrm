@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
-import { hasPermission } from "@/lib/authz";
-import { setExhausted } from "@/lib/inventory";
+import { hasPermission, canAdjustInventory } from "@/lib/authz";
+import { setExhausted, applyCostAdjustment } from "@/lib/inventory";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -35,6 +35,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.exhausted === true || body.exhausted === false) {
     setExhausted(id, body.exhausted, session!.user!.id);
   }
+  if (body.avgCost !== undefined) {
+    if (!(await canAdjustInventory(session))) {
+      return NextResponse.json({ error: "No tienes permiso para ajustar costos" }, { status: 403 });
+    }
+    const avgCostNum = typeof body.avgCost === "number" && Number.isFinite(body.avgCost) && body.avgCost >= 0 ? body.avgCost : null;
+    if (avgCostNum === null) {
+      return NextResponse.json({ error: "avgCost debe ser un número >= 0" }, { status: 400 });
+    }
+    if (!body.costNotes || typeof body.costNotes !== "string" || !body.costNotes.trim()) {
+      return NextResponse.json({ error: "El motivo del ajuste de costo es obligatorio" }, { status: 400 });
+    }
+    applyCostAdjustment(id, avgCostNum, body.costNotes, session!.user!.id);
+  }
   const category = body.category !== undefined
     ? (typeof body.category === "string" && body.category.trim() ? body.category.trim() : null)
     : existing.category;
@@ -48,7 +61,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     .set({ name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses })
     .where(eq(schema.inventoryItems.id, id))
     .run();
-  return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses });
+  return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses, avgCost: body.avgCost !== undefined ? body.avgCost : existing.avgCost });
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {

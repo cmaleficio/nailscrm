@@ -3,6 +3,7 @@
 import { Fragment, useState, useEffect, useCallback } from "react";
 import { MovementDialog } from "@/components/MovementDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EditCostDialog } from "@/components/EditCostDialog";
 import { newId } from "@/lib/id";
 
 type InventoryItem = {
@@ -29,7 +30,7 @@ type InventoryItem = {
 type Movement = {
   id: string;
   inventoryItemId: string;
-  kind: "in" | "out" | "adjust";
+  kind: "in" | "out" | "adjust" | "cost_adjust";
   quantity: number;
   unitCostUsd: number | null;
   refType: "bill" | "manual";
@@ -62,6 +63,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   const [newItemForm, setNewItemForm] = useState({ code: "", name: "", unit: "unidad", minStock: "0", barcode: "", photoUrl: "", category: "", subcategory: "", maxUses: "" });
   const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [costEdit, setCostEdit] = useState<InventoryItem | null>(null);
   const [editForm, setEditForm] = useState({ name: "", unit: "", minStock: "0", isActive: 1, category: "", subcategory: "", maxUses: "" });
   const [savingUses, setSavingUses] = useState<string | null>(null);
 
@@ -283,8 +285,10 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
         ? "bg-green-100 text-green-700"
         : kind === "out"
           ? "bg-red-100 text-red-600"
-          : "bg-amber-100 text-amber-700";
-    const label = kind === "in" ? "Entrada" : kind === "out" ? "Salida" : "Ajuste";
+          : kind === "cost_adjust"
+            ? "bg-purple-100 text-purple-700"
+            : "bg-amber-100 text-amber-700";
+    const label = kind === "in" ? "Entrada" : kind === "out" ? "Salida" : kind === "cost_adjust" ? "Costo" : "Ajuste";
     return (
       <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
     );
@@ -487,6 +491,14 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                             >
                               Editar
                             </button>
+                            {canAdjust && (
+                              <button
+                                onClick={() => setCostEdit(item)}
+                                className="rounded-lg bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-200"
+                              >
+                                Editar costo
+                              </button>
+                            )}
                             <button onClick={() => setDeletingItem(item)} className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-600 hover:bg-red-200">
                               Eliminar
                             </button>
@@ -586,7 +598,9 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                         <td className={`px-4 py-3 font-medium ${m.quantity < 0 ? "text-red-600" : "text-green-600"}`}>
                           {m.quantity > 0 ? "+" : ""}{m.quantity}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{m.unitCostUsd !== null ? `$${m.unitCostUsd.toFixed(2)}` : "—"}</td>
+                        <td className="px-4 py-3 text-gray-600">{m.unitCostUsd !== null ? `$${m.unitCostUsd.toFixed(2)}` : "—"}{m.kind === "cost_adjust" && (
+                              <span className="ml-1 text-xs font-semibold text-purple-700">${(m.unitCostUsd ?? 0).toFixed(2)}</span>
+                            )}</td>
                         <td className="px-4 py-3 text-gray-600">{m.refType === "bill" ? "Factura" : "Manual"}</td>
                         <td className="px-4 py-3 text-gray-500">{m.notes ?? ""}</td>
                       </tr>
@@ -679,6 +693,14 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
             setMovementItem(null);
             void loadItems();
           }}
+        />
+      )}
+
+      {costEdit && (
+        <EditCostDialog
+          item={{ id: costEdit.id, name: costEdit.name, avgCost: costEdit.avgCost, unit: costEdit.unit }}
+          onClose={() => setCostEdit(null)}
+          onSaved={() => { setCostEdit(null); void loadItems(); }}
         />
       )}
 

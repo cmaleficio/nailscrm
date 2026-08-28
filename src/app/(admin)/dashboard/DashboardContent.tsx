@@ -9,6 +9,7 @@ import { NewAppointmentDialog } from "@/components/NewAppointmentDialog";
 import { CourseSessionDialog } from "@/components/CourseSessionDialog";
 import { BlockoutDialog } from "@/components/BlockoutDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { AddServiceDialog } from "@/components/AddServiceDialog";
 import { dateToDayStartTs } from "@/lib/time";
 
 type Appointment = {
@@ -80,6 +81,7 @@ export function DashboardContent({ today }: Props) {
   const [showNewAppointment, setShowNewAppointment] = useState(false);
   const [showCourseSession, setShowCourseSession] = useState(false);
   const [showBlockout, setShowBlockout] = useState(false);
+  const [showAddService, setShowAddService] = useState(false);
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
   const [weekBlockouts, setWeekBlockouts] = useState<Record<string, Blockout[]>>({});
   const [cancelledList, setCancelledList] = useState<
@@ -249,6 +251,12 @@ export function DashboardContent({ today }: Props) {
           className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
         >
           ⛔ Bloquear tiempo
+        </button>
+        <button
+          onClick={() => setShowAddService(true)}
+          className="rounded-xl bg-pink-100 px-3 py-1.5 text-sm font-medium text-pink-700 hover:bg-pink-200"
+        >
+          + Servicio realizado
         </button>
       </div>
 
@@ -728,6 +736,16 @@ export function DashboardContent({ today }: Props) {
           onClose={() => setShowBlockout(false)}
           onCreated={() => {
             setShowBlockout(false);
+            refreshAll();
+          }}
+        />
+      )}
+
+      {showAddService && (
+        <AddServiceDialog
+          onClose={() => setShowAddService(false)}
+          onSaved={() => {
+            setShowAddService(false);
             refreshAll();
           }}
         />

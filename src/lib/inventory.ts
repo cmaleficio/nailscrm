@@ -138,6 +138,36 @@ export function setExhausted(itemId: string, exhausted: boolean, createdBy: stri
   }
 }
 
+export function applyCostAdjustment(
+  itemId: string,
+  newAvgCost: number,
+  notes: string,
+  createdBy: string
+): { avgCost: number } {
+  if (newAvgCost < 0) throw new Error("El costo no puede ser negativo");
+  if (!notes.trim()) throw new Error("El motivo es obligatorio");
+  const rounded = Math.round(newAvgCost * 10000) / 10000;
+  db.update(schema.inventoryItems)
+    .set({ avgCost: rounded })
+    .where(eq(schema.inventoryItems.id, itemId))
+    .run();
+  db.insert(schema.inventoryMovements)
+    .values({
+      id: crypto.randomUUID(),
+      inventoryItemId: itemId,
+      kind: "cost_adjust",
+      quantity: 0,
+      unitCostUsd: rounded,
+      refType: "manual",
+      refId: null,
+      notes: notes.trim(),
+      createdBy,
+      createdAt: Math.floor(Date.now() / 1000),
+    })
+    .run();
+  return { avgCost: rounded };
+}
+
 export function recordUsage(
   appointmentId: string,
   usage: { inventoryItemId: string; quantity: number }[],
