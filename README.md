@@ -102,6 +102,16 @@ src/
 - **Admin:** agenda día/semana, completar citas con fotos y pago (opcional, la deuda queda pendiente si no se marca), crear sesiones de curso grupal, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar con desglose por ítem y filtro de estado, compras, cuentas por pagar, inventario, estados financieros (Recaudación + Producción), servicios y horario de trabajo. Los accesos a cada módulo se controlan por permisos asignados en `/dashboard/admin-users`.
 - **Superadmin (`ADMIN_EMAIL`):** gestión de admins y sus permisos en `/dashboard/admin-users`.
 
+## 📚 Base de Conocimiento
+
+El proyecto incluye una base de conocimiento generada con [Graphify](https://github.com/graphify-labs/graphify):
+
+- `graphify-out/graph.html` — Grafo interactivo (abrir en navegador)
+- `graphify-out/graph.json` — Datos crudos del grafo
+- `graphify-out/GRAPH_REPORT.md` — Reporte de comunidades y conexiones
+
+Para actualizarla: `graphify . --code-only --html` (requiere `pip install graphifyy`).
+
 ## Mantenimiento
 
 Cada cambio relevante (funcionalidad nueva/quitada o bug corregido) obliga a actualizar `AGENTS.md` (si aplica), `CHANGELOG.md` y `README.md` en el mismo commit.

@@ -18,6 +18,19 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - **Integraciones:** Google Calendar API (push), WhatsApp Deep Links (wa.me)
 - **Exposición:** Cloudflare Tunnel (localhost → internet)
 
+## 📚 Base de Conocimiento (Graphify)
+
+Antes de hacer cambios en el código o revisar funcionalidades, **consultar la base de conocimiento en `graphify-out/`** para optimizar el uso de tokens y mejorar la calidad de las respuestas.
+
+- `graphify-out/graph.html` — Grafo interactivo (abrir en navegador)
+- `graphify-out/graph.json` — Datos crudos del grafo
+- `graphify-out/GRAPH_REPORT.md` — Reporte de comunidades y conexiones
+
+**Comandos útiles:**
+- `/graphify query "<pregunta>"` — Consultar el grafo (responde desde la base de conocimiento)
+- `/graphify path <nodo1> <nodo2>` — Camino más corto entre dos conceptos
+- `/graphify explain <nodo>` — Explicación en lenguaje natural de un nodo
+
 ## 📏 Reglas de Desarrollo
 - Mobile-first en todas las vistas de cliente
 - Paleta de colores: rosa pastel (#FFE5EC, #FFC2D1), blanco, gris suave (#F5F5F5)
