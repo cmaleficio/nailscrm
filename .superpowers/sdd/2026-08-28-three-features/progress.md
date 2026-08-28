@@ -22,17 +22,22 @@
 ## Task progress
 
 - Task 1.1: complete (schema.ts lines 168 & 306 modified; migration 0015_rare_tinkerer.sql generated)
-- Task 1.2-1.6: complete (commits 3f0b2b5..ab2d5c0, review clean — strictness tightening of userId noted as minor, out of scope)
-- Task 2.1: pending
-- Task 2.2: pending
-- Task 2.3: pending
-- Task 2.4: pending
-- Task 2.5: pending
-- Task 2.6: pending
-- Task 2.7: pending
-- Task 3.1: pending
-- Task 3.2: pending
-- Task 3.3: pending
-- Task 3.4: pending
-- Task 3.5: pending
-- Task 4.1: pending
+- Task 1.2-1.6: complete (commits ab2d5c0; review clean)
+- Task 2.1: complete (schema.ts appointmentId nullable; commit ea753e1)
+- Task 2.2: complete (clients/[id] LEFT JOIN fix; commit ea753e1)
+- Task 2.3: complete (POST /api/purchases; commit ea753e1)
+- Task 2.4: complete (AddServiceDialog created; commit ea753e1)
+- Task 2.5-2.7: complete (mount in agenda/balances/CRM; commit e38499e)
+- Task 3.1: complete (kind union extended; commit 1d444a1)
+- Task 3.2: complete (applyCostAdjustment helper; commit e38499e)
+- Task 3.3: complete (PATCH /api/inventory/items/[id] with avgCost guard; commit e38499e)
+- Task 3.4: complete (EditCostDialog created; commit e38499e)
+- Task 3.5: complete (InventoryContent integration + kardex cost_adjust display; commit e38499e)
+- Task 4.1: complete (AGENTS.md + CHANGELOG.md + README.md; commit 0269a68)
+- Lint fix: commit e751cb9 (removed unused imports + use notes in service_description)
+
+## Final status: ALL TASKS COMPLETE
+- 5 commits on main
+- Lint: 0 errors, 1 pre-existing warning
+- TSC: clean
+- No new schema columns needed (only relaxation of NOT NULL)
