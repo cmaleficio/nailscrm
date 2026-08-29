@@ -1,5 +1,5 @@
 import { db, schema } from "@/db/index";
-import { eq, sql, and, gte, lt, ne } from "drizzle-orm";
+import { eq, sql, and, gte, lt, ne, isNotNull } from "drizzle-orm";
 import { dateTimeToTs } from "@/lib/time";
 
 export type PnLResult = {
@@ -71,7 +71,7 @@ export function getPnL(month: string): PnLResult {
       count: sql<number>`count(*)`,
     })
     .from(schema.servicePurchases)
-    .where(and(notVoid, gte(schema.servicePurchases.completionDate, start), lt(schema.servicePurchases.completionDate, end)))
+    .where(and(notVoid, isNotNull(schema.servicePurchases.appointmentId), gte(schema.servicePurchases.completionDate, start), lt(schema.servicePurchases.completionDate, end)))
     .get();
 
   const prodByService = db
@@ -81,7 +81,7 @@ export function getPnL(month: string): PnLResult {
       count: sql<number>`count(*)`,
     })
     .from(schema.servicePurchases)
-    .where(and(notVoid, gte(schema.servicePurchases.completionDate, start), lt(schema.servicePurchases.completionDate, end)))
+    .where(and(notVoid, isNotNull(schema.servicePurchases.appointmentId), gte(schema.servicePurchases.completionDate, start), lt(schema.servicePurchases.completionDate, end)))
     .groupBy(schema.servicePurchases.serviceName)
     .all()
     .map((r) => ({

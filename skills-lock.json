@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "graphify/SKILL.md",
       "computedHash": "91d57ecdc6cb9d04ef58c92ca355b18da2bf95266af00deffb7f2ba99907307d"
+    },
+    "powershell-master": {
+      "source": "josiahsiegel/claude-plugin-marketplace",
+      "sourceType": "github",
+      "skillPath": "plugins/powershell-master/skills/powershell-master/SKILL.md",
+      "computedHash": "55e434d4b5b51ddadffda32cc474fad193d90c36c1a98f7a4dbb14cf1ded6a28"
+    },
+    "powershell-windows": {
+      "source": "vudovn/ag-kit",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/powershell-windows/SKILL.md",
+      "computedHash": "b39cff1a14b051890ad8342d42f350fd8ec8737f489f3055158cc7dd86c6172e"
     }
   }
 }

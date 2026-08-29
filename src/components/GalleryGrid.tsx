@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FilterPills } from "./FilterPills";
@@ -21,35 +21,63 @@ export function GalleryGrid() {
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState("");
   const [selected, setSelected] = useState<GalleryItem | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
   const fetchItems = useCallback(
     async (reset = false) => {
+      if (loading) return;
       setLoading(true);
       const params = new URLSearchParams();
       if (!reset && cursor) params.set("cursor", cursor);
       if (activeFilter) params.set("filter", activeFilter);
-      params.set("limit", "10");
+      params.set("limit", "20");
 
       const res = await fetch(`/api/gallery?${params}`);
       const data = await res.json();
 
-      if (reset) {
-        setItems(data.items);
-        setCursor(null);
-        setHasMore(data.hasMore);
-      } else {
-        setItems((prev) => [...prev, ...data.items]);
-        setCursor(data.nextCursor);
-        setHasMore(data.hasMore);
-      }
+      setItems((prev) => {
+        if (reset) {
+          seenIdsRef.current = new Set();
+        }
+        const merged = reset ? data.items : [...prev, ...data.items];
+        const unique = merged.filter((it: GalleryItem) => {
+          if (seenIdsRef.current.has(it.id)) return false;
+          seenIdsRef.current.add(it.id);
+          return true;
+        });
+        return unique;
+      });
+      setCursor(data.nextCursor);
+      setHasMore(data.hasMore);
       setLoading(false);
     },
-    [cursor, activeFilter]
+    [cursor, activeFilter, loading]
   );
 
   useEffect(() => {
+    setCursor(null);
+    setHasMore(true);
+    seenIdsRef.current = new Set();
     void fetchItems(true);
-  }, [fetchItems, activeFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter]);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting && hasMore && !loading) {
+          void fetchItems(false);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchItems, hasMore, loading]);
 
   if (items.length === 0 && !loading) {
     return (
@@ -92,16 +120,9 @@ export function GalleryGrid() {
           </button>
         ))}
       </div>
-      {hasMore && (
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => fetchItems(false)}
-            disabled={loading}
-            className="rounded-xl border border-gray-200 bg-white px-6 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Cargando..." : "Cargar más"}
-          </button>
-        </div>
+      <div ref={sentinelRef} className="h-10" />
+      {loading && (
+        <p className="mt-2 text-center text-sm text-gray-400">Cargando...</p>
       )}
 
       {selected && (

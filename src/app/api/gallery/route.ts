@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db/index";
-import { like, sql, eq, and } from "drizzle-orm";
+import { like, sql, eq, and, or, lt, desc } from "drizzle-orm";
 
 type GalleryItem = {
   id: string;
@@ -18,7 +18,13 @@ export async function GET(req: NextRequest) {
   const filter = searchParams.get("filter") || "";
   const limit = Math.min(Number(searchParams.get("limit")) || 10, 50);
 
-  const cursorTs = cursor ? Number(cursor) : null;
+  let cursorTs: number | null = null;
+  let cursorId: string | null = null;
+  if (cursor) {
+    const [ts, ...idParts] = cursor.split("_");
+    cursorTs = Number(ts);
+    cursorId = idParts.join("_");
+  }
 
   // Fotos finales de citas compartidas
   const apConditions = [
@@ -28,8 +34,13 @@ export async function GET(req: NextRequest) {
   if (filter) {
     apConditions.push(like(schema.services.name, `%${filter}%`));
   }
-  if (cursorTs !== null && !Number.isNaN(cursorTs)) {
-    apConditions.push(sql`${schema.appointmentPhotos.createdAt} < ${cursorTs}`);
+  if (cursorTs !== null && !Number.isNaN(cursorTs) && cursorId !== null) {
+    apConditions.push(
+      or(
+        sql`${schema.appointmentPhotos.createdAt} < ${cursorTs}`,
+        sql`(${schema.appointmentPhotos.createdAt} = ${cursorTs} AND ${schema.appointmentPhotos.id} < ${cursorId})`
+      ) as ReturnType<typeof sql>
+    );
   }
 
   const apRows = db
@@ -47,6 +58,7 @@ export async function GET(req: NextRequest) {
     .innerJoin(schema.users, eq(schema.appointments.clientId, schema.users.id))
     .innerJoin(schema.services, eq(schema.appointments.serviceId, schema.services.id))
     .where(and(...apConditions))
+    .orderBy(desc(schema.appointmentPhotos.createdAt), desc(schema.appointmentPhotos.id))
     .limit(limit + 51)
     .all();
 
@@ -55,8 +67,13 @@ export async function GET(req: NextRequest) {
   if (filter) {
     gpConditions.push(like(schema.services.name, `%${filter}%`));
   }
-  if (cursorTs !== null && !Number.isNaN(cursorTs)) {
-    gpConditions.push(sql`${schema.galleryPhotos.createdAt} < ${cursorTs}`);
+  if (cursorTs !== null && !Number.isNaN(cursorTs) && cursorId !== null) {
+    gpConditions.push(
+      or(
+        sql`${schema.galleryPhotos.createdAt} < ${cursorTs}`,
+        sql`(${schema.galleryPhotos.createdAt} = ${cursorTs} AND ${schema.galleryPhotos.id} < ${cursorId})`
+      ) as ReturnType<typeof sql>
+    );
   }
 
   const gpRows = db
@@ -70,12 +87,13 @@ export async function GET(req: NextRequest) {
     .from(schema.galleryPhotos)
     .leftJoin(schema.services, eq(schema.galleryPhotos.serviceId, schema.services.id))
     .where(gpConditions.length ? and(...gpConditions) : undefined)
+    .orderBy(desc(schema.galleryPhotos.createdAt), desc(schema.galleryPhotos.id))
     .limit(limit + 51)
     .all();
 
   const merged: GalleryItem[] = [
     ...apRows.map((r) => ({
-      id: r.id,
+      id: `ap_${r.id}`,
       url: r.url ?? "/placeholder.svg",
       clientName: r.clientName,
       serviceName: r.serviceName,
@@ -84,7 +102,7 @@ export async function GET(req: NextRequest) {
       createdAt: r.createdAt,
     })),
     ...gpRows.map((r) => ({
-      id: r.id,
+      id: `gp_${r.id}`,
       url: r.url,
       clientName: null,
       serviceName: r.serviceName,
@@ -92,13 +110,19 @@ export async function GET(req: NextRequest) {
       appointmentId: null,
       createdAt: r.createdAt,
     })),
-  ]
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+  ].sort((a, b) => {
+    const tsDiff = (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    if (tsDiff !== 0) return tsDiff;
+    return a.id.localeCompare(b.id);
+  });
 
   const page = merged.slice(0, limit + 1);
   const hasMore = page.length > limit;
-  const items = page.slice(0, limit).map(({ ...r }) => r);
-  const nextCursor = hasMore ? String(items[items.length - 1]?.createdAt ?? "") : null;
+  const items = page.slice(0, limit);
+  const lastItem = items[items.length - 1];
+  const nextCursor = hasMore && lastItem
+    ? `${lastItem.createdAt}_${lastItem.id.replace(/^(ap_|gp_)/, "")}`
+    : null;
 
   return NextResponse.json({ items, nextCursor, hasMore });
 }

@@ -127,6 +127,17 @@ export function BalancesContent() {
     await loadBalances();
   }
 
+  async function deletePurchase(clientId: string, purchaseId: string) {
+    if (!window.confirm("¿Eliminar este servicio realizado?")) return;
+    const res = await fetch(`/api/purchases/${purchaseId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error || "No se pudo eliminar el servicio");
+      return;
+    }
+    await loadBalances();
+  }
+
   const fmtDate = (ts: number | null) =>
     ts
       ? new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "America/Caracas" }).format(new Date(ts * 1000))
@@ -237,6 +248,14 @@ export function BalancesContent() {
                                 {statusLabel(i.financialStatus)}
                               </span>
                               <span className="text-sm font-semibold text-gray-900">${i.price.toFixed(2)}</span>
+                              {i.startTime === null && (
+                                <button
+                                  onClick={() => void deletePurchase(c.clientId, i.id)}
+                                  className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                                >
+                                  Eliminar
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}

@@ -138,7 +138,6 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
       <div className="mb-8">
         <StatsBanner
           totalVisits={user.totalVisits}
-          totalRevenue={user.totalRevenue}
         />
       </div>
 

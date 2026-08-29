@@ -18,6 +18,22 @@ Web App standalone (SaaS/CRM) para gestión integral de un salón de nail design
 - **Integraciones:** Google Calendar API (push), WhatsApp Deep Links (wa.me)
 - **Exposición:** Cloudflare Tunnel (localhost → internet)
 
+## 🪟 Entorno de Desarrollo (Windows)
+
+Este proyecto se desarrolla en **Windows** con PowerShell y CMD.
+
+**Shell:** PowerShell 5.1 (predeterminado)
+**Comandos:** Usar cmdlets de PowerShell (ej: `Get-ChildItem`, `Test-Path`, `Remove-Item`) y CMD cuando sea necesario.
+**Skills instalados:**
+- `powershell-master` — PowerShell advanced (`.agents\skills\powershell-master\`)
+- `powershell-windows` — PowerShell on Windows (`.agents\skills\powershell-windows\`)
+
+**Reglas de ejecución:**
+- Encadenar comandos: `cmd1; if ($?) { cmd2 }` (NO usar `&&`)
+- Usar comillas dobles para rutas con espacios
+- Encerrar rutas entre comillas en cmdlets que lo requieran
+- Preferir `& "ruta\a\ejecutable"` para ejecutar binarios con espacios
+
 ## 📚 Base de Conocimiento (Graphify)
 
 Antes de hacer cambios en el código o revisar funcionalidades, **consultar la base de conocimiento en `graphify-out/`** para optimizar el uso de tokens y mejorar la calidad de las respuestas.
@@ -438,3 +454,4 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - Eliminar banco (`DELETE /api/bank-accounts/[id]`, admin): solo si NO tiene pagos (`supplier_payments.bank_account_id`); si los tiene se sugiere desactivarlo.
 - Eliminar factura (`DELETE /api/bills/[id]`, admin): solo si NO tiene pagos (`supplier_payments.bill_id`, 400); revierte el stock de los items con `reverseBillMovements()`. Las `bill_items` se borran por CASCADE.
 - Eliminar item de inventario (`DELETE /api/inventory/items/[id]`, admin): solo si NO tiene stock, facturas (`bill_items`), movimientos ni usos en servicios; si los tiene se sugiere desactivarlo.
+- Eliminar servicio realizado sin cita (`DELETE /api/purchases/[id]`, permiso `balances`): solo si la fila de `service_purchases` tiene `appointment_id = null` (los creados por "Servicio realizado" desde la agenda, Balances o el CRM). Decrementa `users.total_visits` en 1 y llama a `recomputeFinancialStatus`. Las compras con cita asociada no se eliminan desde aquí; se cancelan vía `DELETE /api/appointments/[id]`.

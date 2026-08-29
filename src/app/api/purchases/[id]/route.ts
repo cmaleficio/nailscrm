@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { recomputeFinancialStatus } from "@/lib/financial-status";
 
 export async function PATCH(
   req: NextRequest,
@@ -87,6 +88,55 @@ export async function PATCH(
     .set(next)
     .where(eq(schema.servicePurchases.id, id))
     .run();
+
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!(await hasPermission(session, "balances"))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const purchase = db
+    .select()
+    .from(schema.servicePurchases)
+    .where(eq(schema.servicePurchases.id, id))
+    .get();
+
+  if (!purchase) {
+    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  }
+
+  if (purchase.appointmentId !== null) {
+    return NextResponse.json(
+      { error: "No se puede eliminar un servicio con cita asociada desde aquí" },
+      { status: 400 }
+    );
+  }
+
+  db.delete(schema.servicePurchases)
+    .where(eq(schema.servicePurchases.id, id))
+    .run();
+
+  const client = db
+    .select({ totalVisits: schema.users.totalVisits })
+    .from(schema.users)
+    .where(eq(schema.users.id, purchase.userId))
+    .get();
+
+  if (client && (client.totalVisits ?? 0) > 0) {
+    db.update(schema.users)
+      .set({ totalVisits: (client.totalVisits ?? 0) - 1 })
+      .where(eq(schema.users.id, purchase.userId))
+      .run();
+  }
+
+  recomputeFinancialStatus(purchase.userId);
 
   return NextResponse.json({ success: true });
 }
