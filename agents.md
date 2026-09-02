@@ -345,6 +345,20 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - quantity_per_service: real, not null
 - unique index (service_id, inventory_item_id). `estUsos` del item = `stock / Σ quantity_per_service`.
 
+### Tabla: legal_settings (singleton para documentos legales)
+- key: text, primary key (ej: "privacy_policy"; el módulo puede crecer a más documentos legales en el futuro)
+- company_name: text, not null
+- site_url: text, not null
+- effective_date: text, not null (ISO "YYYY-MM-DD")
+- country: text, not null
+- governing_law: text, not null
+- contact_email: text, not null
+- contact_phone: text (opcional)
+- contact_url: text (opcional)
+- contact_address: text, not null
+- updated_at: integer (timestamp seconds)
+- updated_by: text, foreign key → users.id
+
 ## 🗺️ Estructura de Rutas
 
 ### Públicas
@@ -352,6 +366,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `/login` → Login/registro por correo y contraseña (además de botón Google)
 - `/book` → Wizard de reserva (3 pasos)
 - `/review/[id]` → Formulario de reseña post-cita
+- `/politicas` → Política de privacidad (documento legal)
 
 ### Protegidas (requieren auth)
 - `/dashboard` → Panel admin (agenda del día/semana con sesiones de curso grupal, pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
@@ -365,6 +380,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `/dashboard/services` → Gestión de servicios (flag "Es curso/grupo", fotos del servicio, eliminar si no tiene uso)
 - `/dashboard/gallery` → Muro de inspiración (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
+- `/dashboard/legal` → Datos legales del salón (campos variables de las políticas de privacidad)
 - `/profile` → Portal de cliente (pasaporte de uñas + historial + estado de cuenta + "Mis pagos" con reporte de capturas)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
 
