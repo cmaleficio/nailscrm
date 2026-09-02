@@ -18,7 +18,8 @@ const NAV_ITEMS: { href: string; label: string; icon: string; perm?: string }[] 
   { href: "/dashboard/exchange-rates", label: "Tasas", icon: "💵", perm: "settings" },
   { href: "/dashboard/services", label: "Servicios", icon: "💅", perm: "services" },
   { href: "/dashboard/gallery", label: "Muro", icon: "🖼️", perm: "gallery" },
-  { href: "/dashboard/admin-users", label: "Admins", icon: "🛡️", perm: "adminUsers" },
+  { href: "/dashboard/legal", label: "Legal", icon: "📜", perm: "settings" },
+  { href: "/dashboard/admin-users", label: "Admins", icon: "🛢️", perm: "adminUsers" },
 ];
 
 export default function AdminLayout({
