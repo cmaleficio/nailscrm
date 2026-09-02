@@ -170,7 +170,7 @@ export function LegalContent() {
             required
           />
           <p className={helpCls}>
-            Aparece como "Actualizado el" en la página pública
+            Aparece como &quot;Actualizado el&quot; en la página pública
           </p>
         </div>
 
@@ -205,7 +205,7 @@ export function LegalContent() {
             placeholder="la República Bolivariana de Venezuela"
           />
           <p className={helpCls}>
-            Frase completa que se mostrará en "Ley que Rige"
+            Frase completa que se mostrará en &quot;Ley que Rige&quot;
           </p>
         </div>
 

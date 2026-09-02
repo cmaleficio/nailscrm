@@ -1,4 +1,5 @@
 import type { PrivacyPolicyValues } from "./privacyPolicy.types";
+import Link from "next/link";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso + "T00:00:00");
@@ -12,14 +13,14 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
       <p className="text-sm text-gray-500">Actualizado el {fmtDate(values.effectiveDate)}</p>
 
       <p>
-        <strong>{values.companyName}</strong> ("nosotros", "nuestro" o "nos") se
+        <strong>{values.companyName}</strong> (&quot;nosotros&quot;, &quot;nuestro&quot; o &quot;nos&quot;) se
         compromete a proteger su privacidad. Esta Política de privacidad explica
         cómo recopila, usa y divulga su información personal.
       </p>
 
       <p>
         Esta Política de privacidad se aplica a nuestro sitio web, y sus
-        subdominios asociados (colectivamente, nuestro "Servicio") junto con
+        subdominios asociados (colectivamente, nuestro &quot;Servicio&quot;) junto con
         nuestra aplicación. Al acceder o utilizar nuestro Servicio, usted
         indica que ha leído, comprendido y aceptado nuestra recopilación,
         almacenamiento, uso y divulgación de su información personal como se
@@ -36,7 +37,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
 
       <ul>
         <li><strong>Cookie:</strong> pequeña cantidad de datos generados por un sitio web y guardados por su navegador web. Se utiliza para identificar su navegador, proporcionar análisis, recordar información sobre usted, como su preferencia de idioma o información de inicio de sesión.</li>
-        <li><strong>Compañía:</strong> cuando esta política menciona "Compañía", "nosotros", "nos" o "nuestro", se refiere a <strong>{values.companyName}</strong>, que es responsable de su información en virtud de esta Política de privacidad.</li>
+        <li><strong>Compañía:</strong> cuando esta política menciona &quot;Compañía&quot;, &quot;nosotros&quot;, &quot;nos&quot; o &quot;nuestro&quot;, se refiere a <strong>{values.companyName}</strong>, que es responsable de su información en virtud de esta Política de privacidad.</li>
         <li><strong>Plataforma:</strong> sitio web de Internet, aplicación web o aplicación digital de cara al público de <strong>{values.companyName}</strong>.</li>
         <li><strong>País:</strong> donde se encuentra <strong>{values.companyName}</strong> o los propietarios / fundadores de <strong>{values.companyName}</strong>; en este caso es <strong>{values.country}</strong>.</li>
         <li><strong>Cliente:</strong> se refiere a la empresa, organización o persona que se registra para utilizar el Servicio para gestionar las relaciones con sus consumidores o usuarios del servicio.</li>
@@ -401,7 +402,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
       <p>
         Podemos divulgar información (incluida la información personal)
         sobre usted a nuestros afiliados corporativos. Para los propósitos
-        de esta Política de Privacidad, "Afiliado Corporativo" significa
+        de esta Política de Privacidad, &quot;Afiliado Corporativo&quot; significa
         cualquier persona o entidad que directa o indirectamente controla,
         está controlada por o está bajo control común con
         <strong> {values.companyName}</strong>, ya sea por propiedad o de
@@ -510,7 +511,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
 
       <h2>Cookies</h2>
       <p>
-        <strong>{values.companyName}</strong> utiliza "cookies" para
+        <strong>{values.companyName}</strong> utiliza &quot;cookies&quot; para
         identificar las áreas de nuestro sitio web que ha visitado. Una
         cookie es una pequeña porción de datos que su navegador web
         almacena en su computadora o dispositivo móvil. Usamos cookies
@@ -549,7 +550,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
         Usamos servicios de remarketing. ¿Qué es el remarketing? En
         marketing digital, el remarketing (o retargeting) es la práctica
         de publicar anuncios en Internet a personas que ya han visitado
-        su sitio web. Permite que su empresa parezca que está "siguiendo"
+        su sitio web. Permite que su empresa parezca que está &quot;siguiendo&quot;
         a las personas en Internet mediante la publicación de anuncios en
         los sitios web y las plataformas que más utilizan.
       </p>
@@ -592,7 +593,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
         Podemos mostrar, incluir o poner a disposición contenido de
         terceros (incluidos datos, información, aplicaciones y otros
         servicios de productos) o proporcionar enlaces a sitios web o
-        servicios de terceros ("Servicios de terceros").
+        servicios de terceros (&quot;Servicios de terceros&quot;).
       </p>
       <p>
         Usted reconoce y acepta que
@@ -665,7 +666,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
 
       <h3>Sesiones</h3>
       <p>
-        <strong>{values.companyName}</strong> utiliza "Sesiones" para
+        <strong>{values.companyName}</strong> utiliza &quot;Sesiones&quot; para
         identificar las áreas de nuestro sitio web que ha visitado. Una
         sesión es un pequeño fragmento de datos que su navegador web
         almacena en su computadora o dispositivo móvil.
@@ -746,7 +747,7 @@ export function renderPrivacyPolicy(values: PrivacyPolicyValues): React.ReactNod
       <hr />
       <p className="text-sm text-gray-500">
         Última actualización: {fmtDate(values.effectiveDate)} ·{" "}
-        <a href="/">Volver al inicio</a>
+        <Link href="/">Volver al inicio</Link>
       </p>
     </article>
   );
