@@ -399,3 +399,18 @@ export const courseEnrollments = sqliteTable(
     index("course_enrollments_client_idx").on(t.clientId),
   ]
 );
+
+export const legalSettings = sqliteTable("legal_settings", {
+  key: text("key").primaryKey(),
+  companyName: text("company_name").notNull(),
+  siteUrl: text("site_url").notNull(),
+  effectiveDate: text("effective_date").notNull(),
+  country: text("country").notNull(),
+  governingLaw: text("governing_law").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  contactPhone: text("contact_phone"),
+  contactUrl: text("contact_url"),
+  contactAddress: text("contact_address").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
+});
