@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { todayStr } from "@/lib/time";
+import { todayStr, dateToDayStartTs } from "@/lib/time";
 
 type Props = {
   clientId: string;
@@ -73,7 +73,7 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
         amountVes: parseFloat(amountVes),
         rate: effectiveRate,
         reference,
-        paidAt: Math.floor(new Date(`${paidDate}T00:00:00-04:00`).getTime() / 1000),
+        paidAt: dateToDayStartTs(paidDate),
         notes,
       };
       if (photoUrl) body.photoUrl = photoUrl;

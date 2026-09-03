@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { todayStr } from "@/lib/time";
+import { todayStr, dateToDayStartTs } from "@/lib/time";
 
 type Props = {
   appointmentId: string;
@@ -131,9 +131,7 @@ export function CompleteAppointmentDialog({
           amountVes: parseFloat(amountVes),
           rate: effectiveRate,
           reference,
-          paidAt: Math.floor(
-            new Date(`${paidDate}T00:00:00-04:00`).getTime() / 1000
-          ),
+          paidAt: dateToDayStartTs(paidDate),
         };
         const payRes = await fetch("/api/payments", {
           method: "POST",

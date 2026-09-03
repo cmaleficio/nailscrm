@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
+import { dateToDayStartTs, tsToLocalLabel } from "@/lib/time";
 
 type Service = {
   id: string;
@@ -118,9 +119,7 @@ export function BookingWizard() {
 
   async function handleJoinWaitlist() {
     if (!selectedDate) return;
-    const dayStart = Math.floor(
-      new Date(selectedDate + "T00:00:00-04:00").getTime() / 1000
-    );
+    const dayStart = dateToDayStartTs(selectedDate);
     setWlStatus("joining");
     setWlError("");
     try {
@@ -144,10 +143,10 @@ export function BookingWizard() {
     }
   }
 
-  function handleSlotSelect(hour: number) {
+  function handleSlotSelect(hour: number, minute: number) {
     if (!selectedDate) return;
-    const dateObj = new Date(selectedDate + "T00:00:00-04:00");
-    const timestamp = Math.floor(dateObj.getTime() / 1000) + hour * 3600;
+    const dayStart = dateToDayStartTs(selectedDate);
+    const timestamp = dayStart + hour * 3600 + minute * 60;
     setSelectedSlot(timestamp);
   }
 
@@ -439,24 +438,28 @@ export function BookingWizard() {
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {slots.map((slot) => (
-                    <button
-                      key={slot.label}
-                      disabled={!slot.available}
-                      onClick={() => handleSlotSelect(slot.hour)}
-                      className={`rounded-lg py-2.5 text-sm transition-colors ${
-                        selectedSlot ===
-                        Math.floor(new Date(selectedDate + "T00:00:00-04:00").getTime() / 1000) +
-                          slot.hour * 3600
-                          ? "bg-pink-main text-gray-900 font-medium"
-                          : slot.available
-                            ? "bg-white border border-gray-200 text-gray-700 hover:border-pink-main"
-                            : "bg-gray-50 text-gray-300 cursor-not-allowed border border-gray-100"
-                      }`}
-                    >
-                      {slot.label}
-                    </button>
-                  ))}
+                  {slots.map((slot) => {
+                    const slotTs =
+                      dateToDayStartTs(selectedDate) +
+                      slot.hour * 3600 +
+                      slot.minute * 60;
+                    return (
+                      <button
+                        key={slot.label}
+                        disabled={!slot.available}
+                        onClick={() => handleSlotSelect(slot.hour, slot.minute)}
+                        className={`rounded-lg py-2.5 text-sm transition-colors ${
+                          selectedSlot === slotTs
+                            ? "bg-pink-main text-gray-900 font-medium"
+                            : slot.available
+                              ? "bg-white border border-gray-200 text-gray-700 hover:border-pink-main"
+                              : "bg-gray-50 text-gray-300 cursor-not-allowed border border-gray-100"
+                        }`}
+                      >
+                        {slot.label}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -508,21 +511,9 @@ export function BookingWizard() {
             {selectedSlot && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Fecha</span>
+                  <span className="text-sm text-gray-500">Fecha y hora</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {new Intl.DateTimeFormat("es-ES", {
-                      dateStyle: "long",
-                      timeZone: "America/Caracas",
-                    }).format(new Date(selectedSlot * 1000))}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Hora</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {new Intl.DateTimeFormat("es-ES", {
-                      timeStyle: "short",
-                      timeZone: "America/Caracas",
-                    }).format(new Date(selectedSlot * 1000))}
+                    {tsToLocalLabel(selectedSlot)}
                   </span>
                 </div>
               </>

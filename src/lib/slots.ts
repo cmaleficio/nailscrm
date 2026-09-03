@@ -22,7 +22,8 @@ export function generateSlots(input: SlotInput): SlotTime[] {
 
   const slots: SlotTime[] = [];
 
-  for (let m = openMin; m + durationMins <= closeMin; m += 30) {
+  const step = 15;
+  for (let m = openMin; m + durationMins <= closeMin; m += step) {
     const slotStart = dayStart + m * 60;
     const slotEnd = slotStart + durationMins * 60;
 

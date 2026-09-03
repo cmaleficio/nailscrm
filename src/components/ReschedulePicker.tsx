@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { dateToDayStartTs, tsToLocalDateStr } from "@/lib/time";
 
 type Props = {
   appointmentId: string;
@@ -24,12 +25,7 @@ export function ReschedulePicker({
   onRescheduled,
 }: Props) {
   const [date, setDate] = useState(
-    new Intl.DateTimeFormat("fr-CA", {
-      timeZone: "America/Caracas",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(currentStartTime * 1000))
+    tsToLocalDateStr(currentStartTime)
   );
   const [slots, setSlots] = useState<
     { hour: number; minute: number; label: string; available: boolean }[]
@@ -53,12 +49,7 @@ export function ReschedulePicker({
   }, [date, serviceId]);
 
   function pickSlot(hour: number, minute: number) {
-    const ts =
-      Math.floor(
-        new Date(date + "T00:00:00-04:00").getTime() / 1000
-      ) +
-      hour * 3600 +
-      minute * 60;
+    const ts = dateToDayStartTs(date) + hour * 3600 + minute * 60;
     setSelectedTs(ts);
   }
 
@@ -112,7 +103,7 @@ export function ReschedulePicker({
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          min={new Date().toISOString().split("T")[0]}
+          min={new Date().toLocaleDateString("en-CA", { timeZone: "America/Caracas" })}
           className="mb-4 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
         />
 
@@ -125,25 +116,28 @@ export function ReschedulePicker({
           <p className="text-sm text-gray-400">No hay horarios disponibles</p>
         ) : (
           <div className="grid max-h-48 grid-cols-3 gap-2 overflow-y-auto pb-2">
-            {slots.map((slot) => (
-              <button
-                key={slot.label}
-                disabled={!slot.available}
-                onClick={() => pickSlot(slot.hour, slot.minute)}
-                className={`rounded-lg border py-2 text-sm transition-colors ${
-                  selectedTs ===
-                  Math.floor(new Date(date + "T00:00:00-04:00").getTime() / 1000) +
-                    slot.hour * 3600 +
-                    slot.minute * 60
-                    ? "border-pink-main bg-pink-light font-medium"
-                    : slot.available
-                      ? "border-gray-200 bg-white text-gray-700 hover:border-pink-main"
-                      : "cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300"
-                }`}
-              >
-                {slot.label}
-              </button>
-            ))}
+            {slots.map((slot) => {
+              const slotTs =
+                dateToDayStartTs(date) +
+                slot.hour * 3600 +
+                slot.minute * 60;
+              return (
+                <button
+                  key={slot.label}
+                  disabled={!slot.available}
+                  onClick={() => pickSlot(slot.hour, slot.minute)}
+                  className={`rounded-lg border py-2 text-sm transition-colors ${
+                    selectedTs === slotTs
+                      ? "border-pink-main bg-pink-light font-medium"
+                      : slot.available
+                        ? "border-gray-200 bg-white text-gray-700 hover:border-pink-main"
+                        : "cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300"
+                  }`}
+                >
+                  {slot.label}
+                </button>
+              );
+            })}
           </div>
         )}
 

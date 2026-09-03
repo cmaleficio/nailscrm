@@ -7,8 +7,14 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 ## [Sin publicar]
 
 ### Corregido
-- **Inventario: stock no se descuenta por cada uso, solo al agotar:** `recordUsage()` (`src/lib/inventory.ts`) ahora tiene lógica "usos primero, stock al final". Si un producto tiene `maxUses` configurado, cada cita incrementa `usesConsumed` en 1 pero **no** descuenta stock ni genera movimiento de kardex `out`. Al registrar el uso que cruza `maxUses` (`usesConsumed === maxUses`), descuenta 1 unidad de stock, genera `-1` en el kardex y activa `isExhausted`. Si el producto no tiene `maxUses`, comportamiento original (descuenta `quantity` del stock y genera `-quantity` en kardex). Esto evita que productos como esmaltes se "gasten" en cada cita cuando están diseñados para durar muchos usos.
-- **Producción excluye "Servicio realizado":** la métrica "Producción (completadas)" del P&L (`/dashboard/financials`) ya no suma las filas de `service_purchases` con `appointment_id = null` (las creadas por "Agregar servicio realizado"). Solo cuentan los snapshots de citas reales (`appointment_id IS NOT NULL`). Los registros huérfanos siguen siendo CXC (`financialStatus = pending` por defecto) y aparecen en Balances/CRM hasta que se cobren. Fix en `src/lib/financials.ts` (filtro `isNotNull(appointmentId)` en `prodRow` y `prodByService`).
+- **Slots cada 15 min + bug de "media hora después"**: `generateSlots()` (`src/lib/slots.ts`) ahora itera `step = 15` en lugar de 30. Una cita que termina a las **13:30** ya permite agendar otra a las **13:30** en punto (antes había que esperar hasta las 14:00). Validado con `scripts/test-slots-1330.ts` (día futuro con cita 11:00–13:30 de 120 min → slot 13:30 disponible).
+- **BookingWizard ignoraba los minutos del slot**: `handleSlotSelect(slot.hour)` solo sumaba `hour * 3600`, descartando `slot.minute`. Con la nueva granularidad de 15 min esto rompía: clickear "13:30" guardaba "13:00". Ahora `handleSlotSelect(hour, minute)` y la comparación visual del slot seleccionado usan `dateToDayStartTs + h*3600 + m*60`.
+- **ReschedulePicker**: misma lógica aplicada (pickSlot usaba `hour*3600 + minute*60` correctamente, pero la fecha inicial se construía con `Intl.DateTimeFormat("fr-CA")` ad-hoc; ahora usa `tsToLocalDateStr`).
+- **`min` del input de fecha en ReschedulePicker**: usaba `new Date().toISOString().split("T")[0]` (UTC), podía desfasarse en horas de borde. Ahora `toLocaleDateString("en-CA", { timeZone: "America/Caracas" })`.
+
+### Añadido
+- **Helpers TZ Caracas centralizados en `src/lib/time.ts`**: `SALON_TZ`, `tsToLocalDateStr`, `tsToLocalHHMM`, `tsToLocalLabel`. Migrados `BookingWizard`, `ReschedulePicker`, `CompleteAppointmentDialog`, `RegisterPaymentDialog` (antes construían timestamps con `new Date(iso + "T00:00:00-04:00")` ad-hoc).
+- **Referencia futura para apilar servicios**: la nueva granularidad de 15 min ya soporta servicios de 180–200+ min sin cambios en el grid. Documentar como TODO para permitir a un mismo cliente agendar varios `service_purchases` consecutivos (actualmente bloqueado por la constraint de no-overlap).
 
 ### Añadido
 - feat: módulo de políticas de privacidad (página pública `/politicas` + admin `/dashboard/legal` con 8 campos variables)
