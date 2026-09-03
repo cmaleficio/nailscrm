@@ -1,0 +1,27 @@
+Dispositivo; cualquier dispositivo conectado a Internet, como un teléfono, tablet,
+computadora o cualquier otro dispositivo que se pueda usar para visitar y
+usar los servicios,
+
+Dirección IP: a cada dispositivo conectado a Internet se le asigna un número conocido
+como dirección de protocolo de Internet ((P). Estos números generalmente se asignan en
+bloques geográficos. A menudo, se puede utilizar una dirección IP para identificar la
+ubicación desde la que un dispositivo se conecta a Internet.
+
+Personal: se refiere a aquellas personas que son empleadas por o están
+bajo contrato para realizar un servicio en nombre de una de las partes.
+
+Datos personales: cualquier información que directa, indirectamente o en conexión con otra
+información, incluido un número de identificación personal, permita la identificación de una
+persona física.
+
+Servicio: se refiere al servicio brindado por como se describe en los
+términos relativos (si están disponibles) y en esta plataforma.
+
+Terceros: se refiere a anunciantes, patrocinadores de concursos, socios promocionales y de
+marketing, y otros que brindan nuestro contenido o cuyos productos o servicios que
+creemos que pueden interesarle.
+
+Sitio web: el sitio de , al que se puede acceder a través de esta URL:
+
+Usted: una persona o entidad que está registrada con para utilizar los
+Servicios.

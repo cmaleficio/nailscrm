@@ -1,0 +1,36 @@
+Direcciones de correo
+Títulos de trabajo
+
+Direcciones de facturación
+
+Números de tarjetas de débito / crédito
+Edad
+
+Contraseña
+
+También recopilamos información de dispositivos móviles para una mejor experiencia de usuario,
+aunque estas funciones son completamente opcionales:
+Ubicación (GPS): los datos de ubicación ayudan a crear una representación precisa de sus
+intereses, y esto se puede utilizar para llevar anuncios más específicos y relevantes a los
+clientes potenciales.
+Agenda telefónica (lista de contactos): su lista de contactos permite que la plataforma sea
+mucho más fácil de usar por parte del usuario, ya que acceder a sus contactos desde la
+aplicación le permite ahorrar toneladas de tiempo.
+Cámara (imágenes): otorgar permiso a la cámara le permite al usuario cargar cualquier
+imagen directamente desde la plataforma, puede denegar de manera segura los permisos
+de la cámara para esta plataforma.
+Galería de fotos (imágenes): Otorgar acceso a la galería de fotos permite al usuario cargar
+cualquier imagen de su galería de fotos. Puede denegar el acceso a la galería de fotos de
+manera segura para esta plataforma.
+
+¿Cuándo usa la información del usuario
+final de terceros?
+
+recopilará los datos del úsuario final necesarios para proporcionar los servicios
+de a nuestros clientes:
+Los usuarios finales pueden proporcionarnos voluntariamente la información que han puesto a
+disposición en los sitios web de las redes Sociales. Si nos proporciona dicha información,
+podemos recopilar información disponible públicamente de los sitios web de redes sociales que
+ha indicado. Puede controlar la cantidad de información que los sitios web de redes sociales
+hacen pública visitando estos sitios web y cambiando su configuración de privacidad.
+

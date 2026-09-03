@@ -1,0 +1,33 @@
+¿Qué son los Datos Personales?
+
+Cualquier dato que se relacione con un individuo identificable o identificable. El RGPD cubre un
+amplio espectro de información que podría usarse por sí sola o en combinación con otras piezas
+de información para identificar a una persona. Los datos personales van más allá del nombre o la
+dirección de correo electrónico de una persona. Algunos ejemplos incluyen información
+financiera, opiniones políticas, datos genéticos, datos biométricos, direcciones IP, dirección física,
+orientación sexual y origen étnico.
+
+Los principios de protección de datos incluyen requisitos tales como:
+
++ Los datos personales recopilados deben procesarse de manera justa, legal y transparente y
+solo deben usarse de la manera que una persona esperaría razonablemente.
+
++ Los datos personales solo deben recopilarse para cumplir con un propósito específico y
+solo deben usarse para ese propósito. Las organizaciones deben especificar por qué
+necesitan los datos personales cuando los recopilan.
+
++ Los datos personales no deben conservarse más tiempo del necesario para eumplir con su
+propósito.
+
++ Las personas cubiertas por el RGPD tienen derecho a acceder a sus propios datos
+personales. También pueden solicitar una copia de sus datos y que sus datos se
+actualicen, eliminen, restrinjan o muevan a otra organización.
+
+¿Por qué es importante el RGPD?
+
+RGPD agrega algunos requisitos nuevos con respecto a cómo las empresas deben proteger los
+datos personales de las personas que recopilan y procesan. También aumenta las apuestas para.
+el cumplimiento al aumentar la aplicación e imponer mayores multas por incumplimiento. Más allá
+de estos hechos, es simplemente lo correcto. En _ creemos firmemente que la
+privacidad de sus datos es muy importante y ya contamos con prácticas sólidas de seguridad y
+privacidad que van más allá de losrequisitos de esta nueva regulación

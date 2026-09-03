@@ -1,6 +1,8 @@
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 
+const isCalendarEnabled = () => process.env.GOOGLE_CALENDAR_ENABLED === "true";
+
 const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CAL_BASE = "https://www.googleapis.com/calendar/v3";
 
@@ -82,6 +84,7 @@ export async function createEventOnPrimaryCalendar(
     end: number;
   }
 ): Promise<string | null> {
+  if (!isCalendarEnabled()) return null;
   const token = await getValidAccessToken(userId);
   if (!token) {
     console.error(`createEvent: no token for user ${userId}`);
@@ -121,6 +124,7 @@ export async function updateEventOnPrimaryCalendar(
   eventId: string,
   event: { start: number; end: number }
 ): Promise<boolean> {
+  if (!isCalendarEnabled()) return true;
   const token = await getValidAccessToken(userId);
   if (!token) return false;
 
@@ -150,6 +154,7 @@ export async function deleteEventOnPrimaryCalendar(
   userId: string,
   eventId: string
 ): Promise<boolean> {
+  if (!isCalendarEnabled()) return true;
   const token = await getValidAccessToken(userId);
   if (!token) return false;
 

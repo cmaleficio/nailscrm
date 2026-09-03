@@ -127,6 +127,29 @@
       "when": 1788361443384,
       "tag": "0017_dazzling_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1788382211050,
+      "tag": "0018_legal_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788382229949,
+      "tag": "0019_nav_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788382300000,
+      "tag": "0020_risc_events",
+      "breakpoints": true
     }
+  ]
+}
   ]
 }

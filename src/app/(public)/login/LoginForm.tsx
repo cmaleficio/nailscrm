@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-pink-main focus:outline-none";
@@ -150,13 +151,14 @@ export function LoginForm() {
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
-          <button
-            type="button"
-            onClick={() => signIn("google", { callbackUrl: "/profile" })}
-            className="w-full rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
-          >
-            Continuar con Google
-          </button>
+          <div className="pt-1">
+            <GoogleSignInButton
+              callbackUrl="/profile"
+              text="continue"
+              variant="neutral"
+              fullWidth
+            />
+          </div>
         </form>
       ) : (
         <form onSubmit={handleRegister} className="space-y-3 rounded-xl border border-gray-200 bg-white p-5">

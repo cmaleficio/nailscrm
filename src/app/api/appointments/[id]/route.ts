@@ -63,23 +63,25 @@ export async function PATCH(
       .where(eq(schema.appointments.id, id))
       .run();
 
-    if (appointment.googleEventIdClient) {
-      await updateAppointmentEvent(
-        appointment.clientId,
-        appointment.googleEventIdClient,
-        startTime,
-        endTime
-      );
-    }
-    if (appointment.googleEventIdAdmin) {
-      const adminUserId = await getAdminUserId();
-      if (adminUserId) {
+    if (process.env.GOOGLE_CALENDAR_ENABLED === "true") {
+      if (appointment.googleEventIdClient) {
         await updateAppointmentEvent(
-          adminUserId,
-          appointment.googleEventIdAdmin,
+          appointment.clientId,
+          appointment.googleEventIdClient,
           startTime,
           endTime
         );
+      }
+      if (appointment.googleEventIdAdmin) {
+        const adminUserId = await getAdminUserId();
+        if (adminUserId) {
+          await updateAppointmentEvent(
+            adminUserId,
+            appointment.googleEventIdAdmin,
+            startTime,
+            endTime
+          );
+        }
       }
     }
   }
@@ -246,19 +248,21 @@ export async function DELETE(
       .run();
   });
 
-  if (appointment.googleEventIdClient) {
-    await deleteEventOnPrimaryCalendar(
-      appointment.clientId,
-      appointment.googleEventIdClient
-    );
-  }
-  if (appointment.googleEventIdAdmin) {
-    const adminUserId = await getAdminUserId();
-    if (adminUserId) {
+  if (process.env.GOOGLE_CALENDAR_ENABLED === "true") {
+    if (appointment.googleEventIdClient) {
       await deleteEventOnPrimaryCalendar(
-        adminUserId,
-        appointment.googleEventIdAdmin
+        appointment.clientId,
+        appointment.googleEventIdClient
       );
+    }
+    if (appointment.googleEventIdAdmin) {
+      const adminUserId = await getAdminUserId();
+      if (adminUserId) {
+        await deleteEventOnPrimaryCalendar(
+          adminUserId,
+          appointment.googleEventIdAdmin
+        );
+      }
     }
   }
 

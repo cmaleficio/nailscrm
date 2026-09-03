@@ -208,7 +208,9 @@ export async function POST(req: NextRequest) {
     })
     .run();
 
-  await syncAppointmentToGoogleCalendars(appointment, service.name);
+  if (process.env.GOOGLE_CALENDAR_ENABLED === "true") {
+    await syncAppointmentToGoogleCalendars(appointment, service.name);
+  }
 
   return NextResponse.json({ id: appointment.id });
 }

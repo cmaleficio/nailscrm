@@ -188,13 +188,27 @@ export function recordUsage(
       })
       .run();
 
-    const newStock = Math.max(0, Math.round((item.stock - qty) * 100) / 100);
     const newUses = (item.usesConsumed ?? 0) + 1;
+    const hasMaxUses = item.maxUses != null;
+    const exhaustedNow = item.maxUses != null && newUses >= item.maxUses;
+
+    let newStock = item.stock;
+    let movementQty = 0;
+    if (!hasMaxUses) {
+      newStock = Math.max(0, Math.round((item.stock - qty) * 100) / 100);
+      movementQty = qty > 0 ? -qty : 0;
+    } else {
+      if (exhaustedNow) {
+        newStock = Math.max(0, Math.round((item.stock - 1) * 100) / 100);
+      }
+      movementQty = -1;
+    }
+
     db.update(schema.inventoryItems)
       .set({
         stock: newStock,
         usesConsumed: newUses,
-        isExhausted: item.maxUses != null && newUses >= item.maxUses ? 1 : item.isExhausted,
+        isExhausted: exhaustedNow ? 1 : item.isExhausted,
       })
       .where(eq(schema.inventoryItems.id, u.inventoryItemId))
       .run();
@@ -204,7 +218,7 @@ export function recordUsage(
         id: crypto.randomUUID(),
         inventoryItemId: u.inventoryItemId,
         kind: "out",
-        quantity: qty > 0 ? -qty : 0,
+        quantity: movementQty,
         unitCostUsd: null,
         refType: "usage",
         refId: appointmentId,

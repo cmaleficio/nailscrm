@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p %PORT%",
+    "dev:default": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -12,6 +13,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:client": "tsx src/db/seed-client-demo.ts",
     "db:seed:finance": "tsx src/db/seed-finance-demo.ts",
+    "db:seed:privacy": "tsx src/db/seed-privacy.ts",
+    "risc:register": "tsx scripts/register-risc.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:reset": "tsx src/db/reset-fresh.ts",
     "setup": "npm run db:setup"
@@ -21,6 +24,7 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.1",
     "drizzle-orm": "^0.45.2",
+    "google-auth-library": "^11.0.2",
     "next": "16.2.12",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.2.4",

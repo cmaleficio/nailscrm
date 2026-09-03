@@ -1,0 +1,33 @@
++ Almacenamiento Local
+
+El almacenamiento local, a veces conocido como almacenamiento DOM, proporciona a
+las aplicaciones web métodos y protocolos para almacenar datos del lado del cliente. El
+almacenamiento web admite el almacenamiento de datos persistente, similar a las cookies,
+pero con una capacidad muy mejorada y siñ información almacenada en el encabezado de
+solicitud HTTP.
+
++ Sesiones
+
+utiliza "Sesiones" para identificarlas áreas de nuestro sitio web que ha
+visitado. Una sesión es un pequeño fragmento de datos que su navegador web almacena
+en su computadora o dispositivo móvil.
+
+Información sobre el Reglamento general de protección
+de datos (RGPD)
+
+Es posible. que recopilemos y utilicemos información suya si pertenece al Espacio Económico
+Europeo (EEE), y en esta sección de nuestra Política de privacidad vamos a explicar exactamente
+cómo y por qué se recopilan estos datos, y cómo los mantenemos bajo protección contra la
+replicación o el uso incorrecto.
+
+¿Qué es RGPD?
+
+RGPD es una ley de privacidad y protección de datos en toda la UE que regula cómo las
+empresas protegen los datos de los residentes de la UE y mejora el control que los residentes de
+la UE tienen sobre sus datos personales.
+
+El RGPD es relevante para cualquier empresa que opere a nivel mundial y no solo para las
+empresas con sede en la UE y los residentes de la UE. Los datos de nuestros clientes son
+importantes independientemente de dónde se encuentren, por lo que hemos implementado
+controles RGPD como nuestro estándar de referencia para todas nuestras operaciones en todo el
+mundo.

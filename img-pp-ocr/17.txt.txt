@@ -1,0 +1,21 @@
+Tecnologías de Seguimiento
+
+API de Google Maps
+
+La API de Google Maps es una herramienta sólida que se puede utilizar para crear un mapa
+personalizado, un mapa de búsqueda, funciones de registro, mostrar la sincronización de
+datos en vivo con la ubicación, planificar rutas o crear un mashup, solo por nombrar algunos.
+
+La API de Google Maps puede recopilar información suya y de su dispositivo por motivos
+de seguridad.
+
+La API de Google Maps recopila información que se mantiene de acuerdo con su Política
+de privacidad.
+
+Cookies
+
+Usamos Cookies para mejorar el rendimiento y la funcionalidad de nuestra plataforma, pero
+no son esenciales para su uso. Sin embargo, sin estas cookies, es posible que ciertas
+funciones, como los videos, no estén disponibles o se le solicitará que ingrese sus datos de
+inicio de sesión cada vez que visite la plataforma, ya que no podríamos recordar que había
+iniciado sesión anteriormente.

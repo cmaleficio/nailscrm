@@ -65,9 +65,17 @@ export function SettingsContent() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Configuración</h1>
-        <p className="text-sm text-gray-500">Horario de trabajo por día de la semana</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Configuración</h1>
+          <p className="text-sm text-gray-500">Horario de trabajo por día de la semana</p>
+        </div>
+        <a
+          href="/dashboard/settings/navigation"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          Menú de navegación
+        </a>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">

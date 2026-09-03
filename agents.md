@@ -76,6 +76,8 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - total_revenue: real, default 0 (recaudado = suma de pagos; lo recalcula `applyPaidToClient`)
 - role: text, default 'client' (client | admin)
 - permissions: text (JSON array de permisos de módulos; null = acceso a todos)
+- locked_at: integer (timestamp; lo setea RISC `account-disabled` cuando Google detecta compromiso de la cuenta)
+- locked_reason: text (motivo del bloqueo, ej: 'hijacking', 'bulk-account')
 - created_at: integer (timestamp)
 
 ### Tablas de Auth.js: account, session, verificationToken
@@ -400,6 +402,13 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `DELETE /api/waitlist/[id]` → dueño de la entrada o admin.
 - `POST/GET /api/course-sessions` (admin, `appointments`): crea una sesión de curso grupal (1 `appointments` + N `course_enrollments` + N `service_purchases` pending, validando `services.is_group=1` y disponibilidad) y lista las sesiones con alumnos y saldo por alumno.
 - `POST/DELETE /api/course-sessions/[id]/enrollments` (admin, `appointments`): inscribe/desinscribe un alumno registrado pre-completar (crea/borra su enrollment + `service_purchases`; 409 si ya está inscrito; 400 si la sesión está completada).
+- `POST /api/risc/events` (público, sin auth, solo accesible vía HTTPS en dominio autorizado) → receptor de eventos RISC (Cross-Account Protection) de Google. Valida JWT con `google-auth-library`, deduplica por `jti` en `risc_events`, y en `sessions-revoked` / `tokens-revoked` borra las filas de `session` + `account` del usuario afectado, y en `account-disabled` bloquea al usuario (`users.locked_at` + `users.locked_reason`).
+
+### Tabla: risc_events (de-duplicación de eventos RISC)
+- jti: text, primary key (id único del JWT de Google)
+- event_type: text, not null (URI del evento, ej: `.../risc/event-type/sessions-revoked`)
+- subject_sub: text (Google `sub` del usuario afectado; null para `verification`)
+- received_at: integer (timestamp)
 
 ## 🔐 Permisos de admins
 - `users.permissions`: JSON array de claves; **null = acceso a todos los módulos** (no rompe admins existentes).
@@ -445,6 +454,8 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `npm run db:setup` → genera y aplica migraciones + seed base
 - `npm run db:seed:client` → regenera datos demo del cliente (clienta@email.com / Cliente123!)
 - `npm run db:seed:finance` → regenera datos demo de finanzas (proveedores, bancos, facturas, inventario y uso por servicio)
+- `npm run db:seed:privacy` → inserta/actualiza la fila `legal_settings` con los 9 campos de la política de privacidad (placeholders editables luego en `/dashboard/legal`)
+- `npm run risc:register` → registra el endpoint `/api/risc/events` en el stream de Google RISC (requiere `RISC_SERVICE_ACCOUNT_JSON_PATH` y `RISC_RECEIVER_URL`); usar una vez al configurar el proyecto y re-registrar si cambia la URL
 - `npm run build && npm start` → producción local
 - `npm run lint` → ESLint
 - `npx tsc --noEmit` → typecheck

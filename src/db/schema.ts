@@ -15,6 +15,8 @@ export const users = sqliteTable("users", {
   totalRevenue: real("total_revenue").default(0),
   role: text("role").notNull().default("client"),
   permissions: text("permissions"),
+  lockedAt: integer("locked_at"),
+  lockedReason: text("locked_reason"),
   createdAt: integer("created_at"),
 });
 
@@ -411,6 +413,25 @@ export const legalSettings = sqliteTable("legal_settings", {
   contactPhone: text("contact_phone"),
   contactUrl: text("contact_url"),
   contactAddress: text("contact_address").notNull(),
+  content: text("content"),
   updatedAt: integer("updated_at").notNull(),
   updatedBy: text("updated_by").references(() => users.id),
+});
+
+export const navItems = sqliteTable("nav_items", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  href: text("href").notNull(),
+  position: integer("position").notNull().default(0),
+  isActive: integer("is_active").notNull().default(1),
+  openInNewTab: integer("open_in_new_tab").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const riscEvents = sqliteTable("risc_events", {
+  jti: text("jti").primaryKey(),
+  eventType: text("event_type").notNull(),
+  subjectSub: text("subject_sub"),
+  receivedAt: integer("received_at").notNull(),
 });
