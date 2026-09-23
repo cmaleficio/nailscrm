@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, like, or, and } from "drizzle-orm";
 import { hasAnyPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -90,6 +91,15 @@ export async function POST(req: NextRequest) {
   };
 
   db.insert(schema.users).values(user).run();
+
+  logActivity(db, {
+    entity: "clients",
+    action: "create",
+    entityId: user.id,
+    label: `Cliente creado: ${user.name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true, id: user.id }, { status: 201 });
 }

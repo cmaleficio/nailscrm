@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
+import { logActivity } from "@/lib/audit";
 
 export async function PATCH(req: NextRequest) {
   const session = await auth();
@@ -16,6 +17,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
   }
   db.update(schema.users).set(update).where(eq(schema.users.id, session.user.id)).run();
+
+  logActivity(db, {
+    entity: "users",
+    action: "update",
+    entityId: session?.user?.id,
+    label: "Perfil actualizado",
+    metadata: update,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
+
   const user = db.select().from(schema.users).where(eq(schema.users.id, session.user.id)).get();
   return NextResponse.json(user);
 }

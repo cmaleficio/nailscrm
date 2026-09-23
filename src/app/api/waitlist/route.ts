@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { and, asc, eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -78,6 +79,16 @@ export async function POST(req: NextRequest) {
     createdAt: nowSec,
   };
   db.insert(schema.waitlist).values(row).run();
+
+  logActivity(db, {
+    entity: "waitlist",
+    action: "create",
+    entityId: row.id,
+    label: `Cliente en lista de espera (${new Date((preferredDate as number) * 1000).toISOString().slice(0, 10)})`,
+    metadata: { preferredDate: preferredDate as number },
+    actorId: session?.user?.id ?? row.clientId,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json(row, { status: 201 });
 }

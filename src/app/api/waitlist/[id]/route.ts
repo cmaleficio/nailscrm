@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission, isAdmin } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -33,6 +34,15 @@ export async function PATCH(
     .where(eq(schema.waitlist.id, id))
     .run();
 
+  logActivity(db, {
+    entity: "waitlist",
+    action: "update",
+    entityId: row.id,
+    label: "Cliente de la espera marcado como notificado",
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
+
   return NextResponse.json({ success: true });
 }
 
@@ -62,5 +72,15 @@ export async function DELETE(
   }
 
   db.delete(schema.waitlist).where(eq(schema.waitlist.id, id)).run();
+
+  logActivity(db, {
+    entity: "waitlist",
+    action: "delete",
+    entityId: id,
+    label: "Entrada de lista de espera eliminada",
+    actorId: session?.user?.id ?? row.clientId,
+    actorName: session?.user?.name ?? null,
+  });
+
   return NextResponse.json({ success: true });
 }

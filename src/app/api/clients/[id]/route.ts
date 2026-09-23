@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, and, sql, isNull, or } from "drizzle-orm";
 import { hasAnyPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -24,6 +25,22 @@ export async function PATCH(
   if (Object.keys(update).length > 0) {
     db.update(schema.users).set(update).where(eq(schema.users.id, id)).run();
   }
+
+  const client = db
+    .select({ id: schema.users.id, name: schema.users.name })
+    .from(schema.users)
+    .where(eq(schema.users.id, id))
+    .get();
+
+  logActivity(db, {
+    entity: "clients",
+    action: "update",
+    entityId: client?.id ?? id,
+    label: `Cliente actualizado: ${client?.name ?? id}`,
+    metadata: update,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true });
 }
@@ -175,6 +192,15 @@ export async function DELETE(
   }
 
   db.delete(schema.users).where(eq(schema.users.id, id)).run();
+
+  logActivity(db, {
+    entity: "clients",
+    action: "delete",
+    entityId: user.id,
+    label: `Cliente eliminado: ${user.name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true });
 }

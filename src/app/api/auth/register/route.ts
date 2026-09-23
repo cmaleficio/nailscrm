@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
+import { logActivity } from "@/lib/audit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -65,6 +66,16 @@ export async function POST(req: NextRequest) {
   };
 
   db.insert(schema.users).values(user).run();
+
+  logActivity(db, {
+    entity: "users",
+    action: "create",
+    entityId: user.id,
+    label: `Nuevo registro: ${email}`,
+    metadata: { email },
+    actorId: null,
+    actorName: null,
+  });
 
   return NextResponse.json(
     { success: true, id: user.id },
