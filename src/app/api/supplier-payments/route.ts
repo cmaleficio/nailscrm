@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeBillStatus } from "@/lib/bills";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -83,5 +84,14 @@ export async function POST(req: NextRequest) {
   };
   db.insert(schema.supplierPayments).values(payment).run();
   recomputeBillStatus(body.billId);
+  logActivity(db, {
+    entity: "supplier_payments",
+    action: "create",
+    entityId: payment.id,
+    label: `Pago a proveedor registrado: $${payment.amountUsd}`,
+    metadata: { billId: payment.billId, currency: payment.currency, amountVes: payment.amountVes, rate: payment.rate },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json(payment, { status: 201 });
 }

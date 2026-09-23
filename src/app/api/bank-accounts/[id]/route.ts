@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -51,6 +52,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     .set({ bankName, accountType, accountNumber, currency, isActive, notes })
     .where(eq(schema.bankAccounts.id, id))
     .run();
+  logActivity(db, {
+    entity: "bank_accounts",
+    action: "update",
+    entityId: existing.id,
+    label: `Banco actualizado: ${bankName}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ ...existing, bankName, accountType, accountNumber, currency, isActive, notes });
 }
 
@@ -68,6 +77,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
       { status: 400 }
     );
   }
+  const account = db.select().from(schema.bankAccounts).where(eq(schema.bankAccounts.id, id)).get();
   db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.id, id)).run();
+  logActivity(db, {
+    entity: "bank_accounts",
+    action: "delete",
+    entityId: account?.id ?? id,
+    label: `Banco eliminado: ${account?.bankName ?? "Desconocido"}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

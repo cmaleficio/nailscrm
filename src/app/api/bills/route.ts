@@ -5,6 +5,7 @@ import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { createInventoryIn } from "@/lib/inventory";
 import { monthRange } from "@/lib/financials";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -184,6 +185,21 @@ export async function POST(req: NextRequest) {
         createInventoryIn(it.inventoryItemId, qty, unit, "bill", bill.id, bill.notes ?? null, adminId);
       }
     }
+  }
+
+  {
+    const supplierName = bill.supplierId
+      ? db.select({ name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.id, bill.supplierId)).get()?.name
+      : null;
+    logActivity(db, {
+      entity: "bills",
+      action: "create",
+      entityId: bill.id,
+      label: `Factura ${bill.invoiceNumber ? `N° ${bill.invoiceNumber}` : "sin N°"} creada (${bill.currency === "VES" ? `${bill.amountVes} Bs` : `$${bill.totalUsd}`})${supplierName ? ` – ${supplierName}` : ""}`,
+      metadata: { type: bill.type, currency: bill.currency, totalUsd: bill.totalUsd, supplierId: bill.supplierId },
+      actorId: adminId,
+      actorName: session?.user?.name ?? null,
+    });
   }
 
   return NextResponse.json(bill, { status: 201 });

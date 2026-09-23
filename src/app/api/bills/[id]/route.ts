@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, sql, desc } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { reverseBillMovements, createInventoryIn } from "@/lib/inventory";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -147,6 +148,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   const updated = db.select().from(schema.bills).where(eq(schema.bills.id, id)).get();
+  logActivity(db, {
+    entity: "bills",
+    action: "update",
+    entityId: bill.id,
+    label: `Factura ${bill.invoiceNumber ?? "sin N°"} actualizada`,
+    metadata: body,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json(updated);
 }
 
@@ -173,5 +183,14 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     reverseBillMovements(id, adminId);
   }
   db.delete(schema.bills).where(eq(schema.bills.id, id)).run();
+  logActivity(db, {
+    entity: "bills",
+    action: "delete",
+    entityId: bill.id,
+    label: `Factura ${bill.invoiceNumber ?? "sin N°"} eliminada`,
+    metadata: { totalUsd: bill.totalUsd, type: bill.type },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

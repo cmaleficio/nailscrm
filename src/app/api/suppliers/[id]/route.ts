@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -28,6 +29,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
   }
   db.update(schema.suppliers).set(patch).where(eq(schema.suppliers.id, id)).run();
+  logActivity(db, {
+    entity: "suppliers",
+    action: "update",
+    entityId: existing.id,
+    label: `Proveedor actualizado: ${patch.name ?? existing.name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ ...existing, ...patch });
 }
 
@@ -49,6 +58,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
       { status: 400 }
     );
   }
+  const supplier = db.select().from(schema.suppliers).where(eq(schema.suppliers.id, id)).get();
   db.delete(schema.suppliers).where(eq(schema.suppliers.id, id)).run();
+  logActivity(db, {
+    entity: "suppliers",
+    action: "delete",
+    entityId: supplier?.id ?? id,
+    label: `Proveedor eliminado: ${supplier?.name ?? "Desconocido"}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

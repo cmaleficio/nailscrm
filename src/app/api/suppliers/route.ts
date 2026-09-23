@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { like, or } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -41,5 +42,13 @@ export async function POST(req: NextRequest) {
     createdAt: Math.floor(Date.now() / 1000),
   };
   db.insert(schema.suppliers).values(row).run();
+  logActivity(db, {
+    entity: "suppliers",
+    action: "create",
+    entityId: row.id,
+    label: `Proveedor creado: ${row.name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json(row, { status: 201 });
 }

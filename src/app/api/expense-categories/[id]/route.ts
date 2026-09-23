@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -38,6 +39,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     .set({ name, isActive })
     .where(eq(schema.expenseCategories.id, id))
     .run();
+  logActivity(db, {
+    entity: "expense_categories",
+    action: "update",
+    entityId: existing.id,
+    label: `Categoría actualizada: ${name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ ...existing, name, isActive });
 }
 
@@ -55,6 +64,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
       { status: 400 }
     );
   }
+  const category = db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.id, id)).get();
   db.delete(schema.expenseCategories).where(eq(schema.expenseCategories.id, id)).run();
+  logActivity(db, {
+    entity: "expense_categories",
+    action: "delete",
+    entityId: category?.id ?? id,
+    label: `Categoría eliminada: ${category?.name ?? "Desconocido"}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }
