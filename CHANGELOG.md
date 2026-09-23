@@ -7,6 +7,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 ## [Sin publicar]
 
 ### Añadido
+- **Log de actividad de usuarios** (`activity_logs`): registra quién hizo cada mutación (create/update/delete/cancel/complete/approve/reject/report/adjust/enroll/unenroll/void) en todos los módulos del sistema (citas, clientes, servicios, inventario, compras, CXC/CXP, admins, RISC, configuración). Página `/dashboard/activity` con filtros (usuario, entidad, acción, rango de fechas, texto) y paginación. Nuevo permiso `activityLog`. Helper best-effort `logActivity` en `src/lib/audit.ts` (si falla no rompe la operación de negocio) y endpoints `GET /api/activity-logs` + `GET /api/activity-logs/actors`.
 - **Buscador en Cuentas por cobrar**: input cliente-side en `/dashboard/balances` que filtra la lista de clientes por nombre, teléfono o nombre de cualquier servicio en sus items pendientes. Coincidencia case-insensitive y sin acentos. Botón "Limpiar búsqueda" cuando el filtro oculta todos los resultados. El total adeudado siempre refleja el saldo real, no el filtrado.
 
 ### Cambiado

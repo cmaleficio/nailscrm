@@ -90,6 +90,7 @@ npx tsc --noEmit      # typecheck
 - **Muro del admin:** en `/dashboard/gallery` se suben fotos sueltas al muro (múltiples a la vez, con servicio asociado opcional y descripción).
 - **Teléfono post-Google:** tras registrarse con Google se pide el teléfono en `/complete-registration`.
 - **Permisos por admin:** en `/dashboard/admin-users` (solo superadmin) se asignan permisos por módulo (`users.permissions`); un admin con `null` tiene acceso a todo y el superadmin siempre accede a todo. Hay select "Copiar de…" para replicar los permisos de otro admin. También aparece "Mis pagos" en el perfil del cliente para reportar pagos en Bs con captura.
+- **Log de actividad:** auditoría de cambios por usuario en `/dashboard/activity` con filtros y paginación (permiso `activityLog`).
 
 ## Estructura
 
