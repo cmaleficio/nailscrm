@@ -12,6 +12,7 @@ export const PERMISSION_KEYS = [
   "gallery",
   "adminUsers",
   "paymentApproval",
+  "activityLog",
 ] as const;
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -28,4 +29,5 @@ export const PERMISSION_LABELS: Record<string, string> = {
   gallery: "Muro de inspiración",
   adminUsers: "Gestión de admins",
   paymentApproval: "Aprobar pagos",
+  activityLog: "Log de actividad",
 };

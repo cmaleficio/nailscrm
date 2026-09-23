@@ -435,3 +435,23 @@ export const riscEvents = sqliteTable("risc_events", {
   subjectSub: text("subject_sub"),
   receivedAt: integer("received_at").notNull(),
 });
+
+export const activityLogs = sqliteTable(
+  "activity_logs",
+  {
+    id: text("id").primaryKey(),
+    actorId: text("actor_id").references(() => users.id),
+    actorName: text("actor_name"),
+    entity: text("entity").notNull(),
+    action: text("action").notNull(),
+    entityId: text("entity_id"),
+    label: text("label").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    index("activity_logs_created_at_idx").on(t.createdAt),
+    index("activity_logs_actor_idx").on(t.actorId),
+    index("activity_logs_entity_idx").on(t.entity),
+  ]
+);
