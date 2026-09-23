@@ -6,6 +6,7 @@ import { db, schema } from "@/db/index";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import authConfig from "./auth.config";
+import { linkGoogleAccount } from "./account-link";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -79,7 +80,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return session;
     },
-    async signIn({ user }) {
+    async signIn({ user, account, profile }) {
       const email = user.email;
       if (email && email === process.env.ADMIN_EMAIL) {
         try {
@@ -89,6 +90,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .run();
         } catch (e) {
           console.error("role promote failed", e);
+        }
+      }
+      if (account?.provider === "google" && email) {
+        try {
+          linkGoogleAccount(db, {
+            email,
+            googleSub: account.providerAccountId,
+            name: profile?.name ?? undefined,
+            image: user.image ?? undefined,
+            accessToken: account.access_token ?? undefined,
+            refreshToken: account.refresh_token ?? undefined,
+            idToken: account.id_token ?? undefined,
+            expiresAt: account.expires_at ?? undefined,
+            scope: account.scope ?? undefined,
+          });
+        } catch (e) {
+          console.error("google account link failed", e);
         }
       }
       return true;

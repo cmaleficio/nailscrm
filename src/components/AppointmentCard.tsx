@@ -16,6 +16,7 @@ type Props = {
   onCancel: (id: string) => void;
   onSelect: (clientId: string) => void;
   onReschedule?: (id: string) => void;
+  onViewCompleted?: (id: string) => void;
 };
 
 export function AppointmentCard({
@@ -32,6 +33,7 @@ export function AppointmentCard({
   onCancel,
   onSelect,
   onReschedule,
+  onViewCompleted,
 }: Props) {
   const time = new Intl.DateTimeFormat("es-ES", {
     timeStyle: "short",
@@ -98,21 +100,31 @@ export function AppointmentCard({
             )}
           </>
         ) : (
-          <span
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-              status === "completed"
-                ? "bg-green-50 text-green-600"
+          <>
+            {status === "completed" && onViewCompleted && (
+              <button
+                onClick={() => onViewCompleted(id)}
+                className="rounded-lg bg-pink-50 px-3 py-1.5 text-xs font-medium text-pink-700 hover:bg-pink-100 transition-colors"
+              >
+                Muro
+              </button>
+            )}
+            <span
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                status === "completed"
+                  ? "bg-green-50 text-green-600"
+                  : status === "cancelled"
+                    ? "bg-red-50 text-red-600"
+                    : "bg-gray-50 text-gray-500"
+              }`}
+            >
+              {status === "completed"
+                ? "Completada"
                 : status === "cancelled"
-                  ? "bg-red-50 text-red-600"
-                  : "bg-gray-50 text-gray-500"
-            }`}
-          >
-            {status === "completed"
-              ? "Completada"
-              : status === "cancelled"
-                ? "Cancelada"
-                : status}
-          </span>
+                  ? "Cancelada"
+                  : status}
+            </span>
+          </>
         )}
       </div>
     </div>

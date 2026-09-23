@@ -102,6 +102,8 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
         throw new Error(data.error || "No se pudo crear la cita");
       }
       onCreated();
+      window.dispatchEvent(new Event("appointments:refresh"));
+      window.dispatchEvent(new Event("balances:refresh"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
       setSaving(false);

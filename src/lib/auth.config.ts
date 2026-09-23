@@ -8,6 +8,7 @@ const useSecureCookies =
 export default {
   providers: [
     Google({
+      allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
           scope: "openid email profile",

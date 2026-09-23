@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 
 function withPhotos<T extends { id: string }>(rows: T[]) {
@@ -40,8 +40,14 @@ export async function GET(req: NextRequest) {
     if (!(await hasPermission(session, "services"))) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
-    return NextResponse.json(
-      withPhotos(db.select().from(schema.services).orderBy(schema.services.name).all())
+return NextResponse.json(
+      withPhotos(
+        db
+          .select()
+          .from(schema.services)
+          .orderBy(asc(schema.services.price), asc(schema.services.name))
+          .all()
+      )
     );
   }
 
@@ -49,6 +55,7 @@ export async function GET(req: NextRequest) {
     .select()
     .from(schema.services)
     .where(eq(schema.services.isActive, 1))
+    .orderBy(asc(schema.services.price), asc(schema.services.name))
     .all();
   return NextResponse.json(withPhotos(services));
 }

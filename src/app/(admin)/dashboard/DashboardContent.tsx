@@ -10,6 +10,7 @@ import { CourseSessionDialog } from "@/components/CourseSessionDialog";
 import { BlockoutDialog } from "@/components/BlockoutDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
+import { CompletedAppointmentDialog } from "@/components/CompletedAppointmentDialog";
 import { dateToDayStartTs } from "@/lib/time";
 
 type Appointment = {
@@ -26,6 +27,7 @@ type Appointment = {
   servicePrice: number | null;
   isGroup: number;
   studentCount: number;
+  isOverdue?: number;
 };
 
 type Blockout = { id: string; startTime: number; endTime: number; reason: string | null };
@@ -68,7 +70,8 @@ export function DashboardContent({ today }: Props) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
-  const [view, setView] = useState<"day" | "week" | "waitlist" | "cancelled" | "summary">("day");
+  const [view, setView] = useState<"day" | "week" | "waitlist" | "cancelled" | "summary" | "pending">("day");
+  const [mounted, setMounted] = useState(false);
   const [weekDates, setWeekDates] = useState<Date[]>(() =>
     datesOfWeek(new Date())
   );
@@ -82,6 +85,7 @@ export function DashboardContent({ today }: Props) {
   const [showCourseSession, setShowCourseSession] = useState(false);
   const [showBlockout, setShowBlockout] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
+  const [viewingCompleted, setViewingCompleted] = useState<Appointment | null>(null);
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
   const [weekBlockouts, setWeekBlockouts] = useState<Record<string, Blockout[]>>({});
   const [cancelledList, setCancelledList] = useState<
@@ -100,6 +104,7 @@ export function DashboardContent({ today }: Props) {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [summaryList, setSummaryList] = useState<Appointment[]>([]);
   const [summaryTotalRevenue, setSummaryTotalRevenue] = useState(0);
+  const [pendingList, setPendingList] = useState<Appointment[]>([]);
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -137,18 +142,42 @@ export function DashboardContent({ today }: Props) {
     }
   }, []);
 
+  const fetchPending = useCallback(async () => {
+    const res = await fetch("/api/appointments?pendingOnly=1");
+    if (res.ok) {
+      const data = await res.json();
+      setPendingList(Array.isArray(data) ? data : []);
+    } else {
+      setPendingList([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (view === "summary") {
       fetchSummary();
     }
-  }, [view, fetchSummary]);
+    if (view === "pending") {
+      fetchPending();
+    }
+  }, [view, fetchSummary, fetchPending]);
 
   useEffect(() => {
+    setMounted(true);
     fetchAppointments();
     fetchBlockouts();
     fetchCancelled();
     fetchWaitlist();
-  }, [fetchAppointments, fetchBlockouts, fetchCancelled, fetchWaitlist]);
+    fetchPending();
+  }, [fetchAppointments, fetchBlockouts, fetchCancelled, fetchWaitlist, fetchPending]);
+
+  useEffect(() => {
+    const handler = () => {
+      fetchAppointments();
+      fetchPending();
+    };
+    window.addEventListener("appointments:refresh", handler);
+    return () => window.removeEventListener("appointments:refresh", handler);
+  }, [fetchAppointments, fetchPending]);
 
   const fetchWeek = useCallback(async (dates: Date[]) => {
     const entries: Record<string, Appointment[]> = {};
@@ -200,6 +229,7 @@ export function DashboardContent({ today }: Props) {
     fetchAppointments();
     fetchBlockouts();
     fetchCancelled();
+    fetchPending();
     if (view === "week") fetchWeek(weekDates);
     if (view === "summary") fetchSummary();
   }
@@ -260,28 +290,51 @@ export function DashboardContent({ today }: Props) {
         </button>
       </div>
 
-      <div className="mb-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
-        {(["day", "week", "summary", "waitlist", "cancelled"] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-              view === v
-                ? "bg-pink-main text-gray-900"
-                : "text-gray-500 hover:bg-gray-50"
-            }`}
-          >
-            {v === "day"
-              ? "Día"
-              : v === "week"
-                ? "Semana"
-                : v === "summary"
-                  ? "Resumen"
-                  : v === "waitlist"
-                    ? `Espera${waitlist.length > 0 ? ` (${waitlist.length})` : ""}`
-                    : "Canceladas"}
-          </button>
-        ))}
+      <div className="mb-4 inline-flex flex-wrap rounded-xl border border-gray-200 bg-white p-1">
+        {(() => {
+          const overdue = mounted ? pendingList.filter((a) => a.isOverdue === 1).length : 0;
+          const total = mounted ? pendingList.length : 0;
+          return (["day", "week", "summary", "pending", "waitlist", "cancelled"] as const).map(
+            (v) => {
+              const isPendingTab = v === "pending";
+              const hasOverdue = isPendingTab && overdue > 0;
+              return (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                    view === v
+                      ? hasOverdue
+                        ? "bg-red-100 text-red-700"
+                        : "bg-pink-main text-gray-900"
+                      : hasOverdue
+                        ? "text-red-600 hover:bg-red-50"
+                        : "text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {v === "day"
+                    ? "Día"
+                    : v === "week"
+                      ? "Semana"
+                      : v === "summary"
+                        ? "Resumen"
+                        : isPendingTab
+                          ? (() => {
+                              if (overdue > 0) {
+                                return `Pendientes (${overdue} vencidas / ${total})`;
+                              }
+                              return total > 0
+                                ? `Pendientes (${total})`
+                                : "Pendientes";
+                            })()
+                          : v === "waitlist"
+                            ? `Espera${mounted && waitlist.length > 0 ? ` (${waitlist.length})` : ""}`
+                            : "Canceladas"}
+                </button>
+              );
+            }
+          );
+        })()}
       </div>
 
       {view === "day" && (
@@ -340,6 +393,7 @@ export function DashboardContent({ today }: Props) {
                   onCancel={() => setCancelling(appt)}
                   onSelect={() => handleSelectAppointment(appt)}
                   onReschedule={() => setRescheduling(appt)}
+                  onViewCompleted={() => setViewingCompleted(appt)}
                 />
               ))}
             </div>
@@ -647,6 +701,75 @@ export function DashboardContent({ today }: Props) {
         </div>
       )}
 
+      {view === "pending" && (
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-gray-500">
+            Citas sin completar (últimos 60 días y próximos 30 días)
+          </h2>
+          {pendingList.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay citas pendientes</p>
+            </div>
+          ) : (() => {
+            const overdue = pendingList.filter((a) => a.isOverdue === 1);
+            const upcoming = pendingList.filter((a) => a.isOverdue !== 1);
+            const renderCard = (appt: Appointment) => (
+              <AppointmentCard
+                key={appt.id}
+                id={appt.id}
+                startTime={appt.startTime}
+                clientName={appt.clientName}
+                clientId={appt.clientId}
+                serviceName={appt.serviceName}
+                referencePhotoUrl={appt.referencePhotoUrl}
+                status={appt.status}
+                isGroup={appt.isGroup === 1}
+                studentCount={appt.studentCount}
+                onComplete={() => handleComplete(appt)}
+                onCancel={() => setCancelling(appt)}
+                onSelect={() => handleSelectAppointment(appt)}
+                onReschedule={() => setRescheduling(appt)}
+                onViewCompleted={() => setViewingCompleted(appt)}
+              />
+            );
+            return (
+              <div className="space-y-6">
+                {overdue.length > 0 && (
+                  <div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="rounded-lg bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                        Vencidas
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {overdue.length} cita{overdue.length === 1 ? "" : "s"} sin completar de días anteriores
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {overdue.map(renderCard)}
+                    </div>
+                  </div>
+                )}
+                {upcoming.length > 0 && (
+                  <div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="rounded-lg bg-pink-main px-2 py-0.5 text-xs font-semibold text-gray-900">
+                        Hoy y próximas
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {upcoming.length} cita{upcoming.length === 1 ? "" : "s"} pendientes
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {upcoming.map(renderCard)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {rescheduling && (
         <ReschedulePicker
           appointmentId={rescheduling.id}
@@ -748,6 +871,19 @@ export function DashboardContent({ today }: Props) {
             setShowAddService(false);
             refreshAll();
           }}
+        />
+      )}
+
+      {viewingCompleted && (
+        <CompletedAppointmentDialog
+          appointmentId={viewingCompleted.id}
+          clientName={viewingCompleted.clientName}
+          serviceName={viewingCompleted.serviceName}
+          servicePrice={viewingCompleted.servicePrice ?? 0}
+          dateStr={dateStr(viewingCompleted.startTime)}
+          timeStr={timeStr(viewingCompleted.startTime)}
+          onClose={() => setViewingCompleted(null)}
+          onUpdated={refreshAll}
         />
       )}
     </div>

@@ -39,6 +39,7 @@ export function CompleteAppointmentDialog({
   const [esmalters, setEsmalters] = useState<{ id: string; name: string; category: string | null; subcategory: string | null; stock: number; isExhausted: number }[]>([]);
   const [usageSel, setUsageSel] = useState<Record<string, string>>({});
   const [paidTotal, setPaidTotal] = useState<number | null>(null);
+  const [shareToGallery, setShareToGallery] = useState(false);
 
   useEffect(() => {
     if (clientId) {
@@ -109,7 +110,7 @@ export function CompleteAppointmentDialog({
       const res = await fetch(`/api/appointments/${appointmentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "completed", finalPhotos: urls, usage }),
+        body: JSON.stringify({ status: "completed", finalPhotos: urls, usage, shareToGallery }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -144,6 +145,8 @@ export function CompleteAppointmentDialog({
         }
       }
       onCompleted();
+      window.dispatchEvent(new Event("appointments:refresh"));
+      window.dispatchEvent(new Event("balances:refresh"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
       setSaving(false);
@@ -192,6 +195,20 @@ export function CompleteAppointmentDialog({
               ))}
             </div>
           )}
+          <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={shareToGallery}
+              onChange={(e) => setShareToGallery(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-pink-main focus:ring-pink-main"
+            />
+            <span>
+              <span className="font-medium">Publicar en el muro de inspiración</span>
+              <span className="block text-xs text-gray-500">
+                Si lo desactivas, las fotos quedan guardadas en el perfil del cliente pero no se muestran públicamente.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="mt-5 rounded-xl border border-gray-200 p-4">

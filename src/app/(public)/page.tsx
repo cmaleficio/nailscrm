@@ -1,5 +1,5 @@
 import { db, schema } from "@/db/index";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { ServiceCard } from "@/components/ServiceCard";
 import { GalleryGrid } from "@/components/GalleryGrid";
 import { getSalonName, getSalonLogo } from "@/lib/brand";
@@ -11,6 +11,7 @@ export default async function HomePage() {
     .select()
     .from(schema.services)
     .where(eq(schema.services.isActive, 1))
+    .orderBy(asc(schema.services.price), asc(schema.services.name))
     .all();
 
   const allPhotos = db.select().from(schema.servicePhotos).all();

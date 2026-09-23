@@ -6,7 +6,14 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 
 ## [Sin publicar]
 
+### Añadido
+- **Buscador en Cuentas por cobrar**: input cliente-side en `/dashboard/balances` que filtra la lista de clientes por nombre, teléfono o nombre de cualquier servicio en sus items pendientes. Coincidencia case-insensitive y sin acentos. Botón "Limpiar búsqueda" cuando el filtro oculta todos los resultados. El total adeudado siempre refleja el saldo real, no el filtrado.
+
+### Cambiado
+- **Servicios ordenados por precio ascendente** (tiebreaker por nombre): el home público (`/`), el dashboard de servicios y la API `/api/services` (tanto la lista pública como la admin con `includeInactive=1`) ahora devuelven los servicios del más barato al más costoso. Antes la API pública no tenía orden garantizado y la admin ordenaba alfabéticamente.
+
 ### Corregido
+- **Citas pasadas sin completar invisibles + CXC no aparecía en balances al crear cita**: la pestaña "Día" solo mostraba citas con `start_time` del día actual, así que una cita creada para ayer o dejada sin marcar como completada quedaba oculta en la agenda aunque la `service_purchases` correspondiente existiera. Ahora hay una nueva pestaña "Pendientes" en `/dashboard` que lista todas las citas con `status IN ('pending','confirmed')` de los últimos 60 días y próximos 30 días, agrupadas en "Vencidas" (badge rojo) y "Hoy y próximas" (badge rosa). El admin puede completarlas o cancelarlas desde ahí aunque la cita sea de días anteriores. Endpoint nuevo `GET /api/appointments?pendingOnly=1` (campo derivado `isOverdue` y permiso `appointments`). Además, `NewAppointmentDialog` y `CompleteAppointmentDialog` ahora disparan el evento `balances:refresh` al tener éxito, así que `/dashboard/balances` se actualiza automáticamente al crear/completar una cita sin recargar la página.
 - **Slots cada 15 min + bug de "media hora después"**: `generateSlots()` (`src/lib/slots.ts`) ahora itera `step = 15` en lugar de 30. Una cita que termina a las **13:30** ya permite agendar otra a las **13:30** en punto (antes había que esperar hasta las 14:00). Validado con `scripts/test-slots-1330.ts` (día futuro con cita 11:00–13:30 de 120 min → slot 13:30 disponible).
 - **BookingWizard ignoraba los minutos del slot**: `handleSlotSelect(slot.hour)` solo sumaba `hour * 3600`, descartando `slot.minute`. Con la nueva granularidad de 15 min esto rompía: clickear "13:30" guardaba "13:00". Ahora `handleSlotSelect(hour, minute)` y la comparación visual del slot seleccionado usan `dateToDayStartTs + h*3600 + m*60`.
 - **ReschedulePicker**: misma lógica aplicada (pickSlot usaba `hour*3600 + minute*60` correctamente, pero la fecha inicial se construía con `Intl.DateTimeFormat("fr-CA")` ad-hoc; ahora usa `tsToLocalDateStr`).

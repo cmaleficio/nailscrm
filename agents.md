@@ -371,7 +371,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `/politicas` → Política de privacidad (documento legal)
 
 ### Protegidas (requieren auth)
-- `/dashboard` → Panel admin (agenda del día/semana con sesiones de curso grupal, pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
+- `/dashboard` → Panel admin (agenda del día/semana con sesiones de curso grupal, pestaña **"Pendientes"** con citas sin completar (vencidas y futuras), pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
 - `/dashboard/clients` → CRM de clientes (listado, búsqueda, alta manual, notas/stats)
 - `/dashboard/balances` → Cuentas por cobrar (total adeudado, desglose por ítem con estado financiero, pagos por cliente)
 - `/dashboard/purchases` → Compras (facturas, proveedores y categorías de gasto)
@@ -402,6 +402,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `DELETE /api/waitlist/[id]` → dueño de la entrada o admin.
 - `POST/GET /api/course-sessions` (admin, `appointments`): crea una sesión de curso grupal (1 `appointments` + N `course_enrollments` + N `service_purchases` pending, validando `services.is_group=1` y disponibilidad) y lista las sesiones con alumnos y saldo por alumno.
 - `POST/DELETE /api/course-sessions/[id]/enrollments` (admin, `appointments`): inscribe/desinscribe un alumno registrado pre-completar (crea/borra su enrollment + `service_purchases`; 409 si ya está inscrito; 400 si la sesión está completada).
+- `GET /api/appointments?pendingOnly=1` (admin, permiso `appointments`): lista citas con `status IN ('pending','confirmed')` en la ventana `[hoy-60d, hoy+30d]`, ordenadas ascendente por `start_time`, con un campo derivado `isOverdue` (`start_time < hoy`). Alimenta la pestaña "Pendientes" del dashboard y permite al admin completar o cancelar citas de días anteriores sin tener que navegar el calendario.
 - `POST /api/risc/events` (público, sin auth, solo accesible vía HTTPS en dominio autorizado) → receptor de eventos RISC (Cross-Account Protection) de Google. Valida JWT con `google-auth-library`, deduplica por `jti` en `risc_events`, y en `sessions-revoked` / `tokens-revoked` borra las filas de `session` + `account` del usuario afectado, y en `account-disabled` bloquea al usuario (`users.locked_at` + `users.locked_reason`).
 
 ### Tabla: risc_events (de-duplicación de eventos RISC)
@@ -438,6 +439,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - BlockoutDialog: crea bloques "no disponible" desde la agenda
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
 - ReportPaymentDialog: reporta pago en Bs con captura desde "Mis pagos" del perfil de cliente
+- BalancesContent: en `/dashboard/balances` muestra el total adeudado y los saldos por cliente con desglose por ítem y filtro por estado financiero. Incluye un buscador cliente-side (case-insensitive, ignora acentos) que matchea contra nombre del cliente, teléfono o nombre de cualquier servicio en sus items pendientes; el total adeudado siempre refleja el saldo real, no el filtrado. Pestaña "Pagos recibidos" para aprobar/rechazar capturas reportadas por clientes.
 - SettingsContent: editor del horario de trabajo por día de la semana
 - BillFormDialog: crea/edita facturas (inventario con líneas de producto o gasto fijo $/Bs) desde Compras. Al crear un producto sin código, `POST /api/inventory/items` genera el código automáticamente.
 - SupplierPaymentDialog: registra pagos a proveedores ($/Bs con tasa BCV) desde Cuentas por pagar (captura obligatoria)

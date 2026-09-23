@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, and, gte, lt, ne, sql } from "drizzle-orm";
-import { isAdmin } from "@/lib/authz";
+import { isAdmin, hasPermission } from "@/lib/authz";
 import { validateSlot } from "@/lib/availability";
 import { createAppointmentClientEvent, createAppointmentAdminEvent } from "@/lib/calendar";
+import { todayStr, dateToDayStartTs } from "@/lib/time";
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!(await isAdmin(session))) {
@@ -14,6 +15,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
   const all = searchParams.get("all");
+  const pendingOnly = searchParams.get("pendingOnly");
+
+  if (pendingOnly === "1" && !(await hasPermission(session, "appointments"))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
 
   const baseQuery = db
     .select({
@@ -43,7 +49,44 @@ export async function GET(req: NextRequest) {
     .where(ne(schema.appointments.status, "cancelled"));
 
   let appointments;
-  if (all === "1") {
+  if (pendingOnly === "1") {
+    const dayStart = dateToDayStartTs(todayStr());
+    const pendingQuery = db
+      .select({
+        id: schema.appointments.id,
+        startTime: schema.appointments.startTime,
+        endTime: schema.appointments.endTime,
+        status: schema.appointments.status,
+        referencePhotoUrl: schema.appointments.referencePhotoUrl,
+        clientName: schema.users.name,
+        clientId: schema.users.id,
+        clientPhone: schema.users.phone,
+        serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
+        servicePrice: schema.servicePurchases.servicePrice,
+        serviceId: schema.services.id,
+        isGroup: schema.services.isGroup,
+        isOverdue: sql<number>`CASE WHEN ${schema.appointments.startTime} < ${dayStart} THEN 1 ELSE 0 END`,
+      })
+      .from(schema.appointments)
+      .innerJoin(schema.users, eq(schema.appointments.clientId, schema.users.id))
+      .innerJoin(
+        schema.services,
+        eq(schema.appointments.serviceId, schema.services.id)
+      )
+      .leftJoin(
+        schema.servicePurchases,
+        eq(schema.servicePurchases.appointmentId, schema.appointments.id)
+      )
+      .where(
+        and(
+          sql`${schema.appointments.status} IN ('pending', 'confirmed')`,
+          gte(schema.appointments.startTime, dayStart - 60 * 86400),
+          lt(schema.appointments.startTime, dayStart + 30 * 86400)
+        )
+      )
+      .orderBy(sql`${schema.appointments.startTime} ASC`);
+    appointments = pendingQuery.all();
+  } else if (all === "1") {
     appointments = baseQuery.orderBy(sql`${schema.appointments.startTime} ASC`).all();
   } else if (!date) {
     return NextResponse.json({ error: "date is required (or use all=1)" }, { status: 400 });

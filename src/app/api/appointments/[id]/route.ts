@@ -23,10 +23,15 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
   const { status, startTime } = body;
+  const shareToGallery = body.shareToGallery;
 
-  if (!status && typeof startTime !== "number") {
+  if (
+    !status &&
+    typeof startTime !== "number" &&
+    typeof shareToGallery !== "boolean"
+  ) {
     return NextResponse.json(
-      { error: "status or startTime is required" },
+      { error: "status, startTime or shareToGallery is required" },
       { status: 400 }
     );
   }
@@ -132,7 +137,7 @@ export async function PATCH(
       db.update(schema.appointments)
         .set({
           finalPhotoUrl: finalPhotos[0],
-          sharedToGallery: 1,
+          sharedToGallery: shareToGallery === false ? 0 : 1,
         })
         .where(eq(schema.appointments.id, id))
         .run();
@@ -154,6 +159,13 @@ export async function PATCH(
   if (status) {
     db.update(schema.appointments)
       .set({ status })
+      .where(eq(schema.appointments.id, id))
+      .run();
+  }
+
+  if (typeof shareToGallery === "boolean") {
+    db.update(schema.appointments)
+      .set({ sharedToGallery: shareToGallery ? 1 : 0 })
       .where(eq(schema.appointments.id, id))
       .run();
   }

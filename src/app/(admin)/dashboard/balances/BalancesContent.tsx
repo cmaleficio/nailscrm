@@ -59,6 +59,7 @@ export function BalancesContent() {
   const [tab, setTab] = useState<"balances" | "receipts">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [receiptFilter, setReceiptFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const loadBalances = useCallback(async () => {
     setLoading(true);
@@ -84,6 +85,14 @@ export function BalancesContent() {
 
   useEffect(() => {
     void loadBalances();
+  }, [loadBalances]);
+
+  useEffect(() => {
+    const handler = () => {
+      void loadBalances();
+    };
+    window.addEventListener("balances:refresh", handler);
+    return () => window.removeEventListener("balances:refresh", handler);
   }, [loadBalances]);
 
   useEffect(() => {
@@ -155,6 +164,19 @@ export function BalancesContent() {
   const filteredItems = (items: BalanceItem[]) =>
     statusFilter === "all" ? items : items.filter((i) => i.financialStatus === statusFilter);
 
+  const normalize = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
+  const trimmedSearch = searchTerm.trim();
+  const normalizedSearch = normalize(trimmedSearch);
+
+  const searchedClients = clients.filter((c) => {
+    if (!normalizedSearch) return true;
+    if (normalize(c.name).includes(normalizedSearch)) return true;
+    if (c.phone && normalize(c.phone).includes(normalizedSearch)) return true;
+    return c.items.some((i) => normalize(i.serviceName).includes(normalizedSearch));
+  });
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6">
@@ -181,6 +203,15 @@ export function BalancesContent() {
 
       {tab === "balances" && (
         <>
+          <div className="mb-3">
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar cliente, teléfono o servicio…"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-pink-main focus:outline-none focus:ring-2 focus:ring-pink-100"
+            />
+          </div>
           <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
             {(["all", "pending", "partial", "paid"] as const).map((s) => (
               <button
@@ -200,9 +231,21 @@ export function BalancesContent() {
             <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
               <p className="text-gray-400">No hay cuentas por cobrar pendientes</p>
             </div>
+          ) : searchedClients.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">
+                Ningún cliente coincide con «{trimmedSearch}»
+              </p>
+              <button
+                onClick={() => setSearchTerm("")}
+                className="mt-3 rounded-xl bg-pink-main px-4 py-2 text-xs font-medium text-gray-900 hover:bg-pink-light transition-colors"
+              >
+                Limpiar búsqueda
+              </button>
+            </div>
           ) : (
             <div className="space-y-3">
-              {clients.map((c) => (
+              {searchedClients.map((c) => (
                 <div key={c.clientId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <button onClick={() => void toggleClient(c.clientId)} className="min-w-0 flex-1 text-left">
