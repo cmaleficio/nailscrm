@@ -19,6 +19,7 @@ const NAV_ITEMS: { href: string; label: string; icon: string; perm?: string }[] 
   { href: "/dashboard/services", label: "Servicios", icon: "💅", perm: "services" },
   { href: "/dashboard/gallery", label: "Muro", icon: "🖼️", perm: "gallery" },
   { href: "/dashboard/legal", label: "Legal", icon: "📜", perm: "settings" },
+  { href: "/dashboard/activity", label: "Actividad", icon: "🧾", perm: "activityLog" },
   { href: "/dashboard/admin-users", label: "Admins", icon: "🛢️", perm: "adminUsers" },
 ];
 
