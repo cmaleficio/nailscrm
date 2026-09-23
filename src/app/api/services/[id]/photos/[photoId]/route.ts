@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
@@ -19,7 +19,7 @@ export async function DELETE(
     .from(schema.servicePhotos)
     .where(eq(schema.servicePhotos.id, photoId))
     .get();
-if (!photo || photo.serviceId !== id) {
+  if (!photo || photo.serviceId !== id) {
     return NextResponse.json({ error: "Foto no encontrada" }, { status: 404 });
   }
   db.delete(schema.servicePhotos).where(eq(schema.servicePhotos.id, photoId)).run();

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
@@ -26,7 +26,7 @@ export async function POST(
   const existing = db
     .select({ position: schema.servicePhotos.position })
     .from(schema.servicePhotos)
-.where(eq(schema.servicePhotos.serviceId, id))
+    .where(eq(schema.servicePhotos.serviceId, id))
     .all();
   let nextPos = existing.length ? Math.max(...existing.map((p) => p.position)) + 1 : 0;
   for (const url of urls) {

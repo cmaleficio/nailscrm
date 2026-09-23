@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { asc, eq } from "drizzle-orm";
@@ -77,18 +77,18 @@ export async function POST(req: NextRequest) {
   }
   if (!Number.isFinite(price) || price < 0) {
     return NextResponse.json(
-      { error: "El precio es inválido" },
+      { error: "El precio es invÃ¡lido" },
       { status: 400 }
     );
   }
   if (!Number.isInteger(durationMins) || durationMins <= 0) {
     return NextResponse.json(
-      { error: "La duración debe ser un número entero en minutos" },
+      { error: "La duraciÃ³n debe ser un nÃºmero entero en minutos" },
       { status: 400 }
     );
   }
 
-const service = {
+  const service = {
     id: crypto.randomUUID(),
     name,
     description:
