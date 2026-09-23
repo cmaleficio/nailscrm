@@ -3,6 +3,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { auth } from "@/lib/auth";
+import { logActivity } from "@/lib/audit";
 
 const DEFAULTS: Record<string, string> = {
   name: "DreamNails Studio",
@@ -58,6 +59,15 @@ export async function PUT(req: NextRequest) {
   if (logo_url !== undefined) {
     set("logo_url", logo_url.trim());
   }
+
+  logActivity(db, {
+    entity: "brand_settings",
+    action: "update",
+    label: "Identidad del salón actualizada",
+    metadata: { name, logo_url },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json(getAll());
 }

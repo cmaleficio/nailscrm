@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { db, schema } from "@/db/index";
 import { and, eq } from "drizzle-orm";
+import { logActivity } from "@/lib/audit";
 
 const GOOGLE_RISC_ISSUER = "https://accounts.google.com";
 const GOOGLE_CLIENT_ID = process.env.AUTH_GOOGLE_ID;
@@ -123,6 +124,16 @@ export async function POST(req: NextRequest) {
       default:
         console.log(`[risc] unhandled type ${eventType}`);
     }
+
+    logActivity(db, {
+      entity: "users",
+      action: eventType.includes("account-disabled") ? "update" : "delete",
+      entityId: sub,
+      label: `Evento RISC: ${eventType.split("/").pop()}`,
+      metadata: { eventType, subjectSub: sub },
+      actorId: null,
+      actorName: null,
+    });
   }
 
   return new NextResponse(null, { status: 202 });

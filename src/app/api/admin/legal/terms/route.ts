@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { hasPermission } from "@/lib/authz";
 import { TERMS_OF_SERVICE_KEY } from "@/lib/legal/termsOfService.types";
 import { TERMS_OF_SERVICE_DEFAULTS } from "@/lib/legal/termsOfService.defaults";
+import { logActivity } from "@/lib/audit";
 
 const URL_RE = /^https?:\/\/\S+$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -146,6 +147,14 @@ export async function PUT(req: NextRequest) {
       })
       .run();
   }
+
+  logActivity(db, {
+    entity: "legal_settings",
+    action: "update",
+    label: "Términos de servicio actualizados",
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({
     companyName,

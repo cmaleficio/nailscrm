@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { isSuperAdmin } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -65,6 +66,15 @@ export async function POST(req: NextRequest) {
     .where(eq(schema.users.email, email))
     .run();
 
+  logActivity(db, {
+    entity: "admins",
+    action: "create",
+    entityId: user.id,
+    label: `Admin creado: ${user.name} (${user.email})`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
+
   return NextResponse.json({ success: true });
 }
 
@@ -86,10 +96,29 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
+  const user = db
+    .select({ id: schema.users.id, name: schema.users.name, email: schema.users.email })
+    .from(schema.users)
+    .where(eq(schema.users.email, email))
+    .get();
+
+  if (!user) {
+    return NextResponse.json({ error: "No existe un usuario con ese email" }, { status: 404 });
+  }
+
   db.update(schema.users)
     .set({ role: "client" })
     .where(eq(schema.users.email, email))
     .run();
+
+  logActivity(db, {
+    entity: "admins",
+    action: "delete",
+    entityId: user.id,
+    label: `Admin eliminado: ${user.name ?? user.email}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true });
 }
@@ -113,9 +142,27 @@ export async function PATCH(req: NextRequest) {
   if (!valid) {
     return NextResponse.json({ error: "permissions debe ser un array de strings" }, { status: 400 });
   }
+  const admin = db
+    .select({ id: schema.users.id, email: schema.users.email })
+    .from(schema.users)
+    .where(eq(schema.users.email, email))
+    .get();
+
+  if (!admin) {
+    return NextResponse.json({ error: "No existe un usuario con ese email" }, { status: 404 });
+  }
   db.update(schema.users)
     .set({ permissions: JSON.stringify(permissions) })
     .where(eq(schema.users.email, email))
     .run();
+  logActivity(db, {
+    entity: "admins",
+    action: "update",
+    entityId: admin.id,
+    label: `Permisos de admin actualizados: ${admin.email}`,
+    metadata: { permissions },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

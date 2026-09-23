@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { hasPermission } from "@/lib/authz";
 import { PRIVACY_POLICY_KEY } from "@/lib/legal/privacyPolicy.types";
 import { PRIVACY_POLICY_DEFAULTS } from "@/lib/legal/privacyPolicy.defaults";
+import { logActivity } from "@/lib/audit";
 
 const URL_RE = /^https?:\/\/\S+$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -140,6 +141,14 @@ export async function PUT(req: NextRequest) {
       })
       .run();
   }
+
+  logActivity(db, {
+    entity: "legal_settings",
+    action: "update",
+    label: "Política de privacidad actualizada",
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({
     companyName,

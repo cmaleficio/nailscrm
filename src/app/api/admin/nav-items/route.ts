@@ -3,6 +3,7 @@ import { db, schema } from "@/db/index";
 import { asc, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -102,6 +103,14 @@ export async function PUT(req: NextRequest) {
     .from(schema.navItems)
     .orderBy(asc(schema.navItems.position))
     .all();
+
+  logActivity(db, {
+    entity: "nav_items",
+    action: "update",
+    label: "Navegación del dashboard actualizada",
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json(rows);
 }
