@@ -19,9 +19,9 @@ export async function DELETE(
     .from(schema.servicePhotos)
     .where(eq(schema.servicePhotos.id, photoId))
     .get();
-  if (!photo || photo.serviceId !== id) {
+if (!photo || photo.serviceId !== id) {
     return NextResponse.json({ error: "Foto no encontrada" }, { status: 404 });
-}
+  }
   db.delete(schema.servicePhotos).where(eq(schema.servicePhotos.id, photoId)).run();
   logActivity(db, {
     entity: "service_photos",

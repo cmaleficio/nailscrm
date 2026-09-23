@@ -88,16 +88,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const service = {
+const service = {
     id: crypto.randomUUID(),
     name,
     description:
       typeof body.description === "string" ? body.description.trim() : null,
-price,
+    price,
     durationMins,
     isActive: body.isActive === false ? 0 : 1,
     isGroup: body.isGroup ? 1 : 0,
-};
+  };
 
   db.insert(schema.services).values(service).run();
   logActivity(db, {

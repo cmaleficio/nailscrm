@@ -26,8 +26,8 @@ export async function POST(
   const existing = db
     .select({ position: schema.servicePhotos.position })
     .from(schema.servicePhotos)
-    .where(eq(schema.servicePhotos.serviceId, id))
-.all();
+.where(eq(schema.servicePhotos.serviceId, id))
+    .all();
   let nextPos = existing.length ? Math.max(...existing.map((p) => p.position)) + 1 : 0;
   for (const url of urls) {
     const photo = { id: crypto.randomUUID(), serviceId: id, url, position: nextPos, createdAt: now };
