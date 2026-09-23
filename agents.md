@@ -411,11 +411,23 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - subject_sub: text (Google `sub` del usuario afectado; null para `verification`)
 - received_at: integer (timestamp)
 
+### Tabla: activity_logs (auditoría)
+- id: text, primary key
+- actor_id: text, foreign key → users.id (nullable; null = acción pública/anónima, ej: eventos RISC de Google)
+- actor_name: text (snapshot del nombre; sobrevive a cambios/borrados)
+- entity: text (módulo: appointments, bills, payments, inventory_items, …)
+- action: text (create | update | delete | cancel | complete | approve | reject | report | adjust | enroll | unenroll | void)
+- entity_id: text (id de la fila afectada)
+- label: text (resumen humano de la acción)
+- metadata: text (JSON con detalles: montos, tasas, diffs)
+- created_at: integer (unix seconds)
+- Se llena desde `logActivity(db, ...)` (src/lib/audit.ts), llamada en cada endpoint mutante tras la mutación exitosa. Es best-effort: si falla, no rompe la operación de negocio. `GET /api/activity-logs` y `GET /api/activity-logs/actors` lo exponen (solo permiso `activityLog`). UI en `/dashboard/activity`.
+
 ## 🔐 Permisos de admins
 - `users.permissions`: JSON array de claves; **null = acceso a todos los módulos** (no rompe admins existentes).
 - Superadmin (`ADMIN_EMAIL`) siempre tiene acceso total.
-- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `gallery`, `adminUsers`, `paymentApproval`.
-- `hasPermission(session, key)` en `src/lib/authz.ts` bloquea a no-admins y a admins sin el permiso. `hasAnyPermission(session, keys)` acepta varios módulos. `adjustInventory` controla salidas/ajustes de stock; `paymentApproval` controla aprobar/rechazar/eliminar capturas de pago.
+- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `gallery`, `adminUsers`, `paymentApproval`, `activityLog`.
+- `hasPermission(session, key)` en `src/lib/authz.ts` bloquea a no-admins y a admins sin el permiso. `hasAnyPermission(session, keys)` acepta varios módulos. `adjustInventory` controla salidas/ajustes de stock; `paymentApproval` controla aprobar/rechazar/eliminar capturas de pago; `activityLog` (Log de actividad): ver `/dashboard/activity`.
 - Guardas auditadas por endpoint: servicios (`services*` → `services`), snapshot de compras por cita (`/api/purchases*` → `appointments`), clientes (`/api/clients*` → `clients` **o** `appointments` porque el CRM panel y walk-ins viven en la agenda), blockouts y waitlist admin (`appointments`), muro (`gallery`), facturas/proveedores/categorías (`purchases`), pagos proveedor/bancos (`accountsPayable`), balances/pagos de clientes (`balances`), P&L (`financials`), horario (`settings`), admins (`adminUsers`), inventario y usos (`inventory`). `/api/upload` exige sesión. Públicos por diseño: catálogo activo, slots, galería, tasa actual, registro, auth, reseñas por id.
 - `PATCH /api/admins` rechaza editar permisos del admin principal (`ADMIN_EMAIL`) con 403.
 - En `/dashboard/admin-users` hay select "Copiar de…" para replicar permisos de otro admin (se aplican al guardar).
