@@ -10,6 +10,7 @@ import {
 } from "@/lib/calendar";
 import { recordUsage } from "@/lib/inventory";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { logActivity } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -170,6 +171,30 @@ export async function PATCH(
       .run();
   }
 
+  {
+    if (status === "completed" && appointment.status !== "completed") {
+      logActivity(db, {
+        entity: "appointments",
+        action: "complete",
+        entityId: appointment.id,
+        label: `Cita completada`,
+        metadata: { appointmentId: appointment.id },
+        actorId: session?.user?.id,
+        actorName: session?.user?.name ?? null,
+      });
+    } else {
+      logActivity(db, {
+        entity: "appointments",
+        action: "update",
+        entityId: appointment.id,
+        label: `Cita actualizada`,
+        metadata: { status, startTime, shareToGallery },
+        actorId: session?.user?.id,
+        actorName: session?.user?.name ?? null,
+      });
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
 
@@ -279,6 +304,23 @@ export async function DELETE(
   }
 
   for (const p of purchaseRows) recomputeFinancialStatus(p.userId);
+
+  {
+    const clientRow = db
+      .select({ name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.id, appointment.clientId))
+      .get();
+    logActivity(db, {
+      entity: "appointments",
+      action: "cancel",
+      entityId: appointment.id,
+      label: `Cita cancelada: ${clientRow?.name ?? "Cliente"} – ${purchase?.serviceName ?? service?.name ?? "Servicio"}`,
+      metadata: { startTime: appointment.startTime, servicePrice: purchase?.servicePrice ?? service?.price ?? 0, cancelledBy: session.user.id },
+      actorId: session.user.id,
+      actorName: session?.user?.name ?? null,
+    });
+  }
 
   return NextResponse.json({ success: true, deleted: true });
 }

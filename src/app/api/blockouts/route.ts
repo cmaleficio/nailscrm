@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { and, gte, lt } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { getOverlappingAppointments } from "@/lib/availability";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -52,5 +53,14 @@ export async function POST(req: NextRequest) {
     reason: typeof reason === "string" ? reason : null,
   };
   db.insert(schema.blockouts).values(blockout).run();
+  logActivity(db, {
+    entity: "blockouts",
+    action: "create",
+    entityId: blockout.id,
+    label: `Bloqueo creado: ${blockout.reason ?? "sin motivo"}`,
+    metadata: { startTime: blockout.startTime, endTime: blockout.endTime },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json(blockout);
 }

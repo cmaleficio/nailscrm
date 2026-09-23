@@ -6,6 +6,7 @@ import { isAdmin, hasPermission } from "@/lib/authz";
 import { validateSlot } from "@/lib/availability";
 import { createAppointmentClientEvent, createAppointmentAdminEvent } from "@/lib/calendar";
 import { todayStr, dateToDayStartTs } from "@/lib/time";
+import { logActivity } from "@/lib/audit";
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!(await isAdmin(session))) {
@@ -253,6 +254,23 @@ export async function POST(req: NextRequest) {
 
   if (process.env.GOOGLE_CALENDAR_ENABLED === "true") {
     await syncAppointmentToGoogleCalendars(appointment, service.name);
+  }
+
+  {
+    const clientRow = db
+      .select({ name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.id, targetClientId))
+      .get();
+    logActivity(db, {
+      entity: "appointments",
+      action: "create",
+      entityId: appointment.id,
+      label: `Cita creada: ${clientRow?.name ?? "Cliente"} – ${service.name}`,
+      metadata: { startTime, endTime, serviceId, servicePrice: service.price, createdByAdmin: Boolean(clientId) },
+      actorId: session.user.id,
+      actorName: session?.user?.name ?? null,
+    });
   }
 
   return NextResponse.json({ id: appointment.id });

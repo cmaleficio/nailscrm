@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { getWorkingHoursAll, parseHhMm } from "@/lib/workingHours";
+import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -60,6 +61,14 @@ export async function PUT(req: NextRequest) {
             .run();
         }
       }
+    });
+    logActivity(db, {
+      entity: "working_hours",
+      action: "update",
+      label: "Horario de trabajo actualizado",
+      metadata: { hours: parsed },
+      actorId: session?.user?.id,
+      actorName: session?.user?.name ?? null,
     });
     return NextResponse.json({ success: true });
   } catch (e) {

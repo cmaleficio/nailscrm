@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
+import { logActivity } from "@/lib/audit";
 
 function firstName(fullName: string | null): string {
   return fullName?.trim().split(/\s+/)[0] ?? "";
@@ -92,6 +93,16 @@ export async function POST(
     .set({ reviewRating: rating as number, reviewText: text })
     .where(eq(schema.appointments.id, id))
     .run();
+
+  logActivity(db, {
+    entity: "appointments",
+    action: "update",
+    entityId: id,
+    label: `Reseña publicada con ${rating} estrellas`,
+    metadata: { rating, text },
+    actorId: null,
+    actorName: null,
+  });
 
   return NextResponse.json({ success: true });
 }

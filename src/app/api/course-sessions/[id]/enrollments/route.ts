@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, and } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     .where(and(eq(schema.courseEnrollments.appointmentId, id), eq(schema.courseEnrollments.clientId, clientId))).get();
   if (exists) return NextResponse.json({ error: "El cliente ya está inscrito" }, { status: 409 });
 
-  const client = db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, clientId)).get();
+  const client = db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(eq(schema.users.id, clientId)).get();
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
 
   const now = Math.floor(Date.now() / 1000);
@@ -46,6 +47,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     createdAt: now,
   }).run();
   recomputeFinancialStatus(clientId);
+  logActivity(db, {
+    entity: "course_enrollments",
+    action: "enroll",
+    entityId: `${id}:${clientId}`,
+    label: `Alumno ${client?.name ?? clientId} inscrito al curso`,
+    metadata: { appointmentId: id, clientId },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }
 
@@ -69,5 +79,14 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     .where(and(eq(schema.servicePurchases.appointmentId, id), eq(schema.servicePurchases.userId, clientId)))
     .run();
   recomputeFinancialStatus(clientId);
+  logActivity(db, {
+    entity: "course_enrollments",
+    action: "unenroll",
+    entityId: `${id}:${clientId}`,
+    label: `Alumno ${clientId} dado de baja del curso`,
+    metadata: { appointmentId: id, clientId },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

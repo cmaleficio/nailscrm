@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, inArray, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { validateSlot } from "@/lib/availability";
+import { logActivity } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -67,6 +68,16 @@ export async function POST(req: NextRequest) {
       createdAt: now,
     }).run();
   }
+
+  logActivity(db, {
+    entity: "course_sessions",
+    action: "create",
+    entityId: appointmentId,
+    label: `Sesión de curso creada: ${service.name} (${ids.length} alumno${ids.length === 1 ? "" : "s"})`,
+    metadata: { startTime, endTime, clientIds: ids, pricePerPupil: service.price },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ id: appointmentId });
 }

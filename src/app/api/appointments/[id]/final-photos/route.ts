@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { and, eq, desc } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -142,6 +143,16 @@ export async function POST(
       .run();
   }
 
+  logActivity(db, {
+    entity: "appointments",
+    action: "update",
+    entityId: id,
+    label: `Fotos finales agregadas a la cita`,
+    metadata: { appointmentId: id, photoCount: created.length },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
+
   return NextResponse.json({ success: true, created });
 }
 
@@ -205,6 +216,16 @@ export async function DELETE(
     .set({ finalPhotoUrl: firstRemaining?.url ?? null })
     .where(eq(schema.appointments.id, id))
     .run();
+
+  logActivity(db, {
+    entity: "appointments",
+    action: "update",
+    entityId: id,
+    label: `Foto final eliminada de la cita`,
+    metadata: { appointmentId: id, photoId, url: photo.url },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true });
 }
