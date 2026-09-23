@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { logActivity } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -89,6 +90,16 @@ export async function PATCH(
     .where(eq(schema.servicePurchases.id, id))
     .run();
 
+  logActivity(db, {
+    entity: "purchases",
+    action: "update",
+    entityId: existing.id,
+    label: `Servicio realizado actualizado: ${existing.serviceName}`,
+    metadata: body,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
+
   return NextResponse.json({ success: true });
 }
 
@@ -137,6 +148,16 @@ export async function DELETE(
   }
 
   recomputeFinancialStatus(purchase.userId);
+
+  logActivity(db, {
+    entity: "purchases",
+    action: "delete",
+    entityId: purchase.id,
+    label: `Servicio realizado eliminado: ${purchase.serviceName}`,
+    metadata: { price: purchase.servicePrice },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true });
 }

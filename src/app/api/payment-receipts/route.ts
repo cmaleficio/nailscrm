@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
 import { isAdmin } from "@/lib/authz";
 import { getTodayRate } from "@/lib/bcv";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -96,5 +97,13 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   };
   db.insert(schema.paymentReceipts).values(receipt).run();
+  logActivity(db, {
+    entity: "payment_receipts",
+    action: "report",
+    entityId: receipt.id,
+    label: `Captura de pago reportada: $${receipt.amountUsd} (${receipt.amountVes} Bs)`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json(receipt, { status: 201 });
 }

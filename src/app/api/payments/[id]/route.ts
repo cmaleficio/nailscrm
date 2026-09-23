@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { logActivity } from "@/lib/audit";
 
 export async function DELETE(
   _req: NextRequest,
@@ -20,5 +21,14 @@ export async function DELETE(
   }
   db.delete(schema.payments).where(eq(schema.payments.id, id)).run();
   recomputeFinancialStatus(payment.userId);
+  logActivity(db, {
+    entity: "payments",
+    action: "delete",
+    entityId: payment.id,
+    label: `Pago eliminado: $${payment.amountUsd} (${payment.currency})`,
+    metadata: { userId: payment.userId, amountVes: payment.amountVes },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

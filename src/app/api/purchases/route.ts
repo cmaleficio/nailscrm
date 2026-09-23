@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus, applyPaidToClient } from "@/lib/financial-status";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -90,5 +91,14 @@ export async function POST(req: NextRequest) {
     .set({ totalVisits: (client.totalVisits ?? 0) + 1 })
     .where(eq(schema.users.id, userId))
     .run();
+  logActivity(db, {
+    entity: "purchases",
+    action: "create",
+    entityId: purchaseId,
+    label: `Servicio realizado: ${client.name} – ${service.name}`,
+    metadata: { price: finalPrice, completionDate },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true, id: purchaseId }, { status: 201 });
 }

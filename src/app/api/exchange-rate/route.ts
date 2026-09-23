@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/authz";
 import { db, schema } from "@/db/index";
 import { sql } from "drizzle-orm";
+import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -50,6 +51,15 @@ export async function POST(request: Request) {
         },
       })
       .run();
+    logActivity(db, {
+      entity: "exchange_rates",
+      action: "create",
+      entityId: id,
+      label: `Tasa registrada: Bs ${rate} (${date})`,
+      metadata: { date, rate, source: "manual" },
+      actorId: session?.user?.id,
+      actorName: session?.user?.name ?? null,
+    });
     return NextResponse.json({ date, rate, source: "manual" });
   } catch (err) {
     console.error("POST /api/exchange-rate error:", err);

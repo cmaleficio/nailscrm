@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -51,6 +52,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         .run();
     });
     recomputeFinancialStatus(receipt.clientId);
+    logActivity(db, {
+      entity: "payment_receipts",
+      action: action === "approve" ? "approve" : "reject",
+      entityId: receipt.id,
+      label: `Captura de pago ${action === "approve" ? "aprobada" : "rechazada"}: $${receipt.amountUsd}`,
+      metadata: { amountVes: receipt.amountVes, rate: receipt.rate, notes },
+      actorId: session?.user?.id,
+      actorName: session?.user?.name ?? null,
+    });
     return NextResponse.json({ success: true, paymentId });
   }
 
@@ -59,6 +69,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       .set({ status: "rejected", reviewedBy: adminId, reviewedAt: now, reviewNotes: notes })
       .where(eq(schema.paymentReceipts.id, id))
       .run();
+    logActivity(db, {
+      entity: "payment_receipts",
+      action: action === "approve" ? "approve" : "reject",
+      entityId: receipt.id,
+      label: `Captura de pago ${action === "approve" ? "aprobada" : "rechazada"}: $${receipt.amountUsd}`,
+      metadata: { amountVes: receipt.amountVes, rate: receipt.rate, notes },
+      actorId: session?.user?.id,
+      actorName: session?.user?.name ?? null,
+    });
     return NextResponse.json({ success: true });
   }
 
@@ -79,5 +98,13 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Solo se pueden eliminar capturas pendientes" }, { status: 400 });
   }
   db.delete(schema.paymentReceipts).where(eq(schema.paymentReceipts.id, id)).run();
+  logActivity(db, {
+    entity: "payment_receipts",
+    action: "delete",
+    entityId: receipt.id,
+    label: `Captura de pago eliminada: $${receipt.amountUsd}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

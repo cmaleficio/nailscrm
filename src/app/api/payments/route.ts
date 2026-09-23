@@ -6,6 +6,7 @@ import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
 import { getRateByDate } from "@/lib/bcv";
 import { todayStr } from "@/lib/time";
+import { logActivity } from "@/lib/audit";
 
 function paidAtToDateStr(paidAt: number): string {
   const d = new Date(paidAt * 1000);
@@ -118,5 +119,21 @@ export async function POST(req: NextRequest) {
 
   db.insert(schema.payments).values(payment).run();
   recomputeFinancialStatus(payment.userId);
+  {
+    const clientName = db
+      .select({ name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .get()?.name ?? "Cliente";
+    logActivity(db, {
+      entity: "payments",
+      action: "create",
+      entityId: payment.id,
+      label: `Pago registrado: ${clientName} – $${usd} (${cur})`,
+      metadata: { usd, currency: cur, amountVes, rate: effectiveRate, appointmentId: payment.appointmentId },
+      actorId: adminId,
+      actorName: session?.user?.name ?? null,
+    });
+  }
   return NextResponse.json(payment);
 }
