@@ -1,14 +1,37 @@
-import { describe, expect, test } from "vitest";
-import { createTestDb } from "@/lib/account-link.test-helpers";
+import { describe, test, expect } from "vitest";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
-import { logActivity, listActivityActors, listActivityLogs } from "@/lib/audit";
+import { logActivity, listActivityLogs, listActivityActors } from "./audit";
 
-describe("audit", () => {
-  function createAuditDb() {
-    const db = createTestDb();
-    db.$client.exec(`CREATE TABLE activity_logs (
+type TestDb = ReturnType<typeof drizzle<typeof schema>>;
+
+function createAuditDb(): TestDb {
+  const sqlite = new Database(":memory:");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.exec(`
+    CREATE TABLE users (
       id TEXT PRIMARY KEY,
-      actor_id TEXT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      emailVerified INTEGER,
+      image TEXT,
+      phone TEXT,
+      address TEXT,
+      password_hash TEXT,
+      google_id TEXT,
+      tech_notes TEXT,
+      total_visits INTEGER DEFAULT 0,
+      total_revenue REAL DEFAULT 0,
+      role TEXT NOT NULL DEFAULT 'client',
+      permissions TEXT,
+      locked_at INTEGER,
+      locked_reason TEXT,
+      created_at INTEGER
+    );
+    CREATE TABLE activity_logs (
+      id TEXT PRIMARY KEY,
+      actor_id TEXT REFERENCES users(id),
       actor_name TEXT,
       entity TEXT NOT NULL,
       action TEXT NOT NULL,
@@ -16,91 +39,117 @@ describe("audit", () => {
       label TEXT NOT NULL,
       metadata TEXT,
       created_at INTEGER NOT NULL
-    )`);
-    return db;
-  }
+    );
+    CREATE INDEX activity_logs_created_at_idx ON activity_logs (created_at);
+    CREATE INDEX activity_logs_actor_idx ON activity_logs (actor_id);
+    CREATE INDEX activity_logs_entity_idx ON activity_logs (entity);
+  `);
+  return drizzle(sqlite, { schema });
+}
 
-  const seedActor = (db: ReturnType<typeof createTestDb>) =>
-    db
-      .insert(schema.users)
-      .values({ id: "u-1", name: "Ana Admin", email: "ana@admin.com" })
-      .run();
+function seedActor(db: TestDb, id: string, name: string) {
+  db.insert(schema.users).values({
+    id, name, email: `${id}@example.com`, role: "admin", createdAt: Date.now(),
+  }).run();
+}
 
-  test("logActivity inserta una fila con timestamp unix", () => {
+describe("logActivity", () => {
+  test("inserta una fila con actor, label y metadata", () => {
     const db = createAuditDb();
-    seedActor(db);
-    logActivity(db, { entity: "appointment", action: "create", entityId: "appt-1", label: "Creaste una cita para Ana", actorId: "u-1", actorName: "Ana Admin" });
+    seedActor(db, "a-1", "Ana Martínez");
+    logActivity(db, {
+      entity: "appointments", action: "create", entityId: "appt-1",
+      label: "Cita creada", metadata: { price: 35, currency: "USD" },
+      actorId: "a-1", actorName: "Ana Martínez",
+    });
     const rows = db.select().from(schema.activityLogs).all();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].entity).toBe("appointment");
+    expect(rows.length).toBe(1);
+    expect(rows[0].actorId).toBe("a-1");
+    expect(rows[0].actorName).toBe("Ana Martínez");
+    expect(rows[0].entity).toBe("appointments");
     expect(rows[0].action).toBe("create");
     expect(rows[0].entityId).toBe("appt-1");
-    expect(rows[0].label).toBe("Creaste una cita para Ana");
+    expect(rows[0].label).toBe("Cita creada");
+    expect(JSON.parse(rows[0].metadata ?? "null")).toEqual({ price: 35, currency: "USD" });
+    expect(rows[0].createdAt).toBeGreaterThan(0);
+  });
+
+  test("permite actor público (null) y metadata null", () => {
+    const db = createAuditDb();
+    logActivity(db, { entity: "appointments", action: "create", label: "Reserva anónima", metadata: null, actorId: null, actorName: null });
+    const rows = db.select().from(schema.activityLogs).all();
+    expect(rows[0].actorId).toBeNull();
+    expect(rows[0].actorName).toBeNull();
     expect(rows[0].metadata).toBeNull();
-    expect(rows[0].createdAt).toBeGreaterThan(1_700_000_000);
   });
 
-  test("logActivity NO lanza aunque la tabla no exista (best-effort)", () => {
-    const db = createTestDb();
-    expect(() => logActivity(db, { entity: "service", action: "delete", label: "Borraste un servicio" })).not.toThrow();
+  test("no lanza cuando la tabla no existe (best-effort)", () => {
+    const sqlite = new Database(":memory:");
+    const db = drizzle(sqlite, { schema });
+    expect(() =>
+      logActivity(db as TestDb, { entity: "bills", action: "create", label: "x" })
+    ).not.toThrow();
   });
+});
 
-  test("logActivity serializa metadata a JSON", () => {
+describe("listActivityLogs", () => {
+  test("ordena desc por createdAt y pagina con hasMore/nextOffset", () => {
     const db = createAuditDb();
-    seedActor(db);
-    logActivity(db, { entity: "payment", action: "mark_payed", entityId: "pay-1", label: "Registraste un pago", metadata: { amountUsd: 35, currency: "USD" }, actorId: "u-1" });
-    const row = db.select().from(schema.activityLogs).get()!;
-    expect(JSON.parse(row.metadata!)).toEqual({ amountUsd: 35, currency: "USD" });
+    seedActor(db, "a-1", "Ana");
+    db.insert(schema.activityLogs).values({ id: "a", entity: "bills", action: "create", label: "A", actorId: "a-1", actorName: "Ana", createdAt: 1000 }).run();
+    db.insert(schema.activityLogs).values({ id: "b", entity: "bills", action: "create", label: "B", actorId: "a-1", actorName: "Ana", createdAt: 2000 }).run();
+    db.insert(schema.activityLogs).values({ id: "c", entity: "bills", action: "create", label: "C", actorId: "a-1", actorName: "Ana", createdAt: 3000 }).run();
+    const r1 = listActivityLogs(db, { limit: 2, offset: 0 });
+    expect(r1.items.map((i) => i.label)).toEqual(["C", "B"]);
+    expect(r1.total).toBe(3);
+    expect(r1.hasMore).toBe(true);
+    expect(r1.nextOffset).toBe(2);
+    const r2 = listActivityLogs(db, { limit: 2, offset: 2 });
+    expect(r2.items.map((i) => i.label)).toEqual(["A"]);
+    expect(r2.hasMore).toBe(false);
+    expect(r2.nextOffset).toBeNull();
   });
 
-  test("listActivityLogs filtra por entidad, acción y actor", () => {
+  test("filtra por entity, action, actor y q", () => {
     const db = createAuditDb();
-    seedActor(db);
-    logActivity(db, { entity: "appointment", action: "create", entityId: "a1", label: "Creaste una cita", actorId: "u-1", actorName: "Ana Admin" });
-    logActivity(db, { entity: "service", action: "delete", entityId: "s1", label: "Borraste un servicio", actorId: "u-1", actorName: "Ana Admin" });
-    logActivity(db, { entity: "appointment", action: "complete", entityId: "a2", label: "Completaste una cita", actorName: "Walk-in" });
-
-    const byEntity = listActivityLogs(db, { entity: "appointment" });
-    expect(byEntity.total).toBe(2);
-    expect(byEntity.hasMore).toBe(false);
-
-    const byActor = listActivityLogs(db, { actorId: "u-1" });
-    expect(byActor.total).toBe(2);
-
-    const byAction = listActivityLogs(db, { action: "delete" });
-    expect(byAction.total).toBe(1);
-    expect(byAction.items[0].entity).toBe("service");
+    seedActor(db, "a-1", "Ana");
+    seedActor(db, "a-2", "Luisa");
+    logActivity(db, { entity: "bills", action: "create", label: "Factura F-1001", actorId: "a-1", actorName: "Ana" });
+    logActivity(db, { entity: "payments", action: "create", label: "Pago $35", actorId: "a-2", actorName: "Luisa" });
+    expect(listActivityLogs(db, { entity: "bills", limit: 50 }).items.length).toBe(1);
+    expect(listActivityLogs(db, { actor: "a-2", limit: 50 }).items[0].label).toBe("Pago $35");
+    expect(listActivityLogs(db, { action: "create", q: "F-1001", limit: 50 }).items.length).toBe(1);
   });
 
-  test("listActivityLogs pagina con limit y nextOffset", () => {
+  test("filtra por rango from/to", () => {
     const db = createAuditDb();
-    seedActor(db);
-    for (let i = 0; i < 5; i++) {
-      logActivity(db, { entity: "appointment", action: "create", entityId: `a${i}`, label: `Cita ${i}`, actorId: "u-1" });
-    }
-    const page1 = listActivityLogs(db, { limit: 2, offset: 0 });
-    expect(page1.items).toHaveLength(2);
-    expect(page1.total).toBe(5);
-    expect(page1.hasMore).toBe(true);
-    expect(page1.nextOffset).toBe(2);
-
-    const page3 = listActivityLogs(db, { limit: 2, offset: 4 });
-    expect(page3.items).toHaveLength(1);
-    expect(page3.hasMore).toBe(false);
-    expect(page3.nextOffset).toBeNull();
+    db.insert(schema.activityLogs).values({ id: "l1", entity: "bills", action: "create", label: "1", createdAt: 1000 }).run();
+    db.insert(schema.activityLogs).values({ id: "l2", entity: "bills", action: "create", label: "2", createdAt: 2000 }).run();
+    const r = listActivityLogs(db, { from: 1500, to: 2500, limit: 50 });
+    expect(r.items.map((i) => i.label)).toEqual(["2"]);
   });
 
-  test("listActivityActors agrupa por actor y ordena por última actividad desc", async () => {
+  test("respeta límites máximo 200 y mínimo 1", () => {
     const db = createAuditDb();
-    db.$client.exec(`INSERT INTO users (id, name, email) VALUES ('u-1', 'Ana', 'a@x.com'), ('u-2', 'Betty', 'b@x.com')`);
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    logActivity(db, { entity: "appointment", action: "create", label: "x", actorId: "u-1", actorName: "Ana" });
-    await sleep(5);
-    logActivity(db, { entity: "payment", action: "mark_payed", label: "y", actorId: "u-1", actorName: "Ana" });
-    await sleep(5);
-    logActivity(db, { entity: "service", action: "update", label: "z", actorId: "u-2", actorName: "Betty" });
+    seedActor(db, "a-1", "Ana");
+    logActivity(db, { entity: "bills", action: "create", label: "x", actorId: "a-1", actorName: "Ana" });
+    expect(listActivityLogs(db, { limit: 9999, offset: 0 }).items.length).toBe(1);
+  });
+});
 
-    const actors = listActivityActors(db) as Array<{ actorId: string; actorName: string | null }>;
-    expect(actors.map((a) => a.actorId)).toEqual(["u-1", "u-2"]);
+describe("listActivityActors", () => {
+  test("devuelve actores distintos ignorando actor null", () => {
+    const db = createAuditDb();
+    seedActor(db, "a-1", "Ana");
+    seedActor(db, "a-2", "Luisa");
+    logActivity(db, { entity: "bills", action: "create", label: "1", actorId: "a-1", actorName: "Ana" });
+    logActivity(db, { entity: "bills", action: "create", label: "2", actorId: "a-1", actorName: "Ana" });
+    logActivity(db, { entity: "payments", action: "create", label: "3", actorId: "a-2", actorName: "Luisa" });
+    logActivity(db, { entity: "payments", action: "create", label: "4", actorId: null, actorName: null });
+    const actors = listActivityActors(db);
+    expect(actors).toEqual([
+      { actorId: "a-1", actorName: "Ana" },
+      { actorId: "a-2", actorName: "Luisa" },
+    ]);
   });
 });

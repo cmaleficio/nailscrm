@@ -1,129 +1,120 @@
-import { and, asc, desc, eq, like, sql, type SQL } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { and, desc, eq, like, sql, type SQL } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
-import { activityLogs } from "@/db/schema";
 
-type DB = BetterSQLite3Database<typeof schema>;
+export type AuditDb = ReturnType<typeof drizzle<typeof schema>>;
 
 export const AUDIT_ENTITIES = [
-  "appointment",
-  "service",
-  "service_purchase",
-  "payment",
-  "payment_receipt",
-  "supplier",
-  "bill",
-  "expense_category",
-  "supplier_payment",
-  "bank_account",
-  "inventory_item",
-  "inventory_movement",
-  "client",
-  "waitlist",
-  "workout_block",
-  "course_session",
-  "gallery_photo",
-  "user",
-  "admin",
-  "brand_settings",
-  "nav_items",
-  "legal_settings",
-  "risc_alert",
+  "appointments", "appointment_usage", "course_sessions", "course_enrollments",
+  "services", "service_photos", "gallery_photos", "service_products",
+  "users", "clients", "admins", "waitlist", "blockouts", "working_hours",
+  "purchases", "payments", "payment_receipts", "exchange_rates",
+  "suppliers", "expense_categories", "bank_accounts", "bills", "supplier_payments",
+  "inventory_items", "inventory_movements", "risc_events",
+  "brand_settings", "nav_items", "legal_settings",
 ] as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
 
-export const AUDIT_ACTIONS = ["create", "update", "delete", "complete", "mark_payed", "approve", "reject"] as const;
+export const AUDIT_ACTIONS = [
+  "create", "update", "delete", "cancel", "complete",
+  "approve", "reject", "report", "adjust", "enroll", "unenroll", "void",
+] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-export interface AuditEvent {
+export type LogActivityParams = {
   entity: AuditEntity;
   action: AuditAction;
-  entityId?: string;
+  entityId?: string | null;
   label: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | null;
   actorId?: string | null;
   actorName?: string | null;
-}
+};
 
-export function logActivity(dbc: DB, ev: AuditEvent): void {
+export function logActivity(dbc: AuditDb, params: LogActivityParams): void {
   try {
-    dbc.insert(activityLogs).values({
+    let metadata: string | null = null;
+    if (params.metadata != null) {
+      try {
+        metadata = JSON.stringify(params.metadata);
+      } catch {
+        metadata = null;
+      }
+    }
+    dbc.insert(schema.activityLogs).values({
       id: crypto.randomUUID(),
-      actorId: ev.actorId ?? null,
-      actorName: ev.actorName ?? null,
-      entity: ev.entity,
-      action: ev.action,
-      entityId: ev.entityId ?? null,
-      label: ev.label,
-      metadata: ev.metadata ? JSON.stringify(ev.metadata) : null,
+      actorId: params.actorId ?? null,
+      actorName: params.actorName ?? null,
+      entity: params.entity,
+      action: params.action,
+      entityId: params.entityId ?? null,
+      label: params.label,
+      metadata,
       createdAt: Math.floor(Date.now() / 1000),
     }).run();
   } catch (err) {
-    console.error("logActivity: no se pudo registrar el evento de auditoría", err);
+    console.error("logActivity failed:", err);
   }
 }
 
-export interface ActivityLogFilters {
-  entity?: string;
-  action?: string;
-  actorId?: string;
-  query?: string;
-  offset?: number;
+export type ActivityLogFilters = {
+  entity?: string | null;
+  action?: string | null;
+  actor?: string | null;
+  from?: number | null;
+  to?: number | null;
+  q?: string | null;
   limit?: number;
-  order?: "asc" | "desc";
-}
+  offset?: number;
+};
 
-export interface ActivityLogsResult {
-  items: Array<Record<string, unknown>>;
-  total: number;
-  hasMore: boolean;
-  nextOffset: number | null;
-}
-
-export function listActivityLogs(dbc: DB, filters: ActivityLogFilters = {}): ActivityLogsResult {
+export function listActivityLogs(dbc: AuditDb, filters: ActivityLogFilters = {}) {
+  const limit = Math.min(Math.max(Number(filters.limit) || 50, 1), 200);
+  const offset = Math.max(Number(filters.offset) || 0, 0);
   const conditions: SQL[] = [];
-  const limit = Math.min(Math.max(filters.limit ?? 25, 1), 100);
-  const offset = Math.max(filters.offset ?? 0, 0);
-  const order: "asc" | "desc" = filters.order ?? "desc";
-
-  if (filters.entity) conditions.push(eq(activityLogs.entity, filters.entity));
-  if (filters.action) conditions.push(eq(activityLogs.action, filters.action));
-  if (filters.actorId) conditions.push(eq(activityLogs.actorId, filters.actorId));
-  if (filters.query) conditions.push(like(activityLogs.label, `%${filters.query}%`));
-
+  if (filters.entity) conditions.push(eq(schema.activityLogs.entity, filters.entity));
+  if (filters.action) conditions.push(eq(schema.activityLogs.action, filters.action));
+  if (filters.actor) conditions.push(eq(schema.activityLogs.actorId, filters.actor));
+  if (filters.from != null) conditions.push(sql`${schema.activityLogs.createdAt} >= ${filters.from}`);
+  if (filters.to != null) conditions.push(sql`${schema.activityLogs.createdAt} <= ${filters.to}`);
+  if (filters.q && filters.q.trim()) {
+    conditions.push(like(schema.activityLogs.label, `%${filters.q.trim()}%`));
+  }
   const where = conditions.length ? and(...conditions) : undefined;
-
-  const orderBy =
-    order === "asc"
-      ? [asc(activityLogs.createdAt), asc(activityLogs.id)]
-      : [desc(activityLogs.createdAt), desc(activityLogs.id)];
-
-  const rows = dbc.select().from(activityLogs).where(where).orderBy(...orderBy).limit(limit + 1).offset(offset).all();
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-
-  const totalRows = dbc.select({ count: sql<number>`count(*)` }).from(activityLogs).where(where).get();
-  const total = totalRows?.count ?? 0;
-
-  return {
-    items: items as Array<Record<string, unknown>>,
-    total,
-    hasMore,
-    nextOffset: hasMore ? offset + limit : null,
-  };
+  const total =
+    dbc.select({ n: sql<number>`count(*)` }).from(schema.activityLogs).where(where).get()?.n ?? 0;
+  const items = dbc
+    .select({
+      id: schema.activityLogs.id,
+      actorId: schema.activityLogs.actorId,
+      actorName: schema.activityLogs.actorName,
+      entity: schema.activityLogs.entity,
+      action: schema.activityLogs.action,
+      entityId: schema.activityLogs.entityId,
+      label: schema.activityLogs.label,
+      metadata: schema.activityLogs.metadata,
+      createdAt: schema.activityLogs.createdAt,
+    })
+    .from(schema.activityLogs)
+    .where(where)
+    .orderBy(desc(schema.activityLogs.createdAt))
+    .limit(limit)
+    .offset(offset)
+    .all();
+  const hasMore = offset + items.length < total;
+  return { items, total, hasMore, nextOffset: hasMore ? offset + items.length : null };
 }
 
-export function listActivityActors(dbc: DB) {
+export function listActivityActors(dbc: AuditDb) {
   return dbc
     .select({
-      actorId: activityLogs.actorId,
-      actorName: activityLogs.actorName,
+      actorId: schema.activityLogs.actorId,
+      actorName: schema.activityLogs.actorName,
     })
-    .from(activityLogs)
-    .where(sql`${activityLogs.actorId} is not null`)
-    .groupBy(activityLogs.actorId, activityLogs.actorName)
-    .orderBy(sql`max(${activityLogs.createdAt}) desc`)
+    .from(schema.activityLogs)
+    .where(sql`${schema.activityLogs.actorId} is not null`)
+    .groupBy(schema.activityLogs.actorId)
     .all();
 }
