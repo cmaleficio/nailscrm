@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -77,6 +78,16 @@ export async function PATCH(
     .set({ name, price, durationMins, description, isActive, isGroup })
     .where(eq(schema.services.id, id))
     .run();
+
+  logActivity(db, {
+    entity: "services",
+    action: "update",
+    entityId: existing.id,
+    label: `Servicio actualizado: ${existing.name}`,
+    metadata: body,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({
     id,
@@ -153,6 +164,15 @@ export async function DELETE(
   }
 
   db.delete(schema.services).where(eq(schema.services.id, id)).run();
+
+  logActivity(db, {
+    entity: "services",
+    action: "delete",
+    entityId: service.id,
+    label: `Servicio eliminado: ${service.name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json({ success: true });
 }

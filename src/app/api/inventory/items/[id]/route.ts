@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, sql } from "drizzle-orm";
 import { hasPermission, canAdjustInventory } from "@/lib/authz";
 import { setExhausted, applyCostAdjustment } from "@/lib/inventory";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -61,6 +62,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     .set({ name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses })
     .where(eq(schema.inventoryItems.id, id))
     .run();
+  logActivity(db, {
+    entity: "inventory_items",
+    action: "update",
+    entityId: existing.id,
+    label: `Producto actualizado: ${existing.name}`,
+    metadata: body,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ ...existing, name, unit, minStock, isActive, notes, barcode, photoUrl, category, subcategory, maxUses, avgCost: body.avgCost !== undefined ? body.avgCost : existing.avgCost });
 }
 
@@ -90,5 +100,13 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     );
   }
   db.delete(schema.inventoryItems).where(eq(schema.inventoryItems.id, id)).run();
+  logActivity(db, {
+    entity: "inventory_items",
+    action: "delete",
+    entityId: item.id,
+    label: `Producto eliminado: ${item.name}`,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

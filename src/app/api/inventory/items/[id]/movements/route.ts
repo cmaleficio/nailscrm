@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq, desc } from "drizzle-orm";
 import { hasPermission, canAdjustInventory } from "@/lib/authz";
 import { applyManualMovement } from "@/lib/inventory";
+import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -44,6 +45,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   try {
     const result = applyManualMovement(id, kind, param, notes, adminId);
+    const movement = db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(eq(schema.inventoryMovements.inventoryItemId, id))
+      .orderBy(desc(schema.inventoryMovements.createdAt))
+      .get();
+    const item = db.select().from(schema.inventoryItems).where(eq(schema.inventoryItems.id, id)).get();
+    logActivity(db, {
+      entity: "inventory_movements",
+      action: "adjust",
+      entityId: movement?.id ?? null,
+      label: `Movimiento de inventario: ${movement?.kind === "in" ? "entrada" : movement?.kind === "out" ? "salida" : "ajuste"} de ${Math.abs(movement?.quantity ?? 0)} ${item?.name ?? ""}`,
+      metadata: { kind: movement?.kind, quantity: movement?.quantity, notes: movement?.notes },
+      actorId: session?.user?.id,
+      actorName: session?.user?.name ?? null,
+    });
     return NextResponse.json(result, { status: 201 });
   } catch (e) {
     return NextResponse.json(

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -60,5 +61,13 @@ export async function PUT(req: NextRequest) {
       })
       .run();
   }
+  logActivity(db, {
+    entity: "service_products",
+    action: "update",
+    label: "Uso de inventario por servicio actualizado",
+    metadata: body,
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json({ success: true });
 }

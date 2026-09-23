@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function DELETE(
   _req: NextRequest,
@@ -27,6 +28,15 @@ export async function DELETE(
   }
 
   db.delete(schema.galleryPhotos).where(eq(schema.galleryPhotos.id, id)).run();
+
+  logActivity(db, {
+    entity: "gallery_photos",
+    action: "delete",
+    entityId: row.id,
+    label: "Foto eliminada del muro",
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   if (row.url.startsWith("/uploads/gallery/")) {
     try {

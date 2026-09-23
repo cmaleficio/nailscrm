@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { desc, eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -83,6 +84,15 @@ export async function POST(req: NextRequest) {
     createdAt: Math.floor(Date.now() / 1000),
   };
   db.insert(schema.galleryPhotos).values(row).run();
+  logActivity(db, {
+    entity: "gallery_photos",
+    action: "create",
+    entityId: row.id,
+    label: "Foto subida al muro de inspiración",
+    metadata: { serviceId, caption: row.caption },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
 
   return NextResponse.json(row, { status: 201 });
 }

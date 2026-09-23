@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 export async function POST(
   req: NextRequest,
@@ -26,12 +27,20 @@ export async function POST(
     .select({ position: schema.servicePhotos.position })
     .from(schema.servicePhotos)
     .where(eq(schema.servicePhotos.serviceId, id))
-    .all();
+.all();
   let nextPos = existing.length ? Math.max(...existing.map((p) => p.position)) + 1 : 0;
   for (const url of urls) {
-    db.insert(schema.servicePhotos)
-      .values({ id: crypto.randomUUID(), serviceId: id, url, position: nextPos, createdAt: now })
-      .run();
+    const photo = { id: crypto.randomUUID(), serviceId: id, url, position: nextPos, createdAt: now };
+    db.insert(schema.servicePhotos).values(photo).run();
+    logActivity(db, {
+      entity: "service_photos",
+      action: "create",
+      entityId: photo.id,
+      label: "Foto agregada al servicio",
+      metadata: { serviceId: id, position: photo.position },
+      actorId: session?.user?.id,
+      actorName: session?.user?.name ?? null,
+    });
     nextPos += 1;
   }
   return NextResponse.json({ success: true });

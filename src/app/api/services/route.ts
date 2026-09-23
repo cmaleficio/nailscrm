@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { asc, eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
+import { logActivity } from "@/lib/audit";
 
 function withPhotos<T extends { id: string }>(rows: T[]) {
   const photos = db.select().from(schema.servicePhotos).all();
@@ -96,9 +97,17 @@ price,
     durationMins,
     isActive: body.isActive === false ? 0 : 1,
     isGroup: body.isGroup ? 1 : 0,
-  };
+};
 
   db.insert(schema.services).values(service).run();
-
+  logActivity(db, {
+    entity: "services",
+    action: "create",
+    entityId: service.id,
+    label: `Servicio creado: ${service.name}`,
+    metadata: { price: service.price, durationMins: service.durationMins, isGroup: service.isGroup },
+    actorId: session?.user?.id,
+    actorName: session?.user?.name ?? null,
+  });
   return NextResponse.json(service, { status: 201 });
 }
