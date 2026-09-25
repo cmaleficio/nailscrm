@@ -11,6 +11,8 @@ import { BlockoutDialog } from "@/components/BlockoutDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
 import { CompletedAppointmentDialog } from "@/components/CompletedAppointmentDialog";
+import { PhotoLightbox, usePhotoLightbox, type LightboxPhoto } from "@/components/PhotoLightbox";
+import { PhotoThumb } from "@/components/PhotoThumb";
 import { dateToDayStartTs } from "@/lib/time";
 
 type Appointment = {
@@ -99,12 +101,17 @@ export function DashboardContent({ today }: Props) {
       cancelledAt: number;
       clientName: string;
       actorRole: string;
+      referencePhotoUrls: string[];
     }[]
   >([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [summaryList, setSummaryList] = useState<Appointment[]>([]);
   const [summaryTotalRevenue, setSummaryTotalRevenue] = useState(0);
   const [pendingList, setPendingList] = useState<Appointment[]>([]);
+  const lightbox = usePhotoLightbox();
+
+  // Cada `AppointmentCard` solo tiene una foto de referencia: se abre sola.
+  const openPhoto = (photo: LightboxPhoto) => lightbox.open([photo], 0);
 
   const fetchAppointments = useCallback(async () => {
     const res = await fetch(`/api/appointments?date=${today}`);
@@ -394,6 +401,7 @@ export function DashboardContent({ today }: Props) {
                   onSelect={() => handleSelectAppointment(appt)}
                   onReschedule={() => setRescheduling(appt)}
                   onViewCompleted={() => setViewingCompleted(appt)}
+                  onOpenPhoto={openPhoto}
                 />
               ))}
             </div>
@@ -601,6 +609,7 @@ export function DashboardContent({ today }: Props) {
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3">Servicio</th>
+                    <th className="px-4 py-3">Fotos</th>
                     <th className="px-4 py-3">Precio</th>
                     <th className="px-4 py-3">Canceló</th>
                     <th className="px-4 py-3">Cuándo</th>
@@ -622,6 +631,24 @@ export function DashboardContent({ today }: Props) {
                         {c.clientName}
                       </td>
                       <td className="px-4 py-3 text-gray-700">{c.serviceName}</td>
+                      <td className="px-4 py-3">
+                        {c.referencePhotoUrls.length > 0 ? (
+                          <PhotoThumb
+                            photos={c.referencePhotoUrls.map((url, i) => ({
+                              id: `${c.id}-ref-${i}`,
+                              url,
+                              caption: `Referencia · ${c.serviceName} · ${c.clientName}`,
+                            }))}
+                            index={0}
+                            onOpen={lightbox.open}
+                            width={40}
+                            height={40}
+                            className="h-10 w-10"
+                          />
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">${c.servicePrice.toFixed(2)}</td>
                       <td className="px-4 py-3 text-gray-600">
                         {c.actorRole === "client" ? "Cliente" : "Admin"}
@@ -730,6 +757,7 @@ export function DashboardContent({ today }: Props) {
                 onSelect={() => handleSelectAppointment(appt)}
                 onReschedule={() => setRescheduling(appt)}
                 onViewCompleted={() => setViewingCompleted(appt)}
+                onOpenPhoto={openPhoto}
               />
             );
             return (
@@ -886,6 +914,8 @@ export function DashboardContent({ today }: Props) {
           onUpdated={refreshAll}
         />
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

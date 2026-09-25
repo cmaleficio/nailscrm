@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import type { LightboxPhoto } from "@/components/PhotoLightbox";
+import { PhotoThumb } from "@/components/PhotoThumb";
 
 type Props = {
   id: string;
@@ -17,6 +18,7 @@ type Props = {
   onSelect: (clientId: string) => void;
   onReschedule?: (id: string) => void;
   onViewCompleted?: (id: string) => void;
+  onOpenPhoto?: (photo: LightboxPhoto) => void;
 };
 
 export function AppointmentCard({
@@ -34,6 +36,7 @@ export function AppointmentCard({
   onSelect,
   onReschedule,
   onViewCompleted,
+  onOpenPhoto,
 }: Props) {
   const time = new Intl.DateTimeFormat("es-ES", {
     timeStyle: "short",
@@ -48,13 +51,20 @@ export function AppointmentCard({
         <p className="text-sm font-semibold text-gray-900">{time}</p>
       </div>
 
-      {referencePhotoUrl && (
-        <Image
-          src={referencePhotoUrl}
-          alt="Referencia"
+      {referencePhotoUrl && onOpenPhoto && (
+        <PhotoThumb
+          photos={[
+            {
+              id: `ref-${id}`,
+              url: referencePhotoUrl,
+              caption: `Referencia · ${serviceName} · ${clientName}`,
+            },
+          ]}
+          index={0}
+          onOpen={(photos, index) => onOpenPhoto(photos[index])}
           width={48}
           height={48}
-          className="h-12 w-12 rounded-lg object-cover"
+          className="h-12 w-12 shrink-0"
         />
       )}
 

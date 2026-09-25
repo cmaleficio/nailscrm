@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       rate: schema.supplierPayments.rate,
       paymentDate: schema.supplierPayments.paymentDate,
       reference: schema.supplierPayments.reference,
+      photoUrl: schema.supplierPayments.photoUrl,
       notes: schema.supplierPayments.notes,
       createdAt: schema.supplierPayments.createdAt,
     })

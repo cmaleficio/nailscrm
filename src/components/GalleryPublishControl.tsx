@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 
 type FinalPhoto = {
   id: string;
@@ -12,13 +13,20 @@ type FinalPhoto = {
 
 type Props = {
   appointmentId: string;
+  clientName?: string;
+  serviceName?: string;
   onChange?: () => void;
 };
 
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-main focus:outline-none";
 
-export function GalleryPublishControl({ appointmentId, onChange }: Props) {
+export function GalleryPublishControl({
+  appointmentId,
+  clientName,
+  serviceName,
+  onChange,
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<FinalPhoto[]>([]);
   const [shared, setShared] = useState(false);
@@ -26,6 +34,18 @@ export function GalleryPublishControl({ appointmentId, onChange }: Props) {
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const lightbox = usePhotoLightbox();
+
+  const lightboxPhotos = photos.map((p) => ({
+    id: p.id,
+    url: p.url,
+    caption: [
+      serviceName,
+      clientName ? `modelo de ${clientName}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -159,19 +179,27 @@ export function GalleryPublishControl({ appointmentId, onChange }: Props) {
 
       {photos.length > 0 ? (
         <div className="mb-3 flex flex-wrap gap-2">
-          {photos.map((p) => (
+          {photos.map((p, index) => (
             <div key={p.id} className="relative">
-              <Image
-                src={p.url}
-                alt="Foto final"
-                width={64}
-                height={64}
-                className="h-16 w-16 rounded-lg object-cover"
-              />
+              <button
+                type="button"
+                onClick={() => lightbox.open(lightboxPhotos, index)}
+                aria-label="Ampliar foto final"
+                className="block cursor-zoom-in"
+              >
+                <Image
+                  src={p.url}
+                  alt="Foto final"
+                  width={64}
+                  height={64}
+                  className="h-16 w-16 rounded-lg object-cover"
+                />
+              </button>
               <button
                 type="button"
                 onClick={() => handleDelete(p.id)}
                 disabled={deletingId === p.id}
+                aria-label="Eliminar foto final"
                 className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-xs text-white disabled:opacity-50"
               >
                 ×
@@ -200,6 +228,8 @@ export function GalleryPublishControl({ appointmentId, onChange }: Props) {
           {error}
         </p>
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

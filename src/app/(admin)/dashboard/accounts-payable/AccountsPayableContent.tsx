@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { todayStr, dateToDayStartTs } from "@/lib/time";
 import { SupplierPaymentDialog } from "@/components/SupplierPaymentDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 
 type Bill = {
   id: string;
@@ -37,6 +38,7 @@ type Payment = {
   rate: number | null;
   paymentDate: number;
   reference: string;
+  photoUrl: string | null;
   notes: string | null;
 };
 
@@ -66,6 +68,7 @@ export function AccountsPayableContent() {
   const [deletingBank, setDeletingBank] = useState<BankAccount | null>(null);
   const [confirmError, setConfirmError] = useState("");
   const [bankBusy, setBankBusy] = useState(false);
+  const lightbox = usePhotoLightbox();
 
   const [bankForm, setBankForm] = useState<{
     id: string | null;
@@ -277,8 +280,31 @@ export function AccountsPayableContent() {
           ) : (
             <div className="space-y-2">
               {payments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                  <div>
+                <div key={p.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                  {p.photoUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        lightbox.open([
+                          {
+                            id: p.id,
+                            url: p.photoUrl!,
+                            caption: `Pago a ${p.supplierName ?? "proveedor"} · ${fmtDate(p.paymentDate)}`,
+                          },
+                        ])
+                      }
+                      aria-label="Ampliar captura del pago"
+                      className="shrink-0 cursor-zoom-in"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.photoUrl}
+                        alt="Captura del pago"
+                        className="h-12 w-12 rounded-lg object-cover"
+                      />
+                    </button>
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900">
                       {p.supplierName ?? "Sin proveedor"} {p.invoiceNumber && `· ${p.invoiceNumber}`}
                     </p>
@@ -290,7 +316,7 @@ export function AccountsPayableContent() {
                   </div>
                   <button
                     onClick={() => setDeletingPayment(p)}
-                    className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                    className="shrink-0 rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
                   >
                     Eliminar
                   </button>
@@ -457,6 +483,8 @@ export function AccountsPayableContent() {
           }}
         />
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 
 type ServiceCardProps = {
   id: string;
@@ -22,7 +23,9 @@ export function ServiceCard({
   photos,
 }: ServiceCardProps) {
   const [index, setIndex] = useState(0);
-  const photo = photos.length > 0 ? photos[Math.min(index, photos.length - 1)] : null;
+  const lightbox = usePhotoLightbox();
+  const current = Math.min(index, photos.length - 1);
+  const photo = photos.length > 0 ? photos[current] : null;
   const prev = () => setIndex((i) => (i - 1 + photos.length) % photos.length);
   const next = () => setIndex((i) => (i + 1) % photos.length);
 
@@ -31,7 +34,17 @@ export function ServiceCard({
       <div className="relative overflow-hidden rounded-xl bg-gray-soft">
         {photo ? (
           <>
-            <div className="relative h-36">
+            <button
+              type="button"
+              onClick={() =>
+                lightbox.open(
+                  photos.map((p) => ({ id: p.id, url: p.url, caption: name })),
+                  current
+                )
+              }
+              aria-label={`Ampliar foto de ${name}`}
+              className="relative h-36 w-full cursor-zoom-in"
+            >
               <Image
                 fill
                 sizes="(max-width: 640px) 100vw, 33vw"
@@ -39,11 +52,12 @@ export function ServiceCard({
                 alt={name}
                 className="object-cover"
               />
-            </div>
+            </button>
             {photos.length > 1 && (
               <>
                 <button
                   onClick={prev}
+                  aria-label="Foto anterior"
                   className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-1 hover:bg-white transition-colors"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -52,6 +66,7 @@ export function ServiceCard({
                 </button>
                 <button
                   onClick={next}
+                  aria-label="Foto siguiente"
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-1 hover:bg-white transition-colors"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -88,6 +103,8 @@ export function ServiceCard({
       >
         Agendar
       </Link>
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

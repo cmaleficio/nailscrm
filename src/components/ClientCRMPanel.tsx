@@ -2,9 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
+
+type PhotoGroup = {
+  appointmentId: string;
+  serviceName: string;
+  startTime: number | null;
+  photos: { id: string; url: string }[];
+};
 
 type ClientData = {
   id: string;
@@ -16,6 +24,7 @@ type ClientData = {
   totalRevenue: number | null;
   email: string;
   balanceUsd: number;
+  photoGroups: PhotoGroup[];
   payments: {
     id: string;
     amountUsd: number;
@@ -63,8 +72,8 @@ export function ClientCRMPanel({
   const [purchaseSaving, setPurchaseSaving] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState("");
-  const [photos, setPhotos] = useState<{ id: string; url: string }[]>([]);
-  const [contact, setContact] = useState({ name: "", phone: "", address: "" });
+  const [photoAppointmentId, setPhotoAppointmentId] = useState<string | null>(null);
+  const [contact, setContact] = useState({ name: "", phone: "", address: "", email: "" });
   const [editingContact, setEditingContact] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -72,16 +81,16 @@ export function ClientCRMPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const lightbox = usePhotoLightbox();
 
-  useEffect(() => {
-    if (!appointmentId) return;
-    fetch(`/api/appointments/${appointmentId}/photos`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setPhotos(data);
-      })
-      .catch(() => {});
-  }, [appointmentId]);
+  // Cuando el panel se abre desde la agenda se sabe la cita; desde
+  // /dashboard/clients se ofrece la más reciente y el admin puede cambiar.
+  const photoGroups = client?.photoGroups ?? [];
+  const photoGroup =
+    photoGroups.find((g) => g.appointmentId === photoAppointmentId) ??
+    photoGroups.find((g) => g.appointmentId === appointmentId) ??
+    photoGroups[0] ??
+    null;
 
   useEffect(() => {
     fetch(`/api/clients/${clientId}`)
@@ -93,6 +102,7 @@ export function ClientCRMPanel({
           name: data.name ?? "",
           phone: data.phone ?? "",
           address: data.address ?? "",
+          email: data.email ?? "",
         });
       });
   }, [clientId]);
@@ -191,10 +201,11 @@ export function ClientCRMPanel({
           name: contact.name,
           phone: contact.phone,
           address: contact.address,
+          email: contact.email,
         }),
       });
       if (!res.ok) throw new Error("No se pudo guardar");
-      setClient({ ...client, name: contact.name, phone: contact.phone, address: contact.address });
+      setClient({ ...client, name: contact.name, phone: contact.phone, address: contact.address, email: contact.email });
       setEditingContact(false);
     } catch {
       setEditingContact(false);
@@ -248,7 +259,55 @@ export function ClientCRMPanel({
           </button>
         </div>
 
-        <PhotoCarousel photos={photos} />
+        {photoGroup && photoGroup.photos.length > 0 && (
+          <>
+            <PhotoCarousel
+              // La key reinicia el índice interno del carrusel al cambiar de cita.
+              key={photoGroup.appointmentId}
+              photos={photoGroup.photos.map((p) => ({
+                id: p.id,
+                url: p.url,
+                caption: `${photoGroup.serviceName}${
+                  photoGroup.startTime
+                    ? ` · ${new Intl.DateTimeFormat("es-ES", {
+                        dateStyle: "long",
+                        timeZone: "America/Caracas",
+                      }).format(new Date(photoGroup.startTime * 1000))}`
+                    : ""
+                }`,
+              }))}
+              onOpen={lightbox.open}
+            />
+            {photoGroups.length > 1 && (
+              <div className="-mt-3 mb-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Modelos de otra visita
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {photoGroups.map((g) => (
+                    <button
+                      key={g.appointmentId}
+                      type="button"
+                      onClick={() => setPhotoAppointmentId(g.appointmentId)}
+                      className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
+                        g.appointmentId === photoGroup.appointmentId
+                          ? "bg-pink-main text-gray-900"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {g.startTime
+                        ? new Intl.DateTimeFormat("es-ES", {
+                            dateStyle: "short",
+                            timeZone: "America/Caracas",
+                          }).format(new Date(g.startTime * 1000))
+                        : g.serviceName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         <div className="mb-6 flex gap-4">
           <div className="flex-1 rounded-xl bg-pink-light p-3 text-center">
@@ -318,8 +377,9 @@ export function ClientCRMPanel({
             <div className="mt-2 space-y-1 text-sm text-gray-700">
               <p className="font-medium text-gray-900">{contact.name}</p>
               {contact.phone && <p>{contact.phone}</p>}
+              {contact.email && <p className="text-gray-500">{contact.email}</p>}
               {contact.address && <p className="text-gray-500">{contact.address}</p>}
-              {!contact.phone && !contact.address && (
+              {!contact.phone && !contact.email && !contact.address && (
                 <p className="text-gray-400">Sin datos de contacto</p>
               )}
             </div>
@@ -335,6 +395,13 @@ export function ClientCRMPanel({
                 value={contact.phone}
                 onChange={(e) => setContact({ ...contact, phone: e.target.value })}
                 placeholder="Teléfono"
+                className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
+              />
+              <input
+                type="email"
+                value={contact.email}
+                onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                placeholder="Correo electrónico"
                 className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
               />
               <input
@@ -556,7 +623,7 @@ export function ClientCRMPanel({
               .then((data) => {
                 setClient(data);
                 setTechNotes(data.techNotes || "");
-                setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "" });
+                setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "", email: data.email ?? "" });
               });
           }}
         />
@@ -574,7 +641,7 @@ export function ClientCRMPanel({
               .then((data) => {
                 setClient(data);
                 setTechNotes(data.techNotes || "");
-                setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "" });
+                setContact({ name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "", email: data.email ?? "" });
               });
           }}
         />
@@ -593,6 +660,8 @@ export function ClientCRMPanel({
         />
       )}
       </div>
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

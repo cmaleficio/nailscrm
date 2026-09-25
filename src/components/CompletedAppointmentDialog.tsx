@@ -38,6 +38,8 @@ export function CompletedAppointmentDialog({
         <div className="mt-5">
           <GalleryPublishControl
             appointmentId={appointmentId}
+            clientName={clientName}
+            serviceName={serviceName}
             onChange={onUpdated}
           />
         </div>

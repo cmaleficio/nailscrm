@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { StatsBanner } from "@/components/StatsBanner";
 import { ReportPaymentDialog } from "@/components/ReportPaymentDialog";
+import { PhotoCarousel } from "@/components/PhotoCarousel";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
+import { PhotoThumb } from "@/components/PhotoThumb";
 
 type ProfileUser = {
   name: string;
@@ -17,6 +20,8 @@ type ProfileUser = {
   totalRevenue: number;
 };
 
+type Photo = { id: string; url: string };
+
 type Appointment = {
   id: string;
   startTime: number;
@@ -24,6 +29,8 @@ type Appointment = {
   reviewRating: number | null;
   reviewText: string | null;
   serviceName: string;
+  /** Todas las fotos finales que subió el admin, no solo la primera. */
+  photos: Photo[];
 };
 
 type UpcomingAppointment = {
@@ -70,6 +77,16 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
   const [cancelError, setCancelError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const lightbox = usePhotoLightbox();
+
+  const longDate = useCallback(
+    (ts: number) =>
+      new Intl.DateTimeFormat("es-ES", {
+        dateStyle: "long",
+        timeZone: "America/Caracas",
+      }).format(new Date(ts * 1000)),
+    []
+  );
 
   const loadReceipts = useCallback(() => {
     fetch("/api/payment-receipts")
@@ -171,12 +188,19 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
                 className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
               >
                 {appt.referencePhotoUrl && (
-                  <Image
-                    src={appt.referencePhotoUrl}
-                    alt="Referencia"
+                  <PhotoThumb
+                    photos={[
+                      {
+                        id: `ref-${appt.id}`,
+                        url: appt.referencePhotoUrl,
+                        caption: `Referencia · ${appt.serviceName} · ${longDate(appt.startTime)}`,
+                      },
+                    ]}
+                    index={0}
+                    onOpen={lightbox.open}
                     width={48}
                     height={48}
-                    className="h-12 w-12 rounded-lg object-cover"
+                    className="h-12 w-12 shrink-0"
                   />
                 )}
                 <div className="flex-1 min-w-0">
@@ -323,8 +347,20 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
             {receipts.map((r) => (
               <div key={r.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
                 {r.photoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.photoUrl} alt="Captura" className="h-12 w-12 rounded-lg object-cover" />
+                  <PhotoThumb
+                    photos={[
+                      {
+                        id: r.id,
+                        url: r.photoUrl,
+                        caption: `Captura de pago · ${r.amountVes.toFixed(2)} Bs`,
+                      },
+                    ]}
+                    index={0}
+                    onOpen={lightbox.open}
+                    width={48}
+                    height={48}
+                    className="h-12 w-12 shrink-0"
+                  />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900">
@@ -390,26 +426,23 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
 
                 {/* Content */}
                 <div className="flex-1 rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="text-sm text-gray-500">
-                    {new Intl.DateTimeFormat("es-ES", {
-                      dateStyle: "long",
-                      timeZone: "America/Caracas",
-                    }).format(new Date(appt.startTime * 1000))}
-                  </p>
+                  <p className="text-sm text-gray-500">{longDate(appt.startTime)}</p>
                   <p className="mt-1 font-medium text-gray-900">
                     {appt.serviceName}
                   </p>
 
-                  {appt.finalPhotoUrl && (
-                    <div className="relative mt-3 aspect-[4/3] w-full max-h-48 overflow-hidden rounded-lg">
-                      <Image
-                        fill
-                        sizes="(max-width: 640px) 100vw, 512px"
-                        src={appt.finalPhotoUrl}
-                        alt="Resultado final"
-                        className="object-cover"
-                      />
-                    </div>
+                  {appt.photos.length > 0 && (
+                    <PhotoCarousel
+                      title="Tus uñas"
+                      photos={appt.photos.map((p) => ({
+                        id: p.id,
+                        url: p.url,
+                        caption: `${appt.serviceName} · ${longDate(appt.startTime)}`,
+                      }))}
+                      frameClassName="aspect-[4/3] w-full max-h-48"
+                      sizes="(max-width: 640px) 100vw, 512px"
+                      onOpen={lightbox.open}
+                    />
                   )}
 
                   {appt.reviewRating && (
@@ -469,6 +502,8 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
           }}
         />
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

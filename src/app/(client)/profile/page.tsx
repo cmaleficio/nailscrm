@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db/index";
-import { eq, and, gte, ne, sql } from "drizzle-orm";
+import { eq, and, gte, inArray, ne, sql } from "drizzle-orm";
 import { ProfileContent } from "./ProfileContent";
 
 export default async function ProfilePage() {
@@ -80,8 +80,35 @@ export default async function ProfilePage() {
     .orderBy(schema.appointments.startTime)
     .all();
 
-  const due = db
-    .select({ s: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)` })
+  // Todas las fotos finales de esas visitas, no solo appointments.final_photo_url
+  // (que es únicamente la primera). El admin sube varias al completar la cita.
+  const completedIds = completedAppointments.map((a) => a.id);
+  const finalPhotos = completedIds.length
+    ? db
+        .select({
+          appointmentId: schema.appointmentPhotos.appointmentId,
+          id: schema.appointmentPhotos.id,
+          url: schema.appointmentPhotos.url,
+        })
+        .from(schema.appointmentPhotos)
+        .where(
+          and(
+            inArray(schema.appointmentPhotos.appointmentId, completedIds),
+            eq(schema.appointmentPhotos.kind, "final")
+          )
+        )
+        .orderBy(schema.appointmentPhotos.position)
+        .all()
+    : [];
+
+  const photosByAppointment = new Map<string, { id: string; url: string }[]>();
+  for (const photo of finalPhotos) {
+    const list = photosByAppointment.get(photo.appointmentId) ?? [];
+    list.push({ id: photo.id, url: photo.url });
+    photosByAppointment.set(photo.appointmentId, list);
+  }
+
+  const due = db    .select({ s: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)` })
     .from(schema.servicePurchases)
     .where(and(eq(schema.servicePurchases.userId, user.id), ne(schema.servicePurchases.financialStatus, "void")))
     .get()?.s ?? 0;
@@ -135,6 +162,9 @@ export default async function ProfilePage() {
         reviewRating: a.reviewRating,
         reviewText: a.reviewText,
         serviceName: a.serviceName,
+        photos: photosByAppointment.get(a.id) ??
+          // Citas antiguas completadas antes de que existiera appointment_photos
+          (a.finalPhotoUrl ? [{ id: `${a.id}-final`, url: a.finalPhotoUrl }] : []),
       }))}
       balanceUsd={balanceUsd}
       statementItems={statementItems.map((s) => ({

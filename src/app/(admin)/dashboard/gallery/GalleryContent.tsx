@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 
 type GalleryPhoto = {
   id: string;
@@ -29,6 +30,17 @@ export function GalleryContent() {
   const [deleting, setDeleting] = useState<GalleryPhoto | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const lightbox = usePhotoLightbox();
+
+  const lightboxPhotos = useMemo(
+    () =>
+      photos.map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+        caption: photo.caption ?? photo.serviceName,
+      })),
+    [photos]
+  );
 
   const fetchPhotos = useCallback(async () => {
     const res = await fetch("/api/gallery-photos");
@@ -173,12 +185,16 @@ export function GalleryContent() {
 
       {/* Grid de fotos */}
       <div className="columns-2 gap-3 sm:columns-3">
-        {photos.map((photo) => (
+        {photos.map((photo, index) => (
           <div
             key={photo.id}
             className="mb-3 break-inside-avoid overflow-hidden rounded-xl border border-gray-200 bg-white"
           >
-            <div className="relative aspect-square">
+            <button
+              type="button"
+              onClick={() => lightbox.open(lightboxPhotos, index)}
+              className="relative block aspect-square w-full cursor-zoom-in"
+            >
               <Image
                 fill
                 sizes="(max-width: 640px) 50vw, 33vw"
@@ -186,7 +202,7 @@ export function GalleryContent() {
                 alt={photo.caption ?? photo.serviceName ?? "Inspiración de uñas"}
                 className="object-cover"
               />
-            </div>
+            </button>
             <div className="flex items-center justify-between gap-2 p-2">
               <p className="min-w-0 truncate text-xs text-gray-500">
                 {photo.serviceName ?? photo.caption ?? "Sin servicio"}
@@ -224,6 +240,8 @@ export function GalleryContent() {
           onClose={() => setDeleting(null)}
         />
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

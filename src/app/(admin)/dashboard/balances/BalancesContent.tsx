@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 
 type BalanceItem = {
   id: string;
@@ -59,6 +60,7 @@ export function BalancesContent() {
   const [tab, setTab] = useState<"balances" | "receipts">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [receiptFilter, setReceiptFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const lightbox = usePhotoLightbox();
   const [searchTerm, setSearchTerm] = useState("");
 
   const loadBalances = useCallback(async () => {
@@ -370,8 +372,23 @@ export function BalancesContent() {
               {receipts.map((r) => (
                 <div key={r.id} className="flex items-start gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                   {r.photoUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.photoUrl} alt="Captura" className="h-16 w-16 rounded-lg object-cover" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        lightbox.open([
+                          {
+                            id: r.id,
+                            url: r.photoUrl,
+                            caption: `Captura de pago · ${r.clientName ?? "Cliente"} · ${fmtDate(r.createdAt)}`,
+                          },
+                        ])
+                      }
+                      aria-label="Ampliar captura de pago"
+                      className="shrink-0 cursor-zoom-in"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={r.photoUrl} alt="Captura" className="h-16 w-16 rounded-lg object-cover" />
+                    </button>
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900">{r.clientName ?? "Cliente"}</p>
@@ -437,6 +454,8 @@ export function BalancesContent() {
           }}
         />
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }

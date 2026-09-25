@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 
 type Service = {
   id: string;
@@ -44,6 +45,7 @@ export function ServicesContent() {
   const [deleting, setDeleting] = useState<Service | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const lightbox = usePhotoLightbox();
 
   const fetchServices = useCallback(async () => {
     const res = await fetch("/api/services?includeInactive=1");
@@ -506,19 +508,36 @@ export function ServicesContent() {
                 </p>
                 {service.photos.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {service.photos.map((photo) => (
+                    {service.photos.map((photo, index) => (
                       <div key={photo.id} className="relative">
-                        <Image
-                          src={photo.url}
-                          alt={service.name}
-                          width={64}
-                          height={64}
-                          className="h-16 w-16 rounded-lg object-cover"
-                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            lightbox.open(
+                              service.photos.map((p) => ({
+                                id: p.id,
+                                url: p.url,
+                                caption: service.name,
+                              })),
+                              index
+                            )
+                          }
+                          aria-label={`Ampliar foto de ${service.name}`}
+                          className="block cursor-zoom-in"
+                        >
+                          <Image
+                            src={photo.url}
+                            alt={service.name}
+                            width={64}
+                            height={64}
+                            className="h-16 w-16 rounded-lg object-cover"
+                          />
+                        </button>
                         <button
                           onClick={() =>
                             handleDeletePhoto(service.id, photo.id)
                           }
+                          aria-label="Eliminar foto"
                           className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-xs text-white"
                         >
                           ×
@@ -562,6 +581,8 @@ export function ServicesContent() {
           onClose={() => setDeleting(null)}
         />
       )}
+
+      <PhotoLightbox {...lightbox} />
     </div>
   );
 }
