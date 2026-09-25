@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, and, sql, isNull, or } from "drizzle-orm";
+import { eq, and, sql, isNull, or, ne } from "drizzle-orm";
 import { hasAnyPermission } from "@/lib/authz";
 import { logActivity } from "@/lib/audit";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function PATCH(
   req: NextRequest,
@@ -16,11 +18,37 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
+
+  let email: string | undefined;
+  if (body.email !== undefined) {
+    email = String(body.email).trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      return NextResponse.json(
+        { error: "Correo electrónico inválido" },
+        { status: 400 }
+      );
+    }
+    // PastelSalón nunca genera emails sintéticos @local para clientes normales;
+    // pero si el cliente ya tiene uno, se sobrescribe al editar.
+    const duplicate = db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(and(eq(schema.users.email, email), ne(schema.users.id, id)))
+      .get();
+    if (duplicate) {
+      return NextResponse.json(
+        { error: "Ya existe otro cliente con ese correo" },
+        { status: 409 }
+      );
+    }
+  }
+
   const update: Partial<typeof schema.users.$inferSelect> = {};
   if (body.name !== undefined) update.name = body.name;
   if (body.phone !== undefined) update.phone = body.phone;
   if (body.address !== undefined) update.address = body.address;
   if (body.techNotes !== undefined) update.techNotes = body.techNotes;
+  if (email !== undefined) update.email = email;
 
   if (Object.keys(update).length > 0) {
     db.update(schema.users).set(update).where(eq(schema.users.id, id)).run();
@@ -100,10 +128,55 @@ export async function GET(
     .limit(10)
     .all();
 
+  // Fotos de referencia agrupadas por cita. Así el CRM funciona igual abierto
+  // desde la agenda (donde se sabe la cita) como desde /dashboard/clients
+  // (donde el admin tiene que elegir de qué visita quiere ver los modelos).
+  const photoRows = db
+    .select({
+      appointmentId: schema.appointmentPhotos.appointmentId,
+      photoId: schema.appointmentPhotos.id,
+      url: schema.appointmentPhotos.url,
+      startTime: schema.appointments.startTime,
+      serviceName: schema.services.name,
+    })
+    .from(schema.appointmentPhotos)
+    .innerJoin(
+      schema.appointments,
+      eq(schema.appointmentPhotos.appointmentId, schema.appointments.id)
+    )
+    .innerJoin(
+      schema.services,
+      eq(schema.appointments.serviceId, schema.services.id)
+    )
+    .where(
+      and(
+        eq(schema.appointments.clientId, id),
+        eq(schema.appointmentPhotos.kind, "reference")
+      )
+    )
+    .orderBy(sql`${schema.appointments.startTime} DESC`, schema.appointmentPhotos.position)
+    .all();
+
+  const photoGroups = new Map<
+    string,
+    { appointmentId: string; serviceName: string; startTime: number | null; photos: { id: string; url: string }[] }
+  >();
+  for (const row of photoRows) {
+    const group = photoGroups.get(row.appointmentId) ?? {
+      appointmentId: row.appointmentId,
+      serviceName: row.serviceName,
+      startTime: row.startTime,
+      photos: [],
+    };
+    group.photos.push({ id: row.photoId, url: row.url });
+    photoGroups.set(row.appointmentId, group);
+  }
+
   return NextResponse.json({
     ...client,
     balanceUsd: Math.round(((dueRow?.due ?? 0) - (paidRow?.paid ?? 0)) * 100) / 100,
     payments,
+    photoGroups: [...photoGroups.values()],
   });
 }
 
