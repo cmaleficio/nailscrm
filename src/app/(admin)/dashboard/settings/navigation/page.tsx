@@ -5,6 +5,6 @@ import { NavEditorContent } from "./NavEditorContent";
 
 export default async function NavEditorPage() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) redirect("/");
+  if (!(await hasPermission(session, "navigation"))) redirect("/");
   return <NavEditorContent />;
 }

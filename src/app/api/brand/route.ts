@@ -41,7 +41,7 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "brandSettings"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

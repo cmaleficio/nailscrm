@@ -5,6 +5,6 @@ import { BrandContent } from "./BrandContent";
 
 export default async function BrandPage() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) redirect("/");
+  if (!(await hasPermission(session, "brandSettings"))) redirect("/");
   return <BrandContent />;
 }

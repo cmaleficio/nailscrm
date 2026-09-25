@@ -20,7 +20,11 @@ const TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, i) => {
 const inputCls =
   "rounded-xl border border-gray-200 px-2 py-1.5 text-sm focus:border-pink-main focus:outline-none";
 
-export function SettingsContent() {
+export function SettingsContent({
+  canManageNavigation = false,
+}: {
+  canManageNavigation?: boolean;
+}) {
   const [hours, setHours] = useState<Day[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -70,12 +74,14 @@ export function SettingsContent() {
           <h1 className="text-2xl font-bold text-gray-900">Configuración</h1>
           <p className="text-sm text-gray-500">Horario de trabajo por día de la semana</p>
         </div>
-        <a
-          href="/dashboard/settings/navigation"
-          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
-          Menú de navegación
-        </a>
+        {canManageNavigation && (
+          <a
+            href="/dashboard/settings/navigation"
+            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Menú de navegación
+          </a>
+        )}
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">

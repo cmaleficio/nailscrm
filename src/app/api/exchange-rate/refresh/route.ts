@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { auth } from "@/lib/auth";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 import { refreshTodayRate } from "@/lib/bcv";
 
 function isValidSecret(provided: string | null): boolean {
@@ -14,7 +14,7 @@ function isValidSecret(provided: string | null): boolean {
 
 export async function GET(request: Request) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "exchangeRates"))) {
     const url = new URL(request.url);
     const header = request.headers.get("authorization");
     const bearer = header?.startsWith("Bearer ") ? header.slice(7) : null;

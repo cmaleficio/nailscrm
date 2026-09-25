@@ -7,7 +7,7 @@ import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "navigation"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -31,7 +31,7 @@ type ItemBody = {
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "navigation"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

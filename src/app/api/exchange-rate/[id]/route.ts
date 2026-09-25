@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { logActivity } from "@/lib/audit";
@@ -10,7 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "exchangeRates"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const { id } = await params;

@@ -5,6 +5,7 @@ import { SettingsContent } from "./SettingsContent";
 
 export default async function SettingsPage() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) redirect("/");
-  return <SettingsContent />;
+  if (!(await hasPermission(session, "workingHours"))) redirect("/");
+  const canManageNavigation = await hasPermission(session, "navigation");
+  return <SettingsContent canManageNavigation={canManageNavigation} />;
 }

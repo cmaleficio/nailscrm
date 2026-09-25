@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { isSuperAdmin } from "@/lib/authz";
+import { expandLegacyPermissions, isPermissionKey } from "@/lib/permissions";
 import { logActivity } from "@/lib/audit";
 
 export async function GET() {
@@ -27,7 +28,9 @@ export async function GET() {
     let permissions: string[] | null = null;
     try {
       const parsed = a.permissions ? JSON.parse(a.permissions) : null;
-      permissions = Array.isArray(parsed) ? parsed : null;
+      permissions = Array.isArray(parsed) && parsed.every(isPermissionKey)
+        ? expandLegacyPermissions(parsed)
+        : null;
     } catch {
       permissions = null;
     }
@@ -138,10 +141,10 @@ export async function PATCH(req: NextRequest) {
       { status: 403 }
     );
   }
-  const valid = Array.isArray(permissions) && permissions.every((p: unknown) => typeof p === "string");
-  if (!valid) {
-    return NextResponse.json({ error: "permissions debe ser un array de strings" }, { status: 400 });
+  if (!Array.isArray(permissions) || !permissions.every(isPermissionKey)) {
+    return NextResponse.json({ error: "permissions contiene un permiso no válido" }, { status: 400 });
   }
+  const normalizedPermissions = expandLegacyPermissions(permissions);
   const admin = db
     .select({ id: schema.users.id, email: schema.users.email })
     .from(schema.users)
@@ -152,7 +155,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "No existe un usuario con ese email" }, { status: 404 });
   }
   db.update(schema.users)
-    .set({ permissions: JSON.stringify(permissions) })
+    .set({ permissions: JSON.stringify(normalizedPermissions) })
     .where(eq(schema.users.email, email))
     .run();
   logActivity(db, {
@@ -160,7 +163,7 @@ export async function PATCH(req: NextRequest) {
     action: "update",
     entityId: admin.id,
     label: `Permisos de admin actualizados: ${admin.email}`,
-    metadata: { permissions },
+    metadata: { permissions: normalizedPermissions },
     actorId: session?.user?.id,
     actorName: session?.user?.name ?? null,
   });

@@ -8,7 +8,7 @@ import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "workingHours"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   return NextResponse.json(getWorkingHoursAll());
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "workingHours"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();

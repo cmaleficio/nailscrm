@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type NavItem = {
   id: string;
@@ -117,12 +118,12 @@ export function NavEditorContent() {
             Enlaces visibles en la barra superior (escritorio)
           </p>
         </div>
-        <a
-          href="/dashboard/settings"
+        <Link
+          href="/"
           className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
         >
-          ← Configuración
-        </a>
+          ← Inicio
+        </Link>
       </div>
 
       <div className="space-y-3">

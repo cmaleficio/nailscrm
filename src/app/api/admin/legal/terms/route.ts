@@ -37,7 +37,7 @@ function optStr(v: unknown): string | null {
 
 export async function GET() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "legalSettings"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const row = db
@@ -67,7 +67,7 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) {
+  if (!(await hasPermission(session, "legalSettings"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { isAdmin } from "@/lib/authz";
+import { hasPermission } from "@/lib/authz";
 import { db, schema } from "@/db/index";
 import { sql } from "drizzle-orm";
 import { logActivity } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "exchangeRates"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const rows = db
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!(await isAdmin(session))) {
+  if (!(await hasPermission(session, "exchangeRates"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   try {

@@ -5,6 +5,6 @@ import { ExchangeRatesContent } from "./ExchangeRatesContent";
 
 export default async function ExchangeRatesPage() {
   const session = await auth();
-  if (!(await hasPermission(session, "settings"))) redirect("/");
+  if (!(await hasPermission(session, "exchangeRates"))) redirect("/");
   return <ExchangeRatesContent />;
 }
