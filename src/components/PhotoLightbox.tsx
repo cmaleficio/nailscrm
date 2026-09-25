@@ -88,7 +88,11 @@ export function PhotoLightbox({ photos, index, onIndexChange, onClose, footer }:
   useEffect(() => setOrigin(window.location.origin), []);
 
   // El viewport del visor es el espacio disponible: la superficie menos la barra superior.
+  // La dependencia es `active` y no `[]`: al montar el visor todavía no hay foto, el
+  // `return null` de abajo impide que exista la superficie y el efecto abortaría con
+  // `surfaceRef.current === null`, dejando el viewport en 0x0 y la imagen sin tamaño.
   useEffect(() => {
+    if (!active) return;
     const node = surfaceRef.current;
     if (!node) return;
     const measure = () => setViewport({ w: node.clientWidth, h: node.clientHeight });
@@ -96,7 +100,7 @@ export function PhotoLightbox({ photos, index, onIndexChange, onClose, footer }:
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [active]);
 
   // Cambiar de foto reinicia el zoom y el desplazamiento.
   useEffect(() => {
