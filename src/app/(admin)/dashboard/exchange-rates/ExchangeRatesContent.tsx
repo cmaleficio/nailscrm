@@ -23,6 +23,8 @@ export function ExchangeRatesContent() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/exchange-rate")
@@ -85,6 +87,34 @@ export function ExchangeRatesContent() {
     }
   }
 
+  async function runBackfill() {
+    if (!confirm("¿Rellenar las tasas BCV faltantes desde el historial? Esto puede tardar un momento.")) return;
+    setBackfilling(true);
+    setBackfillMsg("");
+    setError("");
+    try {
+      const res = await fetch("/api/exchange-rate/backfill");
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "No se pudo rellenar las tasas");
+      }
+      const d = await res.json();
+      const inserted = d.inserted ?? 0;
+      const scanned = d.scanned ?? 0;
+      setBackfillMsg(
+        inserted > 0
+          ? `Listo: se insertaron ${inserted} tasas faltantes de ${scanned} revisadas.`
+          : `Sin tasas faltantes (${scanned} revisadas).`
+      );
+      const data = await fetch("/api/exchange-rate").then((r) => r.json());
+      setRows(data.rows ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al rellenar tasas");
+    } finally {
+      setBackfilling(false);
+    }
+  }
+
   const sortedRows = [...rows].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
@@ -92,6 +122,18 @@ export function ExchangeRatesContent() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Tasas BCV</h1>
         <p className="text-sm text-gray-500">Tasa del día y gestión de fechas anteriores</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            onClick={runBackfill}
+            disabled={backfilling}
+            className="rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50 transition-colors"
+          >
+            {backfilling ? "Rellenando..." : "Rellenar tasas faltantes"}
+          </button>
+          {backfillMsg && (
+            <span className="text-sm text-green-700">{backfillMsg}</span>
+          )}
+        </div>
       </div>
 
       {todayRate && (

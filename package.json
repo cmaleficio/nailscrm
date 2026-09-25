@@ -15,6 +15,7 @@
     "db:seed:client": "tsx src/db/seed-client-demo.ts",
     "db:seed:finance": "tsx src/db/seed-finance-demo.ts",
     "db:seed:privacy": "tsx src/db/seed-privacy.ts",
+    "db:backfill:rates": "tsx src/db/backfill-rates.ts",
     "risc:register": "tsx scripts/register-risc.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:reset": "tsx src/db/reset-fresh.ts",
