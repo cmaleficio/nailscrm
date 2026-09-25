@@ -231,6 +231,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - El fetch usa `node:https` con `rejectUnauthorized: false` (el certificado del BCV no lo valida el trust store de Node; equivale a `curl -sk` del script original). Timeout 10s y sigue redirects.
 - La extracción ancla en `<div id="dolar">` (independiente del orden de monedas): regex `id="dolar"[\s\S]*?<strong class="strong-tb">([\d.,]+)<\/strong>` + `normalizeBcvNumber` (quita puntos de miles y cambia coma a punto). La fecha valor se extrae de `date-display-single` `content="YYYY-MM-DDTHH:mm:ss-04:00"`.
 - Refresh diario vía cron externo: `GET /api/exchange-rate/refresh` (admin con sesión o `CRON_SECRET` en header `Authorization: Bearer` o query `?secret=`) fuerza `refreshTodayRate()` (inserta o actualiza la fila de hoy con `onConflictDoUpdate`). cron-job.org debe llamar la URL pública del túnel a diario.
+- Backfill de gaps: `GET /api/exchange-rate/backfill` (misma auth que refresh) o `npm run db:backfill:rates` ejecuta `backfillMissingRates()`: scrapea la serie histórica de `https://www.bcv.org.ve/estadisticas/indice-de-inversion` (34 páginas del Drupal views `nuevo_indicador`, filas `<tr class="... letra-pequeña ...">`), extrae de cada fila la fecha (`content="YYYY-MM-DD"` de `date-display-single`) y la columna 2 "Tipo de Cambio de Venta (Bs / USD)" (celda `views-field views-field-views-conditional` sin el sufijo `-1`, formato coma decimal `853,49930000`), y hace `INSERT` solo de las fechas que faltan en `exchange_rates` (`onConflictDoNothing`, no pisa tasas `manual`). Devuelve `{ scanned, inserted, alreadyPresent, failed }`; 502 si el scrape falla. En `/dashboard/exchange-rates` hay un botón "Rellenar tasas faltantes" que lo invoca desde la UI y recarga la tabla.
 
 ### Tabla: suppliers (proveedores)
 - id: text, primary key
@@ -378,17 +379,22 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `/dashboard/accounts-payable` → Cuentas por pagar (facturas pendientes, pagos a proveedores y bancos)
 - `/dashboard/inventory` → Inventario (existencias, kardex y uso por servicio)
 - `/dashboard/financials` → Estados financieros (P&L mensual base de caja + producción)
-- `/dashboard/settings` → Configuración (horario de trabajo por día de la semana)
+- `/dashboard/brand` → Identidad del salón (nombre y logo)
+- `/dashboard/settings` → Horario de trabajo por día de la semana
+- `/dashboard/settings/navigation` → Menú de navegación público editable
+- `/dashboard/exchange-rates` → Tasas BCV (alta manual, eliminación y backfill)
 - `/dashboard/services` → Gestión de servicios (flag "Es curso/grupo", fotos del servicio, eliminar si no tiene uso)
 - `/dashboard/gallery` → Muro de inspiración (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
 - `/dashboard/legal` → Datos legales del salón (campos variables de las políticas de privacidad)
+- `/dashboard/legal/terms` → Condiciones de servicio editables
 - `/profile` → Portal de cliente (pasaporte de uñas + historial + estado de cuenta + "Mis pagos" con reporte de capturas)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
 
 ### APIs nuevas de permisos y pagos
 - `GET /api/my-permissions` (admin autenticado) → permisos del admin actual.
 - `GET /api/exchange-rate/current` (público) → tasa del día (usa `getTodayRate`).
+- `GET/POST /api/exchange-rate` y `DELETE /api/exchange-rate/[id]` (permiso `exchangeRates`) → gestión de tasas BCV; `GET /api/exchange-rate/refresh` y `GET /api/exchange-rate/backfill` aceptan el mismo permiso o `CRON_SECRET`.
 - `GET /api/payment-receipts` → admin: todas (filtro `?status=`); cliente: solo las suyas.
 - `POST /api/payment-receipts` (cliente) → reporta pago en Bs con captura; valida cita propia.
 - `PATCH/DELETE /api/payment-receipts/[id]` → solo permiso `paymentApproval`; `approve` inserta en `payments` y liga `paymentId`.
@@ -426,19 +432,30 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 ## 🔐 Permisos de admins
 - `users.permissions`: JSON array de claves; **null = acceso a todos los módulos** (no rompe admins existentes).
 - Superadmin (`ADMIN_EMAIL`) siempre tiene acceso total.
-- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `settings`, `services`, `gallery`, `adminUsers`, `paymentApproval`, `activityLog`.
+- Claves (`PERMISSION_KEYS` en `src/lib/permissions.ts`): `appointments`, `clients`, `balances`, `purchases`, `accountsPayable`, `inventory`, `adjustInventory`, `financials`, `brandSettings`, `workingHours`, `exchangeRates`, `legalSettings`, `navigation`, `services`, `gallery`, `adminUsers`, `paymentApproval`, `activityLog`.
+- El permiso legacy `settings` se expande automáticamente a `brandSettings`, `workingHours`, `exchangeRates`, `legalSettings` y `navigation` al leer permisos en `authz.ts` y `/api/admins`; no se muestra en el editor ni se guarda como clave nueva.
+- Lectura del valor almacenado: `parseStoredPermissions(raw)` en `src/lib/permissions.ts` es la única fuente de verdad. `null`/vacío = **acceso total**; JSON con `settings` = expandido; **JSON corrupto o que no sea un array de strings = `[]` (sin permisos), nunca acceso total**. `getPermissions(session)` sin sesión devuelve `[]` (no `null`), para que el layout no renderice el nav completo a un anónimo. Cubierto por `src/lib/permissions.test.ts` y `src/lib/authz.test.ts`.
 - `hasPermission(session, key)` en `src/lib/authz.ts` bloquea a no-admins y a admins sin el permiso. `hasAnyPermission(session, keys)` acepta varios módulos. `adjustInventory` controla salidas/ajustes de stock; `paymentApproval` controla aprobar/rechazar/eliminar capturas de pago; `activityLog` (Log de actividad): ver `/dashboard/activity`.
-- Guardas auditadas por endpoint: servicios (`services*` → `services`), snapshot de compras por cita (`/api/purchases*` → `appointments`), clientes (`/api/clients*` → `clients` **o** `appointments` porque el CRM panel y walk-ins viven en la agenda), blockouts y waitlist admin (`appointments`), muro (`gallery`), facturas/proveedores/categorías (`purchases`), pagos proveedor/bancos (`accountsPayable`), balances/pagos de clientes (`balances`), P&L (`financials`), horario (`settings`), admins (`adminUsers`), inventario y usos (`inventory`). `/api/upload` exige sesión. Públicos por diseño: catálogo activo, slots, galería, tasa actual, registro, auth, reseñas por id.
+- La navegación lateral del dashboard se filtra **en el servidor**: `src/app/(admin)/layout.tsx` (Server Component) resuelve `auth()` + `getPermissions(session)` y pasa el resultado a `AdminShell` (`src/components/AdminShell.tsx`), que renderiza el nav ya filtrado. No hay `fetch` cliente-side de permisos (evita mismatch de hidratación entre el HTML del servidor y el primer render del cliente). `GET /api/my-permissions` sigue existiendo como utilidad.
+- Si aparece "Hydration failed" en el sidebar tras un cambio de permisos, casi siempre es **caché de desarrollo de Next**, no el código: el HTML y el payload RSC deben nascer del mismo build. El dev server guarda compilaciones viejas en `.next/dev/static/chunks` (p. ej. un chunk con el mapping legacy `perm: "settings"` convive con el nuevo) y las pestañas abiertas desde antes del cambio siguen hidratando contra el código anterior. Procedimiento: detener el dev server → `Remove-Item -LiteralPath ".next" -Recurse -Force` → `npm run dev:default` → recargar la pestaña afectada. Verificar que el chunk viejo desapareció en `.next/dev/static/chunks`.
+- Guardas auditadas por endpoint: servicios (`services*` → `services`), snapshot de compras por cita (`/api/purchases*` → `appointments`), clientes (`/api/clients*` → `clients` **o** `appointments` porque el CRM panel y walk-ins viven en la agenda), blockouts y waitlist admin (`appointments`), muro (`gallery`), facturas/proveedores/categorías (`purchases`), pagos proveedor/bancos (`accountsPayable`), balances/pagos de clientes (`balances`), P&L (`financials`), identidad (`brandSettings`), horario (`workingHours`), tasas (`exchangeRates`), legal (`legalSettings`), navegación (`navigation`), admins (`adminUsers`), inventario y usos (`inventory`). `/api/upload` exige sesión. Públicos por diseño: catálogo activo, slots, galería, tasa actual, registro, auth, reseñas por id.
 - `PATCH /api/admins` rechaza editar permisos del admin principal (`ADMIN_EMAIL`) con 403.
 - En `/dashboard/admin-users` hay select "Copiar de…" para replicar permisos de otro admin (se aplican al guardar).
 
 ## 🎨 Componentes UI Clave
-- ServiceCard: card de servicio con carrusel de fotos, nombre, duración, precio, botón "Agendar"
-- AppointmentCard: card de cita con hora, cliente, servicio, foto referencia
-- ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables
-- PhotoCarousel: carrusel de fotos de referencia al abrir una cita en la agenda
+- AdminShell: shell del dashboard que recibe `permissions` (string[] | null) desde el layout de servidor y renderiza el sidebar con la navegación filtrada, el header móvil y `{children}`. Sin `fetch` de permisos (el HTML y la hidratación nacen del mismo snapshot).
+- ServiceCard: card de servicio con carrusel de fotos, nombre, duración, precio, botón "Agendar". El frame es un botón que abre el `PhotoLightbox` con todas las fotos del servicio; cada card monta su propio visor.
+- AppointmentCard: card de cita con hora, cliente, servicio, foto referencia. La referencia se renderiza con `PhotoThumb` solo si llega `onOpenPhoto` (el `PhotoLightbox` vive una sola vez en `DashboardContent`, que pasa `openPhoto` tanto en la vista Día como en la de Pendientes).
+- ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables (nombre, teléfono, dirección y **email** — el email editable ayuda a unificar duplicados de Google)
+- ClientCRMPanel: el bloque "Contacto" permite editar también el **email** del cliente; el `PATCH /api/clients/[id]` lo valida (400 formato inválido) y rechaza duplicados con 409, para que al iniciar sesión con Google el `linkGoogleAccount` enlace al usuario existente en vez de crear uno duplicado
+- ClientCRMPanel: el carrusel de referencias usa `client.photoGroups` (nuevo campo de `GET /api/clients/[id]`, fotos `reference` agrupadas por cita) en vez del fetch a `/api/appointments/[id]/photos`. Al abrirse desde la agenda prioriza la cita del `appointmentId` recibido; con más de un grupo muestra el selector "Modelos de otra visita" (pills de fecha) para cambiar de cita.
+- PhotoLightbox: **visor de fotos compartido** a pantalla completa (`z-[70]`, sobre los diálogos `z-50` del admin). Pellizco, rueda del ratón, arrastre con anclaje al punto tocado, doble toque/clic, teclado (`Esc`, flechas, `+`/`-`/`0`), contador `n / total`, porcentaje de zoom, botones Alejar/Acercar/Restablecer, pie de foto y prop `footer` (el muro público lo usa para el CTA "Agendar"). La descarga baja el **original a resolución completa** con nombre slugificado (`src/lib/download-name.ts`); si la URL es de otro origen, el botón pasa a "Abrir" con `target="_blank"`. La matemática de zoom/pan está en `src/lib/zoom.ts` (funciones puras, 23 tests).
+- PhotoLightbox: **el overlay se monta siempre pero solo se activa con fotos**. Todos los hooks corren antes del `return null`, así que los efectos con efectos secundarios (scroll lock y teclado) deben preguntar por `active`; si no, el visor deja `body { overflow: hidden }` para siempre al montar. El scroll lock usa un **contador de módulo** porque el visor se abre encima del drawer del CRM (`z-50`) y no puede restaurar el scroll antes de tiempo.
+- usePhotoLightbox: hook que devuelve `{ photos, index, onIndexChange, onClose, open(fotos, i) }`. Patrón obligatorio en pantallas con varios puntos de entrada: **un solo** `<PhotoLightbox {...lightbox} />` por pantalla y cada miniatura llama `open(fotos, i)`.
+- PhotoThumb: miniatura clickeable (`next/image`) que abre el visor con el grupo que recibe. Props: `photos`, `index`, `onOpen`, `width`, `height`, `className`.
+- PhotoCarousel: carrusel de fotos con flechas y dots (ampliables vía `onOpen`). Props: `photos` (`{ id, url, caption? }[]`), `title`, `frameClassName`, `onOpen`. Lo usan el CRM del admin y la sección "Tus uñas" del portal de cliente.
 - CompleteAppointmentDialog: diálogo para completar cita subiendo varias fotos finales (publicadas en el muro), registrar pago del momento ($/Bs con tasa del día) y marcar qué **esmaltes** (productos con categoría) se usaron en la cita, agrupados por categoría → subcategoría. Al confirmar envía `usage` que llaman a `recordUsage()`.
-- GalleryGrid: grid masonry/pinterest para muro de inspiración con clic → agendar similar (soporta fotos de citas y fotos sueltas del admin)
+- GalleryGrid: grid masonry/pinterest para muro de inspiración; cada foto abre el `PhotoLightbox` con un snapshot de lo cargado (para que el scroll infinito no altere la lista mientras se navega) y el CTA "Agendar similar" va en el `footer` del visor (soporta fotos de citas y fotos sueltas del admin)
 - FilterPills: pills horizontales para filtrar galería (Todas, Acrílicas, Gel, etc)
 - BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro y CTA "Unirme a la lista de espera" cuando el día no tiene slots disponibles)
 - CompleteRegistrationForm: formulario para pedir teléfono tras registrarse con Google
@@ -451,16 +468,16 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - BlockoutDialog: crea bloques "no disponible" desde la agenda
 - RegisterPaymentDialog: registra pagos ($/Bs con tasa BCV) desde cuentas por cobrar o el CRM
 - ReportPaymentDialog: reporta pago en Bs con captura desde "Mis pagos" del perfil de cliente
-- BalancesContent: en `/dashboard/balances` muestra el total adeudado y los saldos por cliente con desglose por ítem y filtro por estado financiero. Incluye un buscador cliente-side (case-insensitive, ignora acentos) que matchea contra nombre del cliente, teléfono o nombre de cualquier servicio en sus items pendientes; el total adeudado siempre refleja el saldo real, no el filtrado. Pestaña "Pagos recibidos" para aprobar/rechazar capturas reportadas por clientes.
-- SettingsContent: editor del horario de trabajo por día de la semana
+- BalancesContent: en `/dashboard/balances` muestra el total adeudado y los saldos por cliente con desglose por ítem y filtro por estado financiero. Incluye un buscador cliente-side (case-insensitive, ignora acentos) que matchea contra nombre del cliente, teléfono o nombre de cualquier servicio en sus items pendientes; el total adeudado siempre refleja el saldo real, no el filtrado. Pestaña "Pagos recibidos" para aprobar/rechazar capturas reportadas por clientes; cada `photoUrl` es un botón que abre el `PhotoLightbox`.
+- SettingsContent: editor del horario de trabajo por día de la semana y enlace al editor de navegación cuando el admin tiene `navigation`.
 - BillFormDialog: crea/edita facturas (inventario con líneas de producto o gasto fijo $/Bs) desde Compras. Al crear un producto sin código, `POST /api/inventory/items` genera el código automáticamente.
 - SupplierPaymentDialog: registra pagos a proveedores ($/Bs con tasa BCV) desde Cuentas por pagar (captura obligatoria)
 - MovementDialog: registra salidas/ajustes de stock (con motivo obligatorio en ajustes) desde Inventario
 - PurchasesContent: pestañas de facturas (grid maestro-detalle editable), proveedores y categorías en /dashboard/purchases
-- AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable
-- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`). Cada producto tiene botón "Editar costo" (`EditCostDialog`, requiere `adjustInventory`) que crea una fila `kind: "cost_adjust"` en el kardex con motivo obligatorio; el kardex muestra la fila con badge púrpura "Costo" y el valor `unit_cost_usd`.
+- AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable. Cada pago de proveedor muestra la miniatura de su captura (`supplier_payments.photoUrl`, obligatoria) con acceso al `PhotoLightbox`.
+- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La pestaña de productos incluye buscador por nombre, código, código de barras, categoría y subcategoría, con coincidencia sin distinguir mayúsculas ni acentos. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`). Cada producto tiene botón "Editar costo" (`EditCostDialog`, requiere `adjustInventory`) que crea una fila `kind: "cost_adjust"` en el kardex con motivo obligatorio; el kardex muestra la fila con badge púrpura "Costo" y el valor `unit_cost_usd`.
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
-- GalleryContent: gestor del muro de inspiración en /dashboard/gallery (subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación)
+- GalleryContent: gestor del muro de inspiración en /dashboard/gallery (subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación). Cada miniatura abre el `PhotoLightbox` con todas las fotos del muro.
 - ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)
 
 ## 🚀 Comandos
