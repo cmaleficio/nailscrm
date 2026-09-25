@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { dateToDayStartTs, tsToLocalLabel } from "@/lib/time";
@@ -679,5 +679,7 @@ export function BookingWizard() {
 }
 
 function signInGoogle() {
-  window.location.href = "/api/auth/signin/google";
+  const callbackUrl =
+    window.location.pathname + window.location.search || "/book";
+  void signIn("google", { callbackUrl });
 }
