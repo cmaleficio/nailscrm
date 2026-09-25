@@ -1,5 +1,5 @@
 import { db, schema } from "@/db/index";
-import { and, gte, lt, sql } from "drizzle-orm";
+import { and, gt, lt, sql } from "drizzle-orm";
 import { getWorkingHoursForDate } from "@/lib/workingHours";
 import { dateToDayStartTs } from "@/lib/time";
 
@@ -17,7 +17,7 @@ export function getOverlappingAppointments(
       and(
         sql`${schema.appointments.status} IN ('pending', 'confirmed')`,
         lt(schema.appointments.startTime, endTime),
-        gte(schema.appointments.endTime, startTime)
+        gt(schema.appointments.endTime, startTime)
       )
     )
     .all()
@@ -37,7 +37,7 @@ export function getOverlappingBlockouts(
       endTime: schema.blockouts.endTime,
     })
     .from(schema.blockouts)
-    .where(and(lt(schema.blockouts.startTime, endTime), gte(schema.blockouts.endTime, startTime)))
+    .where(and(lt(schema.blockouts.startTime, endTime), gt(schema.blockouts.endTime, startTime)))
     .all()
     .filter(
       (b): b is { startTime: number; endTime: number } =>
