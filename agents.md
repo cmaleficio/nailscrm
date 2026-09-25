@@ -496,6 +496,25 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - Admin: el `ADMIN_EMAIL` configurado en `.env` se promueve a superadmin al iniciar sesión.
 - Finanzas: el seed `db:seed:finance` genera proveedores, bancos ($/Bs), 4 items de inventario con códigos (`ACR-001`, `ACR-002`, `GEL-001`, `TIP-001`) y códigos de barras, entradas vía factura F-1001 (parcialmente pagada), factura de alquiler en Bs, uso de productos por servicio (Acrílicas Full y Gel Semipermanente) y una captura de pago pendiente. Re-ejecutable: borra y regenera los datos de finanzas.
 
+## 🛡️ Seguridad de dependencias
+- `next` y `eslint-config-next` están pineados a la **versión exacta** y deben moverse **siempre juntos**. Si subes uno solo, el otro queda desalineado con el runtime.
+- **No uses `npm audit fix` a secas.** El árbol tiene avisos sin arreglo oficial en la rama 0.x, así que npm propone un *downgrade* de `drizzle-kit` que deja el proyecto peor. Cambia las dependencias a mano.
+- Para verificar el estado real de producción usa `npm audit --omit=dev` (el árbol dev arrastra avisos que no se explotan en runtime) y `npm ls <paquete>` para confirmar en qué versión resolvió cada copia transitiva.
+- Riesgos aceptados a propósito (revisar en cada actualización mayor):
+  - `vitest` 2.1.9: crítico solo si el **UI server** está escuchando; el proyecto usa `vitest run`, que nunca lo levanta. Fix oficial = salto major a `vitest@5`.
+  - `drizzle-kit` 0.31.11 arrastrando `esbuild` 0.18.20: requiere el dev server de esbuild sirviendo, y drizzle-kit es un CLI local. La rama 0.x no tiene fix; la salida es migrar a `drizzle-kit@1.0.0-beta.24`+.
+- Al subir `next` o `sharp`, recuerda que la app decodifica **todo lo que hay en `/public/uploads`** vía `/_next/image` sobre peticiones no autenticadas. Ese par (uploads + optimizador) es la superficie de RCE más sensible del despliegue, y el despliegue real es Windows detrás de Cloudflare Tunnel.
+
+## 🔐 Uploads de imágenes
+- `POST /api/upload` (exige sesión) es la **única** vía de subida de imágenes del sistema (fotos de citas, del muro, del catálogo, capturas de pago de clientes y de proveedores).
+- `/public/uploads` se sirve en el **mismo origen** que la app. Por eso un archivo con contenido HTML o SVG es XSS con acceso a la cookie de sesión: nunca confíes en la extensión que manda el cliente.
+- La extensión la decide el **servidor** a partir de los magic bytes del contenido, con `validateImageUpload()` en `src/lib/image-upload.ts` (funciones puras + tests). `file.name` no determina cómo se guarda el archivo.
+- Formatos aceptados: **JPG, PNG, WebP, GIF, HEIC**. HEIC está porque `accept="image/*"` lo genera iOS y existe al menos un archivo real así en el repo: si agregas un formato, verifica contra `public/uploads/**` con `detectImageType` antes de darlo por bueno.
+- **AVIF y SVG están excluidos a propósito.** AVIF es el vector de entrega del RCE de la API de optimización de imágenes de Next (los `<Image>` decodifican lo que hay en `/uploads` a través de `/_next/image`, y `sharp` arrastra los CVE de libheif/libvips), y SVG es XSS directo. No los re-añadas sin actualizar `next`/`sharp` primero.
+- Hay un tope de 25 MB (`MAX_UPLOAD_BYTES`).
+- `next.config.ts` sirve `/uploads/:path*` con `X-Content-Type-Options: nosniff` como defensa en profundidad. Si añades otra ruta estática con archivos subidos por usuarios, aplícale el mismo header.
+- Al cambiar la validación, corre los tests de `src/lib/image-upload.test.ts` **y** la comprobación contra los archivos reales del repo (ver `CHANGELOG.md`); los fixtures sintéticos no detectan un offset mal calculado en la caja ISO BMFF de HEIC.
+
 ## 🚫 Fuera del Alcance (MVP)
 - Pasarelas de pago (Stripe/MercadoPago)
 - Multi-empleado (roles complejos)
