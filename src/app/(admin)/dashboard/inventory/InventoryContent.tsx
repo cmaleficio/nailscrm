@@ -5,6 +5,7 @@ import { MovementDialog } from "@/components/MovementDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EditCostDialog } from "@/components/EditCostDialog";
 import { newId } from "@/lib/id";
+import { matchesInventoryItem } from "@/lib/inventory-search";
 
 type InventoryItem = {
   id: string;
@@ -48,10 +49,12 @@ const inputCls =
 
 export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean }) {
   const [tab, setTab] = useState<"items" | "movimientos" | "servicios">("items");
+  const [searchQuery, setSearchQuery] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [uses, setUses] = useState<Record<string, UseLine[]>>({});
   const [loading, setLoading] = useState(false);
+  const filteredItems = items.filter((item) => matchesInventoryItem(item, searchQuery));
 
   const [selectedItemId, setSelectedItemId] = useState("");
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -403,11 +406,33 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
             <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{confirmError}</p>
           )}
 
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nombre, código, barras o categoría"
+              aria-label="Buscar productos"
+              className={inputCls}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+
           {loading && items.length === 0 ? (
             <p className="mt-6 text-gray-400">Cargando...</p>
           ) : items.length === 0 ? (
             <div className="mt-6 rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
               <p className="text-gray-400">Sin productos en inventario</p>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="mt-6 rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No se encontraron productos</p>
             </div>
           ) : (
             <div className="mt-6 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -427,7 +452,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => {
+                  {filteredItems.map((item) => {
                     const lowStock = item.stock <= item.minStock && item.minStock > 0;
                     return (
                       <Fragment key={item.id}>
