@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, and, gte, lt, ne, sql } from "drizzle-orm";
+import { eq, and, gte, lt, ne, sql, inArray } from "drizzle-orm";
 import { isAdmin, hasPermission } from "@/lib/authz";
 import { validateSlot } from "@/lib/availability";
 import { createAppointmentClientEvent, createAppointmentAdminEvent } from "@/lib/calendar";
 import { todayStr, dateToDayStartTs } from "@/lib/time";
 import { logActivity } from "@/lib/audit";
+import {
+  parseComplementaryIds,
+  resolveBookingServices,
+  formatServiceNames,
+} from "@/lib/booking-combos";
+import { summarizePurchases } from "@/lib/appointment-purchases";
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!(await isAdmin(session))) {
@@ -32,8 +39,7 @@ export async function GET(req: NextRequest) {
       clientName: schema.users.name,
       clientId: schema.users.id,
       clientPhone: schema.users.phone,
-      serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
-      servicePrice: schema.servicePurchases.servicePrice,
+      serviceName: schema.services.name,
       serviceId: schema.services.id,
       isGroup: schema.services.isGroup,
     })
@@ -42,10 +48,6 @@ export async function GET(req: NextRequest) {
     .innerJoin(
       schema.services,
       eq(schema.appointments.serviceId, schema.services.id)
-    )
-    .leftJoin(
-      schema.servicePurchases,
-      eq(schema.servicePurchases.appointmentId, schema.appointments.id)
     )
     .where(ne(schema.appointments.status, "cancelled"));
 
@@ -62,8 +64,7 @@ export async function GET(req: NextRequest) {
         clientName: schema.users.name,
         clientId: schema.users.id,
         clientPhone: schema.users.phone,
-        serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
-        servicePrice: schema.servicePurchases.servicePrice,
+        serviceName: schema.services.name,
         serviceId: schema.services.id,
         isGroup: schema.services.isGroup,
         isOverdue: sql<number>`CASE WHEN ${schema.appointments.startTime} < ${dayStart} THEN 1 ELSE 0 END`,
@@ -73,10 +74,6 @@ export async function GET(req: NextRequest) {
       .innerJoin(
         schema.services,
         eq(schema.appointments.serviceId, schema.services.id)
-      )
-      .leftJoin(
-        schema.servicePurchases,
-        eq(schema.servicePurchases.appointmentId, schema.appointments.id)
       )
       .where(
         and(
@@ -105,8 +102,7 @@ export async function GET(req: NextRequest) {
         clientName: schema.users.name,
         clientId: schema.users.id,
         clientPhone: schema.users.phone,
-        serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
-        servicePrice: schema.servicePurchases.servicePrice,
+        serviceName: schema.services.name,
         serviceId: schema.services.id,
         isGroup: schema.services.isGroup,
       })
@@ -115,10 +111,6 @@ export async function GET(req: NextRequest) {
       .innerJoin(
         schema.services,
         eq(schema.appointments.serviceId, schema.services.id)
-      )
-      .leftJoin(
-        schema.servicePurchases,
-        eq(schema.servicePurchases.appointmentId, schema.appointments.id)
       )
       .where(
         and(
@@ -140,11 +132,44 @@ export async function GET(req: NextRequest) {
       .map((r) => [r.appointmentId, r.n] as const)
   );
 
+  // Las compras se cargan aparte y se fusionan en memoria. El LEFT JOIN que
+  // existía antes multiplicaba la cita por cada fila de service_purchases, así
+  // que una cita con 3 servicios salía 3 veces y una sesión de curso, N veces.
+  const purchaseRows = appointments.length
+    ? db
+        .select({
+          id: schema.servicePurchases.id,
+          appointmentId: schema.servicePurchases.appointmentId,
+          userId: schema.servicePurchases.userId,
+          serviceName: schema.servicePurchases.serviceName,
+          servicePrice: schema.servicePurchases.servicePrice,
+          serviceDurationMins: schema.servicePurchases.serviceDurationMins,
+          isPrimary: schema.servicePurchases.isPrimary,
+        })
+        .from(schema.servicePurchases)
+        .where(
+          inArray(
+            schema.servicePurchases.appointmentId,
+            appointments.map((a) => a.id)
+          )
+        )
+        .all()
+    : [];
+
+  const summaries = summarizePurchases(appointments, purchaseRows);
+
   return NextResponse.json(
-    appointments.map((appt) => ({
-      ...appt,
-      studentCount: enrollCounts.get(appt.id) ?? (appt.isGroup === 1 ? 1 : 0),
-    }))
+    appointments.map((appt) => {
+      const summary = summaries.get(appt.id);
+      return {
+        ...appt,
+        serviceName: summary?.serviceName ?? appt.serviceName,
+        servicePrice: summary?.servicePrice ?? 0,
+        serviceItems: summary?.serviceNames ?? [],
+        isComplementaryOnly: summary?.isComplementaryOnly ?? false,
+        studentCount: enrollCounts.get(appt.id) ?? (appt.isGroup === 1 ? 1 : 0),
+      };
+    })
   );
 }
 
@@ -157,6 +182,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     serviceId,
+    addServiceIds: addServiceIdsRaw,
     startTime,
     referencePhotoUrl,
     referencePhotoUrls,
@@ -195,17 +221,26 @@ export async function POST(req: NextRequest) {
       ? [referencePhotoUrl]
       : [];
 
-  const service = db
+  const addServiceIds = parseComplementaryIds(addServiceIdsRaw);
+
+  // Una sola consulta trae el principal y los complementarios; resolveBookingServices
+  // es la única fuente de reglas de combinación (rol, curso, tope, activo).
+  const comboRows = db
     .select()
     .from(schema.services)
-    .where(eq(schema.services.id, serviceId))
-    .get();
+    .where(inArray(schema.services.id, [serviceId, ...addServiceIds]))
+    .all();
 
-  if (!service) {
+  if (!comboRows.some((s) => s.id === serviceId)) {
     return NextResponse.json({ error: "Service not found" }, { status: 404 });
   }
 
-  const endTime = startTime + service.durationMins * 60;
+  const combo = resolveBookingServices(comboRows, serviceId, addServiceIds);
+  if (combo.error) {
+    return NextResponse.json({ error: combo.error }, { status: 400 });
+  }
+
+  const endTime = startTime + combo.totalDurationMins * 60;
   const now = Math.floor(Date.now() / 1000);
 
   const availabilityError = validateSlot(startTime, endTime);
@@ -213,10 +248,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: availabilityError }, { status: 409 });
   }
 
+  // Sin await entre validateSlot y los inserts: la disponibilidad no puede
+  // quedar obsoleta entre la validación y la escritura.
   const appointment = {
     id: crypto.randomUUID(),
     clientId: targetClientId,
-    serviceId,
+    serviceId: combo.anchorServiceId,
     startTime,
     endTime,
     status: "pending",
@@ -238,22 +275,27 @@ export async function POST(req: NextRequest) {
       .run();
   });
 
-  db.insert(schema.servicePurchases)
-    .values({
-      id: crypto.randomUUID(),
-      userId: targetClientId,
-      appointmentId: appointment.id,
-      serviceId: service.id,
-      serviceName: service.name,
-      serviceDescription: service.description,
-      servicePrice: service.price,
-      serviceDurationMins: service.durationMins,
-      createdAt: now,
-    })
-    .run();
+  for (const s of combo.services) {
+    db.insert(schema.servicePurchases)
+      .values({
+        id: crypto.randomUUID(),
+        userId: targetClientId,
+        appointmentId: appointment.id,
+        serviceId: s.id,
+        serviceName: s.name,
+        serviceDescription: s.description ?? null,
+        servicePrice: s.price,
+        serviceDurationMins: s.durationMins,
+        isPrimary: combo.principal && s.id === combo.principal.id ? 1 : 0,
+        createdAt: now,
+      })
+      .run();
+  }
+
+  const comboLabel = formatServiceNames(combo.services.map((s) => s.name));
 
   if (process.env.GOOGLE_CALENDAR_ENABLED === "true") {
-    await syncAppointmentToGoogleCalendars(appointment, service.name);
+    await syncAppointmentToGoogleCalendars(appointment, comboLabel);
   }
 
   {
@@ -266,14 +308,26 @@ export async function POST(req: NextRequest) {
       entity: "appointments",
       action: "create",
       entityId: appointment.id,
-      label: `Cita creada: ${clientRow?.name ?? "Cliente"} – ${service.name}`,
-      metadata: { startTime, endTime, serviceId, servicePrice: service.price, createdByAdmin: Boolean(clientId) },
+      label: `Cita creada: ${clientRow?.name ?? "Cliente"} – ${comboLabel}`,
+      metadata: {
+        startTime,
+        endTime,
+        serviceId: combo.anchorServiceId,
+        serviceIds: combo.services.map((s) => s.id),
+        servicePrice: combo.totalPrice,
+        createdByAdmin: Boolean(clientId),
+      },
       actorId: session.user.id,
       actorName: session?.user?.name ?? null,
     });
   }
 
-  return NextResponse.json({ id: appointment.id });
+  return NextResponse.json({
+    id: appointment.id,
+    serviceIds: combo.services.map((s) => s.id),
+    totalPrice: combo.totalPrice,
+    totalDurationMins: combo.totalDurationMins,
+  });
 }
 
 async function syncAppointmentToGoogleCalendars(

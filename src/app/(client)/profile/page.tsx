@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db/index";
 import { eq, and, gte, inArray, ne, sql } from "drizzle-orm";
 import { ProfileContent } from "./ProfileContent";
+import { summarizePurchases } from "@/lib/appointment-purchases";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -53,23 +54,23 @@ export default async function ProfilePage() {
     .orderBy(schema.appointments.startTime)
     .all();
 
+  // Sin LEFT JOIN a service_purchases: una cita con principal + complementarios
+  // (o una sesión de curso con N alumnos) salía repetida una vez por cada
+  // compra. Los nombres se fusionan aparte con summarizePurchases.
   const completedAppointments = db
     .select({
       id: schema.appointments.id,
+      clientId: schema.appointments.clientId,
       startTime: schema.appointments.startTime,
       finalPhotoUrl: schema.appointments.finalPhotoUrl,
       reviewRating: schema.appointments.reviewRating,
       reviewText: schema.appointments.reviewText,
-      serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
+      serviceName: schema.services.name,
     })
     .from(schema.appointments)
     .innerJoin(
       schema.services,
       eq(schema.appointments.serviceId, schema.services.id)
-    )
-    .leftJoin(
-      schema.servicePurchases,
-      eq(schema.servicePurchases.appointmentId, schema.appointments.id)
     )
     .where(
       and(
@@ -79,6 +80,35 @@ export default async function ProfilePage() {
     )
     .orderBy(schema.appointments.startTime)
     .all();
+
+  const purchaseSummaries = summarizePurchases(
+    completedAppointments,
+    completedAppointments.length
+      ? db
+          .select({
+            id: schema.servicePurchases.id,
+            appointmentId: schema.servicePurchases.appointmentId,
+            userId: schema.servicePurchases.userId,
+            serviceName: schema.servicePurchases.serviceName,
+            servicePrice: schema.servicePurchases.servicePrice,
+            serviceDurationMins: schema.servicePurchases.serviceDurationMins,
+            isPrimary: schema.servicePurchases.isPrimary,
+          })
+          .from(schema.servicePurchases)
+          .where(
+            inArray(
+              schema.servicePurchases.appointmentId,
+              completedAppointments.map((a) => a.id)
+            )
+          )
+          .all()
+      : []
+  );
+
+  const completedWithNames = completedAppointments.map((a) => ({
+    ...a,
+    serviceName: purchaseSummaries.get(a.id)?.serviceName ?? a.serviceName,
+  }));
 
   // Todas las fotos finales de esas visitas, no solo appointments.final_photo_url
   // (que es únicamente la primera). El admin sube varias al completar la cita.
@@ -155,7 +185,7 @@ export default async function ProfilePage() {
         referencePhotoUrl: a.referencePhotoUrl,
         serviceName: a.serviceName,
       }))}
-      appointments={completedAppointments.map((a) => ({
+      appointments={completedWithNames.map((a) => ({
         id: a.id,
         startTime: a.startTime ?? 0,
         finalPhotoUrl: a.finalPhotoUrl,

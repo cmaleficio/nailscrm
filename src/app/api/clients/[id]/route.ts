@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, and, sql, isNull, or, ne } from "drizzle-orm";
+import { eq, and, sql, isNull, or, ne, inArray } from "drizzle-orm";
 import { hasAnyPermission } from "@/lib/authz";
 import { logActivity } from "@/lib/audit";
+import { summarizePurchases } from "@/lib/appointment-purchases";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -216,6 +217,47 @@ export async function GET(
     };
     group.photos.push({ id: row.photoId, url: row.url });
     passportGroups.set(row.appointmentId, group);
+  }
+
+  // Nombres de servicio de cada cita, fusionados con summarizePurchases para
+  // que una cita con principal + complementarios muestre todos y no solo el
+  // ancla. Se resuelve una vez por cita (no por foto) para no multiplicar filas.
+  // El clientId se pasa como la cita misma porque aquí no importa a qué alumno
+  // pertenece: solo se usan los nombres del snapshot de compras.
+  const groupedAppointmentIds = [
+    ...new Set([
+      ...photoRows.map((r) => r.appointmentId),
+      ...passportRows.map((r) => r.appointmentId),
+    ]),
+  ];
+
+  if (groupedAppointmentIds.length > 0) {
+    const purchaseRows = db
+      .select({
+        id: schema.servicePurchases.id,
+        appointmentId: schema.servicePurchases.appointmentId,
+        userId: schema.servicePurchases.userId,
+        serviceName: schema.servicePurchases.serviceName,
+        servicePrice: schema.servicePurchases.servicePrice,
+        serviceDurationMins: schema.servicePurchases.serviceDurationMins,
+        isPrimary: schema.servicePurchases.isPrimary,
+      })
+      .from(schema.servicePurchases)
+      .where(inArray(schema.servicePurchases.appointmentId, groupedAppointmentIds))
+      .all();
+
+    const names = summarizePurchases(
+      groupedAppointmentIds.map((aid) => ({ id: aid, clientId: aid, serviceName: "" })),
+      purchaseRows
+    );
+
+    for (const [aid, summary] of names) {
+      if (!summary.serviceName) continue;
+      const ref = photoGroups.get(aid);
+      if (ref) ref.serviceName = summary.serviceName;
+      const pass = passportGroups.get(aid);
+      if (pass) pass.serviceName = summary.serviceName;
+    }
   }
 
   return NextResponse.json({

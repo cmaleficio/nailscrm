@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db/index";
-import { like, sql, eq, and, or, lt, desc } from "drizzle-orm";
+import { like, sql, eq, and, or, desc, inArray } from "drizzle-orm";
+import { summarizePurchases } from "@/lib/appointment-purchases";
 
 type GalleryItem = {
   id: string;
@@ -51,6 +52,9 @@ export async function GET(req: NextRequest) {
       serviceName: schema.services.name,
       serviceId: schema.services.id,
       appointmentId: schema.appointments.id,
+      // Necesario para resolver los nombres de la combinación sin hacer
+      // LEFT JOIN a service_purchases (que multiplicaría las filas).
+      clientId: schema.users.id,
       createdAt: schema.appointmentPhotos.createdAt,
     })
     .from(schema.appointmentPhotos)
@@ -61,6 +65,46 @@ export async function GET(req: NextRequest) {
     .orderBy(desc(schema.appointmentPhotos.createdAt), desc(schema.appointmentPhotos.id))
     .limit(limit + 51)
     .all();
+
+  // Nombres completos de los servicios de cada cita. Se resuelven aparte con
+  // summarizePurchases porque un LEFT JOIN a service_purchases multiplicaría
+  // cada foto por el número de compras (y rompería la paginación por cursor).
+  const galleryNameByAppointment = new Map<string, string>();
+  {
+    const ids = [...new Set(apRows.map((r) => r.appointmentId))];
+    if (ids.length > 0) {
+      const purchaseRows = db
+        .select({
+          id: schema.servicePurchases.id,
+          appointmentId: schema.servicePurchases.appointmentId,
+          userId: schema.servicePurchases.userId,
+          serviceName: schema.servicePurchases.serviceName,
+          servicePrice: schema.servicePurchases.servicePrice,
+          serviceDurationMins: schema.servicePurchases.serviceDurationMins,
+          isPrimary: schema.servicePurchases.isPrimary,
+        })
+        .from(schema.servicePurchases)
+        .where(inArray(schema.servicePurchases.appointmentId, ids))
+        .all();
+
+      // Una fila por cita, no por foto: summarizePurchases espera citas.
+      const appts = [
+        ...new Map(
+          apRows.map((r) => [
+            r.appointmentId,
+            {
+              id: r.appointmentId,
+              clientId: r.clientId,
+              serviceName: r.serviceName,
+            },
+          ])
+        ).values(),
+      ];
+      for (const [aid, s] of summarizePurchases(appts, purchaseRows)) {
+        if (s.serviceName) galleryNameByAppointment.set(aid, s.serviceName);
+      }
+    }
+  }
 
   // Fotos sueltas subidas por el admin (pre-llenado del muro)
   const gpConditions = [];
@@ -96,7 +140,7 @@ export async function GET(req: NextRequest) {
       id: `ap_${r.id}`,
       url: r.url ?? "/placeholder.svg",
       clientName: r.clientName,
-      serviceName: r.serviceName,
+      serviceName: galleryNameByAppointment.get(r.appointmentId) ?? r.serviceName,
       serviceId: r.serviceId,
       appointmentId: r.appointmentId,
       createdAt: r.createdAt,

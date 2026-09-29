@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, inArray, type SQL } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import {
   parseProductionFilters,
@@ -10,6 +10,7 @@ import {
   dayKeyFromTimestamp,
   escapeLikePattern,
 } from "@/lib/production-photos";
+import { summarizePurchases } from "@/lib/appointment-purchases";
 
 /**
  * Días por página. Se pagina por DÍA, no por foto: devolver un día entero
@@ -93,6 +94,7 @@ export async function GET(req: NextRequest) {
     .select({
       id: schema.appointmentPhotos.id,
       url: schema.appointmentPhotos.url,
+      appointmentId: schema.appointmentPhotos.appointmentId,
       startTime: schema.appointments.startTime,
       clientId: schema.users.id,
       clientName: schema.users.name,
@@ -117,6 +119,43 @@ export async function GET(req: NextRequest) {
     )
     .all();
 
+  // Nombres de todos los servicios de cada cita, para que el pie muestre la
+  // combinación completa. Se resuelve una vez por cita con summarizePurchases:
+  // aquí NO se puede hacer LEFT JOIN a service_purchases porque multiplicaría
+  // cada foto por el número de compras de la cita.
+  const photoAppointmentIds = [
+    ...new Set(photoRows.map((r) => r.appointmentId)),
+  ];
+  const nameByService = new Map<string, string>();
+  if (photoAppointmentIds.length > 0) {
+    const purchaseRows = db
+      .select({
+        id: schema.servicePurchases.id,
+        appointmentId: schema.servicePurchases.appointmentId,
+        userId: schema.servicePurchases.userId,
+        serviceName: schema.servicePurchases.serviceName,
+        servicePrice: schema.servicePurchases.servicePrice,
+        serviceDurationMins: schema.servicePurchases.serviceDurationMins,
+        isPrimary: schema.servicePurchases.isPrimary,
+      })
+      .from(schema.servicePurchases)
+      .where(inArray(schema.servicePurchases.appointmentId, photoAppointmentIds))
+      .all();
+
+    const appointments = photoRows
+      .filter((r) => r.startTime !== null)
+      .map((r) => ({
+        id: r.appointmentId,
+        clientId: r.clientId,
+        serviceName: r.serviceName,
+      }));
+    // Se deduplican los ids para no pasar la misma cita N veces.
+    const unique = [...new Map(appointments.map((a) => [a.id, a])).values()];
+    for (const [aid, s] of summarizePurchases(unique, purchaseRows)) {
+      if (s.serviceName) nameByService.set(aid, s.serviceName);
+    }
+  }
+
   // Una cita completada sin hora de inicio no tiene día al que pertenecer, así
   // que se queda fuera del archivo en vez de aparecer sin encabezado.
   const photos = photoRows.flatMap((row) => {
@@ -126,7 +165,7 @@ export async function GET(req: NextRequest) {
         ...row,
         date: dayKeyFromTimestamp(row.startTime),
         caption: buildProductionCaption({
-          serviceName: row.serviceName,
+          serviceName: nameByService.get(row.appointmentId) ?? row.serviceName,
           clientName: row.clientName,
           startTime: row.startTime,
         }),
