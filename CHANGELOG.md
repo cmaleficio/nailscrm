@@ -6,6 +6,14 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 
 ## [Sin publicar]
 
+### Nuevo
+- Se puede quitar un servicio suelto de una cita sin cancelar la visita: la clienta lo hace desde `/profile` ("Quitar" por servicio) y el admin desde el panel CRM. La compra se borra, el horario y el total se recalculan, y el estado de cuenta y Google Calendar quedan al día.
+- Google Calendar: las actualizaciones de evento pueden cambiar también el título del evento, además del horario.
+
+### Arreglado
+- El paso 1 del wizard ya no se salta cuando se entra con `?serviceId=`. Un servicio preseleccionado deja ver el paso 1 y ofrece solo lo que falta; si es un complementario, ya no se ignora, y aparece un botón "Cambiar" para deshacer la elección.
+- "Mis próximas citas" ya no muestra una tarjeta repetida por cada servicio de la misma cita (claves duplicadas de React en el portal del cliente).
+
 ### Seguridad
 - **Next.js 16.2.12 → 16.3.6 (ejecución remota sin autenticar)**: la versión instalada estaba dentro del rango de dos avisos críticos. `GHSA-p293-qw3h-jr36` (RCE sin autenticar en servidores alojados en Windows) afectaba de forma **directa** a este despliegue, que corre en Windows y estaba expuesto por el túnel de Cloudflare. También se cerró `GHSA-2xp9-vwfh-vxw4` (RCE en la API de optimización de imágenes con archivos AVIF). La actualización arrastra dos transitivas: `sharp` 0.34.5 → 0.35.4 (cierra `GHSA-f88m-g3jw-g9cj` de libvips y `GHSA-rgj7-g3m4-5g8c` de libheif) y `postcss` 8.4.31 → 8.5.23 (cierra `GHSA-6g55`, `GHSA-r28c`, `GHSA-fxqj` y `GHSA-qx2v`). `eslint-config-next` sube en lockstep porque está pineado a la versión exacta de `next`. El árbol de producción (`npm audit --omit=dev`) queda en **0 vulnerabilidades**.
 - **Uploads sin validación de tipo (XSS same-origin)**: `POST /api/upload` tomaba la extensión con `file.name.split(".").pop()` y escribía los bytes tal cual, sin validar nada. Como los archivos de `/public/uploads` se sirven en el **mismo origen** que la app, subir un `.html` o un `.svg` con script era XSS con acceso a la cookie de sesión de admin. Tampoco existía un tope de tamaño, así que un upload de cientos de MB se aceptaba. Ahora la extensión la decide el **servidor** a partir de los magic bytes del contenido (nunca del nombre del cliente), se rechaza todo lo que no sea una imagen y hay un límite de 25 MB. La detección vive en `src/lib/image-upload.ts` como funciones puras (17 tests). Formatos aceptados: **JPG, PNG, WebP, GIF y HEIC** (HEIC entra porque `accept="image/*"` lo genera iOS y ya había un `.heic` real en uploads); **AVIF y SVG quedan fuera a propósito**: AVIF es el vector de entrega del RCE de la API de optimización de imágenes de Next (`GHSA-2xp9-vwfh-vxw4`) y SVG es XSS directo. `next.config.ts` añade `X-Content-Type-Options: nosniff` para `/uploads/:path*` como defensa en profundidad.

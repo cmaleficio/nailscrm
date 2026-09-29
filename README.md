@@ -112,6 +112,7 @@ src/
 ## Roles
 
 - **Cliente:** reserva, próximas citas y pasaporte en `/profile`.
+- Quitar un servicio que ya no quiere de una cita próxima, sin cancelarla entera.
 - **Admin:** agenda día/semana, completar citas con fotos y pago (opcional, la deuda queda pendiente si no se marca), crear sesiones de curso grupal, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar con desglose por ítem y filtro de estado, compras, cuentas por pagar, inventario, estados financieros (Recaudación + Producción), servicios, identidad, horario, tasas, legal y navegación. Los accesos a cada módulo se controlan por permisos asignados en `/dashboard/admin-users`.
 - **Superadmin (`ADMIN_EMAIL`):** gestión de admins y sus permisos en `/dashboard/admin-users`, más la sección "Etiquetas de analítica" al pie de esa misma pantalla, donde se pega el snippet de Google Analytics / Google Tag Manager (o cualquier otro tag). Se inyecta solo en las páginas públicas (inicio, reservas, reseñas y portal del cliente), nunca en el dashboard, y no se expone a los sub-admins porque es JavaScript arbitrario que correría en el navegador de cada visitante. Hay un botón "Generar" que arma el snippet oficial de gtag.js a partir del Measurement ID, y un interruptor para apagar las etiquetas sin borrarlas.
 
