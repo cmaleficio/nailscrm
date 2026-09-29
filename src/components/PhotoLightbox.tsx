@@ -22,6 +22,11 @@ export type LightboxPhoto = {
   url: string;
   /** Se usa como pie de foto y como base del nombre de descarga. */
   caption?: string | null;
+  /**
+   * "YYYY-MM-DD" de la foto. Solo afecta el nombre del archivo descargado, así
+   * que las pantallas que no lo pasan se comportan como antes.
+   */
+  date?: string | null;
 };
 
 type Props = {
@@ -178,7 +183,11 @@ export function PhotoLightbox({ photos, index, onIndexChange, onClose, footer }:
   if (!photo) return null;
 
   const external = origin ? !isSameOriginUrl(photo.url, origin) : false;
-  const fileName = photoDownloadName({ base: photo.caption, url: photo.url });
+  const fileName = photoDownloadName({
+    base: photo.caption,
+    date: photo.date,
+    url: photo.url,
+  });
   const multiple = photos.length > 1;
 
   return (

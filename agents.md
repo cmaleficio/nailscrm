@@ -47,6 +47,29 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `/graphify path <nodo1> <nodo2>` — Camino más corto entre dos conceptos
 - `/graphify explain <nodo>` — Explicación en lenguaje natural de un nodo
 
+### Cómo se genera y se actualiza el grafo
+
+El grafo se reconstruye con un pipeline determinista + subagentes para la capa semántica de documentos. No use `graphify update .` (degradaría la capa semántica de los .md). En cambio:
+
+```powershell
+$py = Get-Content graphify-out\.graphify_python
+& $py scripts\graphify_rebuild.py        # detect + AST + cache semántico + build + cluster
+& $py scripts\graphify_rebuild.py --finish  # reetiqueta comunidades, graph.html, manifest, cost.json
+```
+
+Según lo que haya cambiado, la primera corrida puede imprimir `FALTAN EXTRACCIÓN SEMANTICA` con la lista de documentos sin cachear. En ese caso:
+
+1. Despache subagentes, uno por documento pendiente, con la spec `extraction-spec.md` del paquete graphify instalado (ver `spec_path()` en `scripts/graphify_rebuild.py` si cambia de lugar). Cada subagente escribe `graphify-out/.graphify_chunk_NN.json` con los nodos/aristas/hyperedges extraídos.
+2. Vuelva a correr `scripts/graphify_rebuild.py` (ahora los chunks se cachean, el grafo se construye y el diff se imprime).
+3. Cierre con `scripts/graphify_rebuild.py --finish`.
+
+Detalles que no se deben romper:
+- `scripts/graphify_rebuild.py` corre cada paso en un subproceso con `parallel=False`: en Windows el multiprocessing estándar revienta con `OSError: [Errno 22] <stdin>`. No cambie eso a `parallel=True` sin meterse a arreglar el guard de `__main__`.
+- Las labels de comunidad se transfieren **por solapamiento de nodos** contra el grafo anterior (`.graphify_prev_graph.json`), nunca por id de comunidad, porque los ids cambian entre corridas. El `--finish` regenera `graph.json` con `community_labels=` vía `to_json`.
+- `scripts/graphify_external_deps.py` se ejecuta en el pipeline antes del build: crea nodos para dependencias externas (`ref_*`) y repara los endpoint colgantes del AST. El grafo final queda con ~2.280 nodos, ~4.615 aristas y 148 comunidades.
+- El health check del pipeline imprime `dangling_endpoint_edges` (aliases de AST como `src_db_index_schema`, `src_lib_auth_auth`) — son benignos, no bloquear por ellos.
+- Cuando un cambio obliga a actualizar `AGENTS.md` y se agrega o cambia documentación, el pipeline vuelve a narrar el grafo; el `--finish` no cambia las labels ya etiquetadas a mano salvo que la comunidad se parta o fusione. Si una comunidad nueva queda como `Community N`, reetiquétela y vuelva a correr `--finish`.
+
 ## 📏 Reglas de Desarrollo
 - Mobile-first en todas las vistas de cliente
 - Paleta de colores: rosa pastel (#FFE5EC, #FFC2D1), blanco, gris suave (#F5F5F5)
@@ -384,7 +407,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `/dashboard/settings/navigation` → Menú de navegación público editable
 - `/dashboard/exchange-rates` → Tasas BCV (alta manual, eliminación y backfill)
 - `/dashboard/services` → Gestión de servicios (flag "Es curso/grupo", fotos del servicio, eliminar si no tiene uso)
-- `/dashboard/gallery` → Muro de inspiración (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada)
+- `/dashboard/gallery` → Fotos, con dos pestañas: "Muro de inspiración" (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada) y **"Producción"** (archivo de solo lectura con todas las fotos finales de citas completadas, agrupado por día)
 - `/dashboard/admin-users` → Gestión de admins (solo superadmin)
 - `/dashboard/legal` → Datos legales del salón (campos variables de las políticas de privacidad)
 - `/dashboard/legal/terms` → Condiciones de servicio editables
@@ -401,6 +424,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - `GET/POST /api/gallery-photos` (admin) → lista/sube fotos sueltas del muro (`gallery_photos`, archivos en `/public/uploads/gallery`; POST acepta `serviceId` y `caption` opcionales).
 - `DELETE /api/gallery-photos/[id]` (admin) → borra la fila y el archivo.
 - `GET /api/gallery` (público) ahora fusiona fotos finales de citas compartidas + fotos sueltas de `gallery_photos` (orden por fecha desc, cursor).
+- `GET /api/production-photos` (permiso `gallery`) → **archivo de producción** para la pestaña "Producción" de `/dashboard/gallery`. Solo fotos `kind = 'final'` de citas `status = 'completed'` (el trabajo real del salón), de citas **compartidas o no**: el muro filtra por `shared_to_gallery` y este archivo no. Filtros `from`/`to`/`serviceId`/`q` + cursor `before`. **Pagina por DÍA, no por foto**: devuelve `{ days: [{ date, label, count, photos }], nextCursor, hasMore }` con días completos, para que los encabezados de fecha sean exactos y ninguna cita quede partida entre páginas; el cursor es **exclusivo** (`dayKey < before`) y se compara como `YYYY-MM-DD`. La clave del día se calcula en SQL con `strftime('%Y-%m-%d', appointments.start_time, 'unixepoch', '-4 hours')` y tiene que coincidir con `dayKeyFromTimestamp` de `src/lib/production-photos.ts` (Venezuela es UTC-4 fijo desde 2016, sin horario de verano). Es de solo lectura: **no** registra `logActivity` y no expone borrado ni publicación al muro.
 - `GET/POST /api/appointments/[id]/review` (público por id de cita): GET devuelve datos mínimos (servicio, fecha, nombre de pila, reseña existente); POST guarda `review_rating` (1-5 obligatorio) + `review_text` (opcional, máx 500) solo en citas `completed`; 409 si ya tiene reseña.
 - `GET /api/waitlist` (admin) → lista la lista de espera con nombre/teléfono del cliente.
 - `POST /api/waitlist` (usuario autenticado) → se une con `preferredDate` (timestamp inicio de día); dedupe por cliente+fecha (409); rechaza fechas pasadas (400).
@@ -449,6 +473,7 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables (nombre, teléfono, dirección y **email** — el email editable ayuda a unificar duplicados de Google)
 - ClientCRMPanel: el bloque "Contacto" permite editar también el **email** del cliente; el `PATCH /api/clients/[id]` lo valida (400 formato inválido) y rechaza duplicados con 409, para que al iniciar sesión con Google el `linkGoogleAccount` enlace al usuario existente en vez de crear uno duplicado
 - ClientCRMPanel: el carrusel de referencias usa `client.photoGroups` (nuevo campo de `GET /api/clients/[id]`, fotos `reference` agrupadas por cita) en vez del fetch a `/api/appointments/[id]/photos`. Al abrirse desde la agenda prioriza la cita del `appointmentId` recibido; con más de un grupo muestra el selector "Modelos de otra visita" (pills de fecha) para cambiar de cita.
+- ClientCRMPanel: **pasaporte de uñas** en el mismo drawer, debajo de las referencias. Segundo carrusel "Trabajos finalizados" alimentado por `client.passportGroups` (fotos `kind = 'final'` de citas `status = 'completed'`, agrupadas por cita). Lleva **su propio** estado `passportAppointmentId` y su propio selector "Trabajo de otra visita": referencias y trabajos finalizados son juegos de citas distintos (una cita completada puede no tener fotos de referencia y una pendiente no tiene fotos finales), así que un selector único los mezclaría. `passportGroups` usa `services.name` y **no** el snapshot de `service_purchases`, porque una sesión de curso tiene una fila de compra por alumno y el `LEFT JOIN` multiplicaría cada foto tantas veces como alumnos tenga la cita (mismo fan-out latente en `src/app/(client)/profile/page.tsx:70-73`).
 - PhotoLightbox: **visor de fotos compartido** a pantalla completa (`z-[70]`, sobre los diálogos `z-50` del admin). Pellizco, rueda del ratón, arrastre con anclaje al punto tocado, doble toque/clic, teclado (`Esc`, flechas, `+`/`-`/`0`), contador `n / total`, porcentaje de zoom, botones Alejar/Acercar/Restablecer, pie de foto y prop `footer` (el muro público lo usa para el CTA "Agendar"). La descarga baja el **original a resolución completa** con nombre slugificado (`src/lib/download-name.ts`); si la URL es de otro origen, el botón pasa a "Abrir" con `target="_blank"`. La matemática de zoom/pan está en `src/lib/zoom.ts` (funciones puras, 23 tests). Los efectos del visor tienen cobertura de render en `src/components/PhotoLightbox.test.tsx` (6 tests) vía `jsdom` con dobles de `ResizeObserver`, `clientWidth/clientHeight` y `naturalWidth/naturalHeight`, porque jsdom no tiene motor de layout ni implementa `ResizeObserver`; ese archivo atrapa exactamente la regresión de medir el viewport con `[]`.
 - Tests: los tests de componentes usan `.test.tsx` y declaran `// @vitest-environment jsdom` en la cabecera; `vitest.config.ts` los incluye en `include` y fuerza el runtime JSX automático. El resto son funciones puras en `.test.ts` con `environment: "node"`.
 - PhotoLightbox: **el overlay se monta siempre pero solo se activa con fotos**. Todos los hooks corren antes del `return null`, así que los efectos con efectos secundarios (scroll lock, teclado y **medición del viewport**) deben preguntar por `active`; si no, el `ResizeObserver` se aborta en el montaje (cuando aún no hay superficie) y la imagen se renderiza en 0x0. El scroll lock usa un **contador de módulo** porque el visor se abre encima del drawer del CRM (`z-50`) y no puede restaurar el scroll antes de tiempo.
@@ -478,7 +503,9 @@ Antes de hacer cambios en el código o revisar funcionalidades, **consultar la b
 - AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable. Cada pago de proveedor muestra la miniatura de su captura (`supplier_payments.photoUrl`, obligatoria) con acceso al `PhotoLightbox`.
 - InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La pestaña de productos incluye buscador por nombre, código, código de barras, categoría y subcategoría, con coincidencia sin distinguir mayúsculas ni acentos. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`). Cada producto tiene botón "Editar costo" (`EditCostDialog`, requiere `adjustInventory`) que crea una fila `kind: "cost_adjust"` en el kardex con motivo obligatorio; el kardex muestra la fila con badge púrpura "Costo" y el valor `unit_cost_usd`.
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
-- GalleryContent: gestor del muro de inspiración en /dashboard/gallery (subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación). Cada miniatura abre el `PhotoLightbox` con todas las fotos del muro.
+- GalleryContent: `/dashboard/gallery` tiene dos pestañas. **"Muro de inspiración"** (`WallTab`): subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación. **"Producción"** (`ProductionTab`): archivo de solo lectura de todas las fotos finales de citas completadas, agrupado por día con encabezados `sticky` y paginado con "Cargar días anteriores". Filtros de rango de fechas, servicio y búsqueda por clienta con separación draft/aplicado (botón "Filtrar", como `/dashboard/activity`). Ambas pestañas montan **su propio** `PhotoLightbox` porque solo una está montada a la vez; ambas usan el mismo grid masonry `columns-2 sm:columns-3` con `break-inside-avoid` que ya usan `GalleryGrid` y el muro. El pie de cada foto (`caption`) lo arma el endpoint con `buildProductionCaption` y alimenta el pie del visor **y** el nombre de la descarga.
+- **Búsqueda sin acentos en SQL**: `src/db/index.ts` registra la función `fold` en la conexión SQLite (`sqlite.function("fold", { deterministic: true }, foldSearchText)`), que pliega diacríticos y baja a minúsculas. Hace falta porque el `LIKE` de SQLite no ignora tildes y el filtro de clientas del archivo de producción va en SQL (un filtro client-side rompería la paginación por día). El texto buscado se escapa con `escapeLikePattern` + `ESCAPE '\'` para que `%` y `_` sean literales. **Ojo al escribir ese `ESCAPE` dentro de un template literal de JS**: en el código hay que escribir `'\\'` (barra invertida real), porque escribir `'\ '` a mano colapsa a `''` y SQLite rechaza la consulta con "ESCAPE expression must be a single character". El resto de los buscadores del proyecto (`/dashboard/balances`, `/dashboard/inventory`) siguen siendo client-side.
+- `LightboxPhoto` acepta un `date?: string | null` opcional ("YYYY-MM-DD") que solo afecta el nombre del archivo descargado (`photoDownloadName` ya lo soportaba pero nadie lo pasaba; `PhotoLightbox` ahora lo reenvía). Las pantallas que no lo pasan se comportan igual que antes.
 - ConfirmDialog: modal de confirmación reutilizable (cancelar cita, eliminar cliente/servicio)
 
 ## 🚀 Comandos

@@ -6,6 +6,7 @@ import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
+import { SALON_TIME_ZONE } from "@/lib/production-photos";
 
 type PhotoGroup = {
   appointmentId: string;
@@ -25,6 +26,7 @@ type ClientData = {
   email: string;
   balanceUsd: number;
   photoGroups: PhotoGroup[];
+  passportGroups: PhotoGroup[];
   payments: {
     id: string;
     amountUsd: number;
@@ -73,6 +75,7 @@ export function ClientCRMPanel({
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState("");
   const [photoAppointmentId, setPhotoAppointmentId] = useState<string | null>(null);
+  const [passportAppointmentId, setPassportAppointmentId] = useState<string | null>(null);
   const [contact, setContact] = useState({ name: "", phone: "", address: "", email: "" });
   const [editingContact, setEditingContact] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
@@ -90,6 +93,16 @@ export function ClientCRMPanel({
     photoGroups.find((g) => g.appointmentId === photoAppointmentId) ??
     photoGroups.find((g) => g.appointmentId === appointmentId) ??
     photoGroups[0] ??
+    null;
+
+  // El pasaporte lleva su propio selector: una cita completada puede no tener
+  // fotos de referencia y una pendiente no tiene fotos finales, así que un
+  // selector único mezclaría visitas de dos clases distintas.
+  const passportGroups = client?.passportGroups ?? [];
+  const passportGroup =
+    passportGroups.find((g) => g.appointmentId === passportAppointmentId) ??
+    passportGroups.find((g) => g.appointmentId === appointmentId) ??
+    passportGroups[0] ??
     null;
 
   useEffect(() => {
@@ -243,6 +256,54 @@ export function ClientCRMPanel({
       )}`
     : null;
 
+  // Pie del carrusel: "Gel Semipermanente · 12 de enero de 2026".
+  const groupCaption = (group: PhotoGroup) =>
+    `${group.serviceName}${
+      group.startTime
+        ? ` · ${new Intl.DateTimeFormat("es-ES", {
+            dateStyle: "long",
+            timeZone: SALON_TIME_ZONE,
+          }).format(new Date(group.startTime * 1000))}`
+        : ""
+    }`;
+
+  // Selector de visita. Referencias y trabajos finalizados son juegos de citas
+  // distintos, así que cada bloque pasa su propio estado.
+  const groupPills = (
+    groups: PhotoGroup[],
+    selectedId: string,
+    onSelect: (id: string) => void,
+    legend: string
+  ) =>
+    groups.length > 1 && (
+      <div className="-mt-3 mb-5">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          {legend}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {groups.map((g) => (
+            <button
+              key={g.appointmentId}
+              type="button"
+              onClick={() => onSelect(g.appointmentId)}
+              className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
+                g.appointmentId === selectedId
+                  ? "bg-pink-main text-gray-900"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {g.startTime
+                ? new Intl.DateTimeFormat("es-ES", {
+                    dateStyle: "short",
+                    timeZone: SALON_TIME_ZONE,
+                  }).format(new Date(g.startTime * 1000))
+                : g.serviceName}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
@@ -264,47 +325,40 @@ export function ClientCRMPanel({
             <PhotoCarousel
               // La key reinicia el índice interno del carrusel al cambiar de cita.
               key={photoGroup.appointmentId}
+              title="Modelos de referencia"
               photos={photoGroup.photos.map((p) => ({
                 id: p.id,
                 url: p.url,
-                caption: `${photoGroup.serviceName}${
-                  photoGroup.startTime
-                    ? ` · ${new Intl.DateTimeFormat("es-ES", {
-                        dateStyle: "long",
-                        timeZone: "America/Caracas",
-                      }).format(new Date(photoGroup.startTime * 1000))}`
-                    : ""
-                }`,
+                caption: groupCaption(photoGroup),
               }))}
               onOpen={lightbox.open}
             />
-            {photoGroups.length > 1 && (
-              <div className="-mt-3 mb-5">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  Modelos de otra visita
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {photoGroups.map((g) => (
-                    <button
-                      key={g.appointmentId}
-                      type="button"
-                      onClick={() => setPhotoAppointmentId(g.appointmentId)}
-                      className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
-                        g.appointmentId === photoGroup.appointmentId
-                          ? "bg-pink-main text-gray-900"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      {g.startTime
-                        ? new Intl.DateTimeFormat("es-ES", {
-                            dateStyle: "short",
-                            timeZone: "America/Caracas",
-                          }).format(new Date(g.startTime * 1000))
-                        : g.serviceName}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            {groupPills(
+              photoGroups,
+              photoGroup.appointmentId,
+              setPhotoAppointmentId,
+              "Modelos de otra visita"
+            )}
+          </>
+        )}
+
+        {passportGroup && passportGroup.photos.length > 0 && (
+          <>
+            <PhotoCarousel
+              key={passportGroup.appointmentId}
+              title="Trabajos finalizados"
+              photos={passportGroup.photos.map((p) => ({
+                id: p.id,
+                url: p.url,
+                caption: groupCaption(passportGroup),
+              }))}
+              onOpen={lightbox.open}
+            />
+            {groupPills(
+              passportGroups,
+              passportGroup.appointmentId,
+              setPassportAppointmentId,
+              "Trabajo de otra visita"
             )}
           </>
         )}

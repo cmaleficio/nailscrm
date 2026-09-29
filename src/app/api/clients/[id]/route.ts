@@ -172,11 +172,58 @@ export async function GET(
     photoGroups.set(row.appointmentId, group);
   }
 
+  // El pasaporte de la clienta: fotos finales de sus citas completadas. Usa
+  // services.name y no el snapshot de service_purchases a propósito, porque
+  // una sesión de curso tiene una fila de compra por alumno y el LEFT JOIN
+  // multiplicaría cada foto tantas veces como alumnos tenga la cita.
+  const passportRows = db
+    .select({
+      appointmentId: schema.appointmentPhotos.appointmentId,
+      photoId: schema.appointmentPhotos.id,
+      url: schema.appointmentPhotos.url,
+      startTime: schema.appointments.startTime,
+      serviceName: schema.services.name,
+    })
+    .from(schema.appointmentPhotos)
+    .innerJoin(
+      schema.appointments,
+      eq(schema.appointmentPhotos.appointmentId, schema.appointments.id)
+    )
+    .innerJoin(
+      schema.services,
+      eq(schema.appointments.serviceId, schema.services.id)
+    )
+    .where(
+      and(
+        eq(schema.appointments.clientId, id),
+        eq(schema.appointmentPhotos.kind, "final"),
+        eq(schema.appointments.status, "completed")
+      )
+    )
+    .orderBy(sql`${schema.appointments.startTime} DESC`, schema.appointmentPhotos.position)
+    .all();
+
+  const passportGroups = new Map<
+    string,
+    { appointmentId: string; serviceName: string; startTime: number | null; photos: { id: string; url: string }[] }
+  >();
+  for (const row of passportRows) {
+    const group = passportGroups.get(row.appointmentId) ?? {
+      appointmentId: row.appointmentId,
+      serviceName: row.serviceName,
+      startTime: row.startTime,
+      photos: [],
+    };
+    group.photos.push({ id: row.photoId, url: row.url });
+    passportGroups.set(row.appointmentId, group);
+  }
+
   return NextResponse.json({
     ...client,
     balanceUsd: Math.round(((dueRow?.due ?? 0) - (paidRow?.paid ?? 0)) * 100) / 100,
     payments,
     photoGroups: [...photoGroups.values()],
+    passportGroups: [...passportGroups.values()],
   });
 }
 

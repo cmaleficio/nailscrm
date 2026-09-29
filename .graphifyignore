@@ -1,0 +1,26 @@
+# graphify: exclusiones del corpus del grafo de conocimiento
+#
+# Estas rutas NO son codigo de la app. Indexarlas hunda el grafo del salon
+# bajo el ruido de la herramienta o de scratch de diseño.
+
+# La skill graphify trae una copia completa de su propio paquete Python
+# (~2.3k nodos de los 3.1k totales en el grafo del 2026-08-28). Es la
+# herramienta que genera el grafo, no una dependencia del salon.
+.agents/
+
+# Scratch de OCR sobre mockups de diseño (21 PNG + sus .txt.txt).
+# No describen ninguna parte del sistema.
+img-pp/
+img-pp-ocr/
+
+# Artefactos del workspace de superpowers.
+.superpowers/
+
+# Bases SQLite locales: son datos, no esquema. El esquema vive en
+# src/db/schema.ts y en las migraciones de drizzle/.
+*.db
+*.db-wal
+*.db-shm
+
+# Logs del dev server en segundo plano.
+*.log

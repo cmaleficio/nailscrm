@@ -89,6 +89,8 @@ npx tsc --noEmit      # typecheck
 - **Reseñas post-cita:** tras completar una cita, la clienta puede dejar su reseña (estrellas + comentario) desde `/review/[id]` o el botón "Dejar reseña" en su perfil.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home. Los servicios se muestran **del más barato al más costoso** (tiebreaker por nombre) tanto en el home público como en el dashboard admin y en la API `/api/services`.
 - **Muro del admin:** en `/dashboard/gallery` se suben fotos sueltas al muro (múltiples a la vez, con servicio asociado opcional y descripción).
+- **Archivo de producción:** la pestaña "Producción" de `/dashboard/gallery` lista **todas** las fotos finales de citas completadas (compartidas o no en el muro), agrupadas por día con encabezados fijos y paginadas por "Cargar días anteriores". Filtros por rango de fechas, servicio y clienta (la búsqueda ignora tildes y acentos). Al hacer clic se abre el visor con zoom, teclado y descarga del archivo original con la fecha en el nombre. Es de solo lectura: para publicar o borrar fotos se sigue usando el botón "Muro" de la cita en la agenda.
+- **Pasaporte de uñas del admin:** el panel de clientas (`/dashboard/clients` o el drawer desde la agenda) muestra un carrusel "Trabajos finalizados" con las fotos finales de cada visita completada, con selector para cambiar de visita. Antes solo se veían los modelos de referencia que sube la clienta.
 - **Teléfono post-Google:** tras registrarse con Google se pide el teléfono en `/complete-registration`.
 - **Permisos por admin:** en `/dashboard/admin-users` (solo superadmin) se asignan permisos por módulo (`users.permissions`), incluidos `brandSettings`, `workingHours`, `exchangeRates`, `legalSettings` y `navigation` de forma independiente; un admin con `null` tiene acceso a todo y el superadmin siempre accede a todo. El permiso legacy `settings` se expande automáticamente a los cinco módulos de configuración al leer o guardar permisos, y un valor corrupto o ausente en la columna se interpreta como **sin permisos** (nunca como acceso total). Hay select "Copiar de…" para replicar los permisos de otro admin. También aparece "Mis pagos" en el perfil del cliente para reportar pagos en Bs con captura.
 - **Log de actividad:** auditoría de cambios por usuario en `/dashboard/activity` con filtros y paginación (permiso `activityLog`).
@@ -112,13 +114,32 @@ src/
 
 ## 📚 Base de Conocimiento
 
-El proyecto incluye una base de conocimiento generada con [Graphify](https://github.com/graphify-labs/graphify):
+El proyecto incluye una base de conocimiento generada con [Graphify](https://github.com/graphify-labs/graphify) que agrupa código, documentos y dependencias externas en un grafo con comunidades etiquetadas:
 
-- `graphify-out/graph.html` — Grafo interactivo (abrir en navegador)
-- `graphify-out/graph.json` — Datos crudos del grafo
-- `graphify-out/GRAPH_REPORT.md` — Reporte de comunidades y conexiones
+- `graphify-out/graph.html` — Grafo interactivo (abrir en navegador, sin servidor)
+- `graphify-out/graph.json` — Datos crudos del grafo (nodos y aristas)
+- `graphify-out/GRAPH_REPORT.md` — Reporte de comunidades, hubs y conexiones
 
-Para actualizarla: `graphify . --code-only --html` (requiere `pip install graphifyy`).
+**Requisito:** Python con `graphifyy[sql]` instalado (`pip install "graphifyy[sql]"`). El intérprete usado en la última corrida se persiste en `graphify-out/.graphify_python` y es el que debe usar para reconstruir.
+
+**Reconstruir/actualizar** (Windows):
+
+```powershell
+$py = Get-Content graphify-out\.graphify_python
+& $py scripts\graphify_rebuild.py        # detect + AST + cache semántico + build + cluster
+& $py scripts\graphify_rebuild.py --finish  # reetiqueta, graph.html, manifest, cost.json
+```
+
+Si el primer comando imprime `FALTAN EXTRACCIÓN SEMANTICA`, hay que despachar subagentes con `extraction-spec.md` del paquete instalado (escriben `graphify-out/.graphify_chunk_NN.json`) y volver a correr. **No usar `graphify update .`**: ese subcomando solo re-extrae código y regenera los documentos a nivel de encabezado, degradando la capa semántica (medido: 2255 → 2109 nodos, 216 nodos de doc perdidos).
+
+Archivos internos del pipeline:
+- `.graphifyignore` — exclusiones que no entran al grafo (`.agents/` — código del propio graphify —, scratch de OCR, SQLite locales, logs)
+- `scripts/graphify_external_deps.py` — crea nodos para dependencias externas y repara imports ambiguos
+- `scripts/graphify_rebuild.py` — pipeline determinista documentado arriba
+- `graphify-out/manifest.json` — hashes/mtimes por archivo para detección de cambios
+- `graphify-out/cost.json` — acumulado de tokens por corrida
+
+`graphify-out/` está en `.gitignore`: las salidas son locales, no se versionan.
 
 ## Mantenimiento
 
