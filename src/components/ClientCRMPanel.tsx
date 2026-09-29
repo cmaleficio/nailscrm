@@ -46,6 +46,10 @@ type Props = {
   appointmentTime?: string;
   onClose: () => void;
   onDeleted?: () => void;
+  /** Estado de la cita abierta: no se quita nada de una cita completada. */
+  appointmentStatus?: string;
+  /** Se llama tras un cambio para que el padre refresque la agenda. */
+  onChanged?: () => void;
 };
 
 type Purchase = {
@@ -65,6 +69,8 @@ export function ClientCRMPanel({
   appointmentTime,
   onClose,
   onDeleted,
+  appointmentStatus,
+  onChanged,
 }: Props) {
   const [client, setClient] = useState<ClientData | null>(null);
   const [techNotes, setTechNotes] = useState("");
@@ -76,6 +82,8 @@ export function ClientCRMPanel({
   const [purchaseSaving, setPurchaseSaving] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState("");
+  const [removingPurchase, setRemovingPurchase] = useState<Purchase | null>(null);
+  const [removeError, setRemoveError] = useState("");
   const [photoAppointmentId, setPhotoAppointmentId] = useState<string | null>(null);
   const [passportAppointmentId, setPassportAppointmentId] = useState<string | null>(null);
   const [contact, setContact] = useState({ name: "", phone: "", address: "", email: "" });
@@ -192,6 +200,39 @@ export function ClientCRMPanel({
     } finally {
       setPurchaseSaving(false);
     }
+  }
+
+  async function removeService() {
+    if (!removingPurchase || !appointmentId) return;
+    setRemoveError("");
+    const res = await fetch(
+      `/api/appointments/${appointmentId}/services?purchaseId=${removingPurchase.id}`,
+      { method: "DELETE" }
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setRemoveError(data?.error ?? "No se pudo quitar el servicio");
+      setRemovingPurchase(null);
+      return;
+    }
+    // La compra editada puede ser la que se quitó: se suelta para no dejar el
+    // formulario apuntando a una fila que ya no existe.
+    setRemovingPurchase(null);
+    setPurchase(null);
+    setPurchaseForm(null);
+    const resFresh = await fetch(`/api/clients/${clientId}`);
+    const data = await resFresh.json();
+    if (data) {
+      setClient(data);
+      setTechNotes(data.techNotes || "");
+      setContact({
+        name: data.name ?? "",
+        phone: data.phone ?? "",
+        address: data.address ?? "",
+        email: data.email ?? "",
+      });
+    }
+    onChanged?.();
   }
 
   async function syncPurchaseToCatalog() {
@@ -536,29 +577,48 @@ export function ClientCRMPanel({
                 {purchaseError}
               </p>
             )}
+            {removeError && (
+              <p className="mb-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-600">
+                {removeError}
+              </p>
+            )}
             {purchases.length > 1 && (
               <div className="mb-3 space-y-1.5">
                 {purchases.map((p) => (
-                  <button
+                  <div
                     key={p.id}
-                    onClick={() => {
-                      setPurchase(p);
-                      setPurchaseForm(p);
-                      setEditingPurchase(false);
-                    }}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
-                      p.id === purchase?.id
-                        ? "bg-pink-light text-gray-900"
-                        : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                    className={`flex items-center gap-1 rounded-lg pr-1 transition-colors ${
+                      p.id === purchase?.id ? "bg-pink-light" : "bg-gray-50"
                     }`}
                   >
-                    <span className="min-w-0 truncate font-medium">
-                      {p.isPrimary === 1 ? p.serviceName : `+ ${p.serviceName}`}
-                    </span>
-                    <span className="shrink-0 text-xs text-gray-400">
-                      ${p.servicePrice.toFixed(2)} · {p.serviceDurationMins} min
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => {
+                        setPurchase(p);
+                        setPurchaseForm(p);
+                        setEditingPurchase(false);
+                      }}
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 px-2.5 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="min-w-0 truncate font-medium text-gray-900">
+                        {p.isPrimary === 1 ? p.serviceName : `+ ${p.serviceName}`}
+                      </span>
+                      <span className="shrink-0 text-xs text-gray-400">
+                        ${p.servicePrice.toFixed(2)} · {p.serviceDurationMins} min
+                      </span>
+                    </button>
+                    {appointmentStatus !== "completed" && (
+                      <button
+                        onClick={() => {
+                          setRemoveError("");
+                          setRemovingPurchase(p);
+                        }}
+                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                        aria-label={`Quitar ${p.serviceName} de la cita`}
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -759,6 +819,15 @@ export function ClientCRMPanel({
           error={deleteError}
           onConfirm={confirmDeleteClient}
           onClose={() => setConfirmDelete(false)}
+        />
+      )}
+      {removingPurchase && (
+        <ConfirmDialog
+          title="Quitar servicio"
+          message={`¿Quitar "${removingPurchase.serviceName}" de la cita? La cita sigue agendada con los servicios que quedan y el total se recalcula.`}
+          confirmLabel="Quitar"
+          onConfirm={removeService}
+          onClose={() => setRemovingPurchase(null)}
         />
       )}
       </div>

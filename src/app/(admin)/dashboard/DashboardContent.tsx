@@ -843,6 +843,8 @@ export function DashboardContent({ today }: Props) {
             setSelectedAppointment(null);
             refreshAll();
           }}
+          appointmentStatus={selectedAppointment.status}
+          onChanged={refreshAll}
         />
       )}
 
