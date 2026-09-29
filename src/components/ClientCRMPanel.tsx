@@ -94,6 +94,7 @@ export function ClientCRMPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [removingBusy, setRemovingBusy] = useState(false);
   const lightbox = usePhotoLightbox();
 
   // Cuando el panel se abre desde la agenda se sabe la cita; desde
@@ -115,20 +116,27 @@ export function ClientCRMPanel({
     passportGroups[0] ??
     null;
 
-  useEffect(() => {
-    fetch(`/api/clients/${clientId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setClient(data);
-        setTechNotes(data.techNotes || "");
-        setContact({
-          name: data.name ?? "",
-          phone: data.phone ?? "",
-          address: data.address ?? "",
-          email: data.email ?? "",
-        });
-      });
+  // Recarga todos los datos del cliente desde el servidor. Se usa tras
+  // cambios en notas, contacto, compras, pagos, o al quitar un servicio.
+  const loadClient = useCallback(async () => {
+    const res = await fetch(`/api/clients/${clientId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data) return;
+    setClient(data);
+    setTechNotes(data.techNotes || "");
+    setContact({
+      name: data.name ?? "",
+      phone: data.phone ?? "",
+      address: data.address ?? "",
+      email: data.email ?? "",
+    });
+    return data;
   }, [clientId]);
+
+  useEffect(() => {
+    loadClient();
+  }, [clientId, loadClient]);
 
   // Una cita puede tener N compras (principal + complementarios). El endpoint
   // las devuelve ordenadas con el principal primero, así que purchases[0] es el
@@ -204,15 +212,17 @@ export function ClientCRMPanel({
 
   async function removeService() {
     if (!removingPurchase || !appointmentId) return;
+    setRemovingBusy(true);
     setRemoveError("");
     const res = await fetch(
-      `/api/appointments/${appointmentId}/services?purchaseId=${removingPurchase.id}`,
+      `/api/appointments/${appointmentId}/services?purchaseId=${encodeURIComponent(removingPurchase.id)}`,
       { method: "DELETE" }
     );
     if (!res.ok) {
       const data = await res.json().catch(() => null);
       setRemoveError(data?.error ?? "No se pudo quitar el servicio");
       setRemovingPurchase(null);
+      setRemovingBusy(false);
       return;
     }
     // La compra editada puede ser la que se quitó: se suelta para no dejar el
@@ -220,19 +230,9 @@ export function ClientCRMPanel({
     setRemovingPurchase(null);
     setPurchase(null);
     setPurchaseForm(null);
-    const resFresh = await fetch(`/api/clients/${clientId}`);
-    const data = await resFresh.json();
-    if (data) {
-      setClient(data);
-      setTechNotes(data.techNotes || "");
-      setContact({
-        name: data.name ?? "",
-        phone: data.phone ?? "",
-        address: data.address ?? "",
-        email: data.email ?? "",
-      });
-    }
+    await loadClient();
     onChanged?.();
+    setRemovingBusy(false);
   }
 
   async function syncPurchaseToCatalog() {
@@ -826,6 +826,9 @@ export function ClientCRMPanel({
           title="Quitar servicio"
           message={`¿Quitar "${removingPurchase.serviceName}" de la cita? La cita sigue agendada con los servicios que quedan y el total se recalcula.`}
           confirmLabel="Quitar"
+          danger
+          busy={removingBusy}
+          error={removeError}
           onConfirm={removeService}
           onClose={() => setRemovingPurchase(null)}
         />
