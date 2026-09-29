@@ -108,10 +108,17 @@ export async function DELETE(
     );
   }
 
+  // Una cita rota (startTime null) no debería recibir eliminación de servicios.
+  if (!appointment.startTime) {
+    return NextResponse.json(
+      { error: "La cita está rota — startTime es null" },
+      { status: 400 }
+    );
+  }
+
   const remaining = remainingCombination(all.filter((p) => p.id !== purchaseId));
   const summary = remaining.names.join(" + ");
-  // Un start_time null es una cita rota: mejor no inventarle un end_time nuevo.
-  const startTime = appointment.startTime ?? 0;
+  const startTime = appointment.startTime;
   const endTime = startTime + remaining.totalDurationMins * 60;
 
   db.transaction((tx) => {
@@ -131,8 +138,9 @@ export async function DELETE(
       .run();
   });
 
-  // La clienta y el admin pagan la cita: recalcular solo para la dueña dejaría
-  // al admin con el precio viejo.
+  // La clienta ancla y el cliente cuya compra se va pagan la cita: recalcular
+  // solo para la dueña dejaría al otro con el precio viejo. En una cita normal
+  // ambos son la misma persona y el Set no hace nada.
   for (const userId of new Set([appointment.clientId, purchase.userId])) {
     recomputeFinancialStatus(userId);
   }
