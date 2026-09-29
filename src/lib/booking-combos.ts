@@ -120,3 +120,53 @@ export function resolveBookingServices(
 export function formatServiceNames(names: string[]): string {
   return names.filter(Boolean).join(" + ");
 }
+
+/**
+ * Qué hacer con el servicio que llega por `?serviceId=`. Es una decisión de
+ * catálogo, no de UI: un complementario no puede ser principal (la API lo
+ * rechaza), pero sí se puede ofrecer como "ya elegido" para agregar otro.
+ */
+export function classifyBookingEntry(
+  service: { id: string; isComplementary?: number | null } | null | undefined,
+  requestedId: string | null
+): "principal" | "complementary" | "ignore" {
+  if (!service || !requestedId || service.id !== requestedId) return "ignore";
+  return service.isComplementary === 1 ? "complementary" : "principal";
+}
+
+/**
+ * Reparte el catálogo. Con algo preseleccionado no se ofrecen principales:
+ * la cita ya tiene su principal y, en un servidor con muchos servicios, la
+ * lista completa de principales es lo que hace que el paso 1 se vea vacío.
+ */
+export function partitionBookingServices<
+  T extends { id: string; isComplementary: number | null },
+>(services: T[], preselectedId: string | null): { principal: T[]; complementary: T[] } {
+  if (preselectedId) {
+    return {
+      principal: [],
+      complementary: services.filter(
+        (s) => s.isComplementary === 1 && s.id !== preselectedId
+      ),
+    };
+  }
+  return {
+    principal: services.filter((s) => s.isComplementary !== 1),
+    complementary: services.filter((s) => s.isComplementary === 1),
+  };
+}
+
+/** Estado tras pulsar "Cambiar": la cita vuelve a no tener nada elegido. */
+export function clearPreselected<T extends { id: string }>(
+  selectedPrimary: T | null,
+  selectedComplementaries: T[],
+  preselectedId: string
+): { primary: T | null; complementaries: T[] } {
+  return {
+    primary:
+      selectedPrimary && selectedPrimary.id === preselectedId
+        ? null
+        : selectedPrimary,
+    complementaries: selectedComplementaries.filter((s) => s.id !== preselectedId),
+  };
+}

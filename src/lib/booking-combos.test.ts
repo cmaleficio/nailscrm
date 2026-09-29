@@ -5,6 +5,9 @@ import {
   parseComplementaryIds,
   resolveBookingServices,
   type ServiceRoleRow,
+  classifyBookingEntry,
+  clearPreselected,
+  partitionBookingServices,
 } from "./booking-combos";
 
 function svc(over: Partial<ServiceRoleRow> & { id: string }): ServiceRoleRow {
@@ -193,5 +196,70 @@ describe("resolveBookingServices", () => {
     const r = resolveBookingServices(all, "full", "matiz,matiz,diseno");
     expect(r.error).toBeNull();
     expect(r.complementaries.map((c) => c.id)).toEqual(["matiz", "diseno"]);
+  });
+});
+
+describe("classifyBookingEntry", () => {
+  it("un principal preseleccionado es principal", () => {
+    expect(classifyBookingEntry({ id: "a", isComplementary: 0 }, "a")).toBe("principal");
+  });
+
+  it("un complementario preseleccionado es complementario (se ofrece agregar, no se ignora)", () => {
+    expect(classifyBookingEntry({ id: "b", isComplementary: 1 }, "b")).toBe("complementary");
+  });
+
+  it("una respuesta de la API que no es el servicio pedido se ignora", () => {
+    expect(classifyBookingEntry({ id: "otro", isComplementary: 0 }, "a")).toBe("ignore");
+    expect(classifyBookingEntry(null, "a")).toBe("ignore");
+    expect(classifyBookingEntry({ id: "a", isComplementary: 0 }, null)).toBe("ignore");
+  });
+});
+
+describe("partitionBookingServices", () => {
+  const catalogo = [
+    { id: "a", isComplementary: 0 },
+    { id: "b", isComplementary: 0 },
+    { id: "c", isComplementary: 1 },
+    { id: "d", isComplementary: 1 },
+  ];
+
+  it("sin preselección separa principales de complementarios", () => {
+    const r = partitionBookingServices(catalogo, null);
+    expect(r.principal.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(r.complementary.map((s) => s.id)).toEqual(["c", "d"]);
+  });
+
+  it("con preselección de un principal no ofrece principales (no hay a qué cambiar)", () => {
+    const r = partitionBookingServices(catalogo, "a");
+    expect(r.principal).toEqual([]);
+    expect(r.complementary.map((s) => s.id)).toEqual(["c", "d"]);
+  });
+
+  it("con preselección de un complementario no lo repite en la lista", () => {
+    const r = partitionBookingServices(catalogo, "c");
+    expect(r.principal).toEqual([]);
+    expect(r.complementary.map((s) => s.id)).toEqual(["d"]);
+  });
+});
+
+describe("clearPreselected", () => {
+  const a = { id: "a", isComplementary: 0 };
+  const c = { id: "c", isComplementary: 1 };
+
+  it("si era el principal, lo suelta", () => {
+    const r = clearPreselected(a, [], "a");
+    expect(r.primary).toBeNull();
+    expect(r.complementaries).toEqual([]);
+  });
+
+  it("si era complementario, lo quita de los complementarios y conserva el resto", () => {
+    const r = clearPreselected(null, [a, c], "c");
+    expect(r.primary).toBeNull();
+    expect(r.complementaries.map((s) => s.id)).toEqual(["a"]);
+  });
+
+  it("es idempotente cuando el id no está en ninguna de las dos listas", () => {
+    const r = clearPreselected(null, [a], "zzz");
+    expect(r.complementaries.map((s) => s.id)).toEqual(["a"]);
   });
 });

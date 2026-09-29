@@ -7,6 +7,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { dateToDayStartTs, tsToLocalLabel } from "@/lib/time";
 import { MAX_COMPLEMENTARY_SERVICES } from "@/lib/booking-combos";
+import {
+  classifyBookingEntry,
+  partitionBookingServices,
+  clearPreselected,
+} from "@/lib/booking-combos";
 
 type Service = {
   id: string;
@@ -59,6 +64,9 @@ export function BookingWizard() {
   const [submitError, setSubmitError] = useState("");
   const [wlStatus, setWlStatus] = useState<"idle" | "joining" | "joined" | "already">("idle");
   const [wlError, setWlError] = useState("");
+  // Con ?serviceId= el paso 1 sigue en pantalla: solo se ofrece lo que falta
+  // (los complementarios) y "Cambiar" deshace la preselección.
+  const [preselectedId, setPreselectedId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return now.getMonth();
@@ -79,12 +87,18 @@ export function BookingWizard() {
     if (serviceId) {
       const res = await fetch(`/api/services?id=${serviceId}`);
       const data = await res.json();
-      // Un complementario nunca puede ser el principal (lo rechaza la API),
-      // así que un enlace directo a uno se ignora en vez de fallar al confirmar.
-      if (data && data.isComplementary !== 1) {
-        setSelectedService(data);
-        setStep(2);
+      // Un complementario nunca puede ser el principal (lo rechaza la API), así
+      // que uno preseleccionado se ofrece como "ya elegido" en vez de fallar al
+      // confirmar. `data.id === serviceId` evita que un id inexistente contamine
+      // el resumen con "undefined".
+      const role = classifyBookingEntry(data, serviceId);
+      if (role === "principal") setSelectedService(data);
+      if (role === "complementary") {
+        setComplementaryIds((prev) =>
+          prev.includes(serviceId) ? prev : [...prev, serviceId]
+        );
       }
+      if (role !== "ignore") setPreselectedId(serviceId);
     }
     const referencePhotoUrl = searchParams.get("referencePhotoUrl");
     if (referencePhotoUrl) {
@@ -125,8 +139,8 @@ export function BookingWizard() {
   // sigue exigiendo serviceId, así que en ese caso se ancla con el primero.
   const primaryService = selectedService ?? selectedComplementaries[0] ?? null;
 
-  const principalServices = services.filter((s) => s.isComplementary !== 1);
-  const complementaryServices = services.filter((s) => s.isComplementary === 1);
+  const { principal: principalServices, complementary: complementaryServices } =
+    partitionBookingServices(services, preselectedId);
   const selectedCount = selectedComplementaries.length + (selectedService ? 1 : 0);
 
   function toggleComplementary(id: string) {
@@ -148,6 +162,22 @@ export function BookingWizard() {
     // combinación: hay que recargar si el usuario ya había elegido fecha.
     setSelectedSlot(null);
     if (selectedDate) void fetchSlots(selectedDate, next);
+  }
+
+  function changePreselected() {
+    if (!preselectedId) return;
+    const next = clearPreselected(
+      selectedService,
+      selectedComplementaries,
+      preselectedId
+    );
+    setSelectedService(next.primary);
+    setComplementaryIds(next.complementaries.map((s) => s.id));
+    setPreselectedId(null);
+    // El slot se invalidaba al cambiar la combinación; aquí la combinación
+    // vuelve a estar vacía, así que el slot ya no aplica.
+    setSelectedSlot(null);
+    if (selectedDate) void fetchSlots(selectedDate, []);
   }
 
   function choosePrimary(service: Service) {
@@ -386,7 +416,6 @@ export function BookingWizard() {
                   <button
                     onClick={() => {
                       choosePrimary(s);
-                      setStep(2);
                     }}
                     className="min-w-0 flex-1 text-left"
                   >
@@ -456,9 +485,19 @@ export function BookingWizard() {
 
           {(selectedService || complementaryIds.length > 0) && (
             <div className="mt-4 rounded-xl border border-purple-100 bg-purple-50/50 p-4">
-              <p className="mb-2 text-sm font-medium text-gray-900">
-                Tu cita ({selectedCount} {selectedCount === 1 ? "servicio" : "servicios"})
-              </p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-900">
+                  Tu cita ({selectedCount} {selectedCount === 1 ? "servicio" : "servicios"})
+                </p>
+                {preselectedId && (
+                  <button
+                    onClick={changePreselected}
+                    className="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    Cambiar
+                  </button>
+                )}
+              </div>
               <ul className="mb-3 space-y-1 text-sm text-gray-600">
                 {selectedService && (
                   <li className="flex items-center justify-between">
