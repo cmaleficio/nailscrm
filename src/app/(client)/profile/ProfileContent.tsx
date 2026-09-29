@@ -33,6 +33,14 @@ type Appointment = {
   photos: Photo[];
 };
 
+type UpcomingService = {
+  id: string;
+  name: string;
+  price: number;
+  durationMins: number;
+  isPrimary: number | null;
+};
+
 type UpcomingAppointment = {
   id: string;
   startTime: number;
@@ -40,6 +48,8 @@ type UpcomingAppointment = {
   status: string;
   referencePhotoUrl: string | null;
   serviceName: string;
+  /** Una fila por servicio de la cita: lo que permite quitar uno suelto. */
+  items: UpcomingService[];
 };
 
 type StatementItem = {
@@ -75,6 +85,8 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState("");
+  const [removingPurchaseId, setRemovingPurchaseId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const lightbox = usePhotoLightbox();
@@ -117,6 +129,22 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
     } finally {
       setCancellingId(null);
     }
+  }
+
+  async function handleRemoveService(appointmentId: string, purchaseId: string) {
+    setRemoveError("");
+    const res = await fetch(
+      `/api/appointments/${appointmentId}/services?purchaseId=${purchaseId}`,
+      { method: "DELETE" }
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setRemoveError(data?.error ?? "No se pudo quitar el servicio");
+      setRemovingPurchaseId(null);
+      return;
+    }
+    setRemovingPurchaseId(null);
+    router.refresh();
   }
 
   return (
@@ -185,73 +213,122 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
             {upcomingAppointments.map((appt) => (
               <div
                 key={appt.id}
-                className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
               >
-                {appt.referencePhotoUrl && (
-                  <PhotoThumb
-                    photos={[
-                      {
-                        id: `ref-${appt.id}`,
-                        url: appt.referencePhotoUrl,
-                        caption: `Referencia · ${appt.serviceName} · ${longDate(appt.startTime)}`,
-                      },
-                    ]}
-                    index={0}
-                    onOpen={lightbox.open}
-                    width={48}
-                    height={48}
-                    className="h-12 w-12 shrink-0"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900">
-                    {appt.serviceName}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {new Intl.DateTimeFormat("es-ES", {
-                      dateStyle: "long",
-                      timeZone: "America/Caracas",
-                    }).format(new Date(appt.startTime * 1000))}
-                    {" · "}
-                    {new Intl.DateTimeFormat("es-ES", {
-                      timeStyle: "short",
-                      timeZone: "America/Caracas",
-                    }).format(new Date(appt.startTime * 1000))}
-                  </p>
-                </div>
-                <span
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                    appt.status === "confirmed"
-                      ? "bg-green-50 text-green-600"
-                      : "bg-amber-50 text-amber-600"
-                  }`}
-                >
-                  {appt.status === "confirmed" ? "Confirmada" : "Pendiente"}
-                </span>
-                {confirmingId === appt.id ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleCancel(appt.id)}
-                      disabled={cancellingId === appt.id}
-                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
-                    >
-                      {cancellingId === appt.id ? "Cancelando..." : "Sí, cancelar"}
-                    </button>
-                    <button
-                      onClick={() => setConfirmingId(null)}
-                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
-                    >
-                      No
-                    </button>
+                <div className="flex items-start gap-4">
+                  {appt.referencePhotoUrl && (
+                    <PhotoThumb
+                      photos={[
+                        {
+                          id: `ref-${appt.id}`,
+                          url: appt.referencePhotoUrl,
+                          caption: `Referencia · ${appt.serviceName} · ${longDate(appt.startTime)}`,
+                        },
+                      ]}
+                      index={0}
+                      onOpen={lightbox.open}
+                      width={48}
+                      height={48}
+                      className="h-12 w-12 shrink-0"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">{appt.serviceName}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Intl.DateTimeFormat("es-ES", {
+                        dateStyle: "long",
+                        timeZone: "America/Caracas",
+                      }).format(new Date(appt.startTime * 1000))}
+                      {" · "}
+                      {new Intl.DateTimeFormat("es-ES", {
+                        timeStyle: "short",
+                        timeZone: "America/Caracas",
+                      }).format(new Date(appt.startTime * 1000))}
+                    </p>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmingId(appt.id)}
-                    className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                  <span
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium ${
+                      appt.status === "confirmed"
+                        ? "bg-green-50 text-green-600"
+                        : "bg-amber-50 text-amber-600"
+                    }`}
                   >
-                    Cancelar
-                  </button>
+                    {appt.status === "confirmed" ? "Confirmada" : "Pendiente"}
+                  </span>
+                </div>
+
+                {appt.items.length > 1 && (
+                  <ul className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                    {appt.items.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="min-w-0 truncate text-gray-700">
+                          {item.isPrimary === 1 ? item.name : `+ ${item.name}`}
+                          <span className="ml-1 text-xs text-gray-400">
+                            ${item.price.toFixed(2)} · {item.durationMins} min
+                          </span>
+                        </span>
+                        {removingPurchaseId === item.id ? (
+                          <span className="flex shrink-0 items-center gap-1">
+                            <button
+                              onClick={() =>
+                                handleRemoveService(appt.id, item.id)
+                              }
+                              className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+                            >
+                              Sí, quitar
+                            </button>
+                            <button
+                              onClick={() => setRemovingPurchaseId(null)}
+                              className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                            >
+                              No
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setRemoveError("");
+                              setRemovingPurchaseId(item.id);
+                            }}
+                            className="shrink-0 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 )}
+
+                <div className="mt-3 flex justify-end">
+                  {confirmingId === appt.id ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCancel(appt.id)}
+                        disabled={cancellingId === appt.id}
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {cancellingId === appt.id ? "Cancelando..." : "Sí, cancelar"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmingId(null)}
+                        className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingId(appt.id)}
+                      className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+                    >
+                      Cancelar cita
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -259,6 +336,11 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
         {cancelError && (
           <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
             {cancelError}
+          </p>
+        )}
+        {removeError && (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            {removeError}
           </p>
         )}
       </section>

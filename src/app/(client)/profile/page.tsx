@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db/index";
-import { eq, and, gte, inArray, ne, sql } from "drizzle-orm";
+import { eq, and, inArray, ne, sql } from "drizzle-orm";
 import { ProfileContent } from "./ProfileContent";
 import { summarizePurchases } from "@/lib/appointment-purchases";
 
@@ -26,29 +26,29 @@ export default async function ProfilePage() {
     redirect("/complete-registration");
   }
 
+  // Sin leftJoin a service_purchases: el JOIN multiplicaba la fila de la cita
+  // por cada compra, así que una cita de 3 servicios salía 3 veces con el mismo
+  // appointments.id (claves duplicadas en React). Las compras se cargan aparte y
+  // se fusionan en memoria, igual que las citas completadas de más abajo.
   const upcomingAppointments = db
     .select({
       id: schema.appointments.id,
+      clientId: schema.appointments.clientId,
       startTime: schema.appointments.startTime,
       endTime: schema.appointments.endTime,
       status: schema.appointments.status,
       referencePhotoUrl: schema.appointments.referencePhotoUrl,
-      serviceName: sql<string>`coalesce(${schema.servicePurchases.serviceName}, ${schema.services.name})`,
+      serviceName: schema.services.name,
     })
     .from(schema.appointments)
     .innerJoin(
       schema.services,
       eq(schema.appointments.serviceId, schema.services.id)
     )
-    .leftJoin(
-      schema.servicePurchases,
-      eq(schema.servicePurchases.appointmentId, schema.appointments.id)
-    )
     .where(
       and(
         eq(schema.appointments.clientId, user.id),
-        sql`${schema.appointments.status} IN ('pending', 'confirmed')`,
-        gte(schema.appointments.startTime, sql`(unixepoch() - 3600)`)
+        eq(schema.appointments.status, "confirmed")
       )
     )
     .orderBy(schema.appointments.startTime)
@@ -81,19 +81,39 @@ export default async function ProfilePage() {
     .orderBy(schema.appointments.startTime)
     .all();
 
+  const purchaseSelect = {
+    id: schema.servicePurchases.id,
+    appointmentId: schema.servicePurchases.appointmentId,
+    userId: schema.servicePurchases.userId,
+    serviceName: schema.servicePurchases.serviceName,
+    servicePrice: schema.servicePurchases.servicePrice,
+    serviceDurationMins: schema.servicePurchases.serviceDurationMins,
+    isPrimary: schema.servicePurchases.isPrimary,
+  };
+
+  const upcomingIds = upcomingAppointments.map((a) => a.id);
+  const upcomingPurchases = upcomingIds.length
+    ? db
+        .select(purchaseSelect)
+        .from(schema.servicePurchases)
+        .where(inArray(schema.servicePurchases.appointmentId, upcomingIds))
+        .all()
+    : [];
+
+  const upcomingSummaries = summarizePurchases(
+    upcomingAppointments.map((a) => ({
+      id: a.id,
+      clientId: a.clientId,
+      serviceName: a.serviceName,
+    })),
+    upcomingPurchases
+  );
+
   const purchaseSummaries = summarizePurchases(
     completedAppointments,
     completedAppointments.length
       ? db
-          .select({
-            id: schema.servicePurchases.id,
-            appointmentId: schema.servicePurchases.appointmentId,
-            userId: schema.servicePurchases.userId,
-            serviceName: schema.servicePurchases.serviceName,
-            servicePrice: schema.servicePurchases.servicePrice,
-            serviceDurationMins: schema.servicePurchases.serviceDurationMins,
-            isPrimary: schema.servicePurchases.isPrimary,
-          })
+          .select(purchaseSelect)
           .from(schema.servicePurchases)
           .where(
             inArray(
@@ -177,14 +197,18 @@ export default async function ProfilePage() {
         totalVisits: user.totalVisits ?? 0,
         totalRevenue: user.totalRevenue ?? 0,
       }}
-      upcomingAppointments={upcomingAppointments.map((a) => ({
-        id: a.id,
-        startTime: a.startTime ?? 0,
-        endTime: a.endTime ?? 0,
-        status: a.status ?? "pending",
-        referencePhotoUrl: a.referencePhotoUrl,
-        serviceName: a.serviceName,
-      }))}
+      upcomingAppointments={upcomingAppointments.map((a) => {
+        const s = upcomingSummaries.get(a.id);
+        return {
+          id: a.id,
+          startTime: a.startTime ?? 0,
+          endTime: a.endTime ?? 0,
+          status: a.status ?? "pending",
+          referencePhotoUrl: a.referencePhotoUrl,
+          serviceName: s?.serviceName ?? a.serviceName,
+          items: s?.items ?? [],
+        };
+      })}
       appointments={completedWithNames.map((a) => ({
         id: a.id,
         startTime: a.startTime ?? 0,
