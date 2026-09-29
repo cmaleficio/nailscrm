@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { ReviewForm } from "./ReviewForm";
 import { getSalonName } from "@/lib/brand";
+import { NOINDEX_METADATA } from "@/lib/seo";
+
+// La URL es un token de la cita, no contenido: nunca va al sitemap y no se
+// indexa aunque alguien la comparta.
+export const metadata: Metadata = NOINDEX_METADATA;
 
 export default async function ReviewPage({
   params,

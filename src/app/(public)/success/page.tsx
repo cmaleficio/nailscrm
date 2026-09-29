@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { NOINDEX_METADATA } from "@/lib/seo";
+
+export const metadata: Metadata = NOINDEX_METADATA;
 
 export default function SuccessPage() {
   return (
