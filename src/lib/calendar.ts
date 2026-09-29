@@ -122,7 +122,7 @@ export async function createEventOnPrimaryCalendar(
 export async function updateEventOnPrimaryCalendar(
   userId: string,
   eventId: string,
-  event: { start: number; end: number }
+  event: { start: number; end: number; summary?: string }
 ): Promise<boolean> {
   if (!isCalendarEnabled()) return true;
   const token = await getValidAccessToken(userId);
@@ -140,6 +140,9 @@ export async function updateEventOnPrimaryCalendar(
         body: JSON.stringify({
           start: { dateTime: new Date(event.start * 1000).toISOString() },
           end: { dateTime: new Date(event.end * 1000).toISOString() },
+          // Google solo reemplaza los campos presentes: si no llega summary, el
+          // título del evento se queda como está. Por eso es opcional y no "".
+          ...(event.summary ? { summary: event.summary } : {}),
         }),
       }
     );
@@ -219,9 +222,10 @@ export async function updateAppointmentEvent(
   userId: string,
   eventId: string,
   start: number,
-  end: number
+  end: number,
+  summary?: string
 ): Promise<boolean> {
-  return updateEventOnPrimaryCalendar(userId, eventId, { start, end });
+  return updateEventOnPrimaryCalendar(userId, eventId, { start, end, summary });
 }
 
 export async function deleteAppointmentEvent(
