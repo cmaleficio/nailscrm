@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { PERMISSION_KEYS, PERMISSION_LABELS } from "@/lib/permissions";
+import { TrackingTagsSection } from "./TrackingTagsSection";
 
 type Admin = {
   id: string;
@@ -271,6 +272,8 @@ export function AdminUsersContent() {
           </div>
         )}
       </div>
+
+      <TrackingTagsSection />
     </div>
   );
 }

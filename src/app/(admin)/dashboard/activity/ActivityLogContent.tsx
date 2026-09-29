@@ -58,6 +58,7 @@ const ENTITY_LABELS: Record<string, string> = {
   brand_settings: "Identidad",
   nav_items: "Navegación",
   legal_settings: "Legal",
+  tracking_tags: "Analítica",
 };
 
 const ACTION_LABELS: Record<string, string> = {

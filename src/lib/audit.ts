@@ -11,7 +11,7 @@ export const AUDIT_ENTITIES = [
   "purchases", "payments", "payment_receipts", "exchange_rates",
   "suppliers", "expense_categories", "bank_accounts", "bills", "supplier_payments",
   "inventory_items", "inventory_movements", "risc_events",
-  "brand_settings", "nav_items", "legal_settings",
+  "brand_settings", "nav_items", "legal_settings", "tracking_tags",
 ] as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];

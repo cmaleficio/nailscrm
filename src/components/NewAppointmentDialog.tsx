@@ -2,13 +2,20 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { todayStr, dateTimeToTs } from "@/lib/time";
+import { MAX_COMPLEMENTARY_SERVICES } from "@/lib/booking-combos";
 
 type Props = {
   onClose: () => void;
   onCreated: () => void;
 };
 
-type Service = { id: string; name: string; price: number; durationMins: number };
+type Service = {
+  id: string;
+  name: string;
+  price: number;
+  durationMins: number;
+  isComplementary: number;
+};
 type Client = { id: string; name: string; phone: string | null };
 type Slot = { label: string; available: boolean };
 
@@ -18,8 +25,10 @@ const inputCls =
 export function NewAppointmentDialog({ onClose, onCreated }: Props) {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceId, setServiceId] = useState("");
+  const [complementaryIds, setComplementaryIds] = useState<string[]>([]);
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [maxContiguousMins, setMaxContiguousMins] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [query, setQuery] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
@@ -39,16 +48,48 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
       .catch(() => {});
   }, []);
 
+  const principal = services.find((s) => s.id === serviceId) ?? null;
+  const chosenComplementaries = services.filter((s) =>
+    complementaryIds.includes(s.id)
+  );
+
+  const totalDurationMins =
+    (principal?.durationMins ?? 0) +
+    chosenComplementaries.reduce((acc, s) => acc + s.durationMins, 0);
+  const totalPrice =
+    (principal?.price ?? 0) +
+    chosenComplementaries.reduce((acc, s) => acc + s.price, 0);
+
+  const comboDoesNotFit =
+    maxContiguousMins > 0 && maxContiguousMins < totalDurationMins;
+
+  function toggleComplementary(id: string) {
+    setComplementaryIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (id === serviceId) return prev;
+      if (prev.length >= MAX_COMPLEMENTARY_SERVICES) return prev;
+      return [...prev, id];
+    });
+    setSelectedSlot("");
+  }
+
   useEffect(() => {
     if (!serviceId || !date) return;
-    fetch(`/api/slots?date=${date}&serviceId=${serviceId}`)
+    const extras = complementaryIds
+      .filter((id) => id !== serviceId)
+      .map((id) => `addServiceIds=${encodeURIComponent(id)}`)
+      .join("&");
+    fetch(
+      `/api/slots?date=${date}&serviceId=${serviceId}${extras ? `&${extras}` : ""}`
+    )
       .then((r) => r.json())
       .then((data) => {
         setSlots(data.slots ?? []);
+        setMaxContiguousMins(data.maxContiguousMins ?? 0);
         setSelectedSlot("");
       })
       .catch(() => {});
-  }, [serviceId, date]);
+  }, [serviceId, complementaryIds, date]);
 
   const searchClients = useCallback(async (q: string) => {
     const res = await fetch(`/api/clients?q=${encodeURIComponent(q)}`);
@@ -95,7 +136,12 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, serviceId, startTime }),
+        body: JSON.stringify({
+          clientId,
+          serviceId,
+          addServiceIds: complementaryIds.filter((id) => id !== serviceId),
+          startTime,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -191,17 +237,66 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
           <label className="mb-1 block text-sm font-medium text-gray-700">Servicio</label>
           <select
             value={serviceId}
-            onChange={(e) => setServiceId(e.target.value)}
+            onChange={(e) => {
+              setServiceId(e.target.value);
+              setSelectedSlot("");
+            }}
             className={inputCls}
           >
             <option value="">Elegir servicio...</option>
-            {services.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} — ${s.price.toFixed(2)} · {s.durationMins} min
-              </option>
-            ))}
+            {services
+              .filter((s) => s.isComplementary !== 1)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — ${s.price.toFixed(2)} · {s.durationMins} min
+                </option>
+              ))}
           </select>
         </div>
+
+        {serviceId && (
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Complementarios{" "}
+              <span className="font-normal text-gray-400">
+                (opcional, hasta {MAX_COMPLEMENTARY_SERVICES})
+              </span>
+            </label>
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {services
+                .filter((s) => s.isComplementary === 1 && s.id !== serviceId)
+                .map((s) => {
+                  const on = complementaryIds.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => toggleComplementary(s.id)}
+                      disabled={!on && complementaryIds.length >= MAX_COMPLEMENTARY_SERVICES}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors disabled:opacity-40 ${
+                        on
+                          ? "bg-purple-50 text-purple-700"
+                          : "bg-gray-50 hover:bg-gray-100"
+                      }`}
+                    >
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-xs text-gray-500">
+                        +${s.price.toFixed(2)} · +{s.durationMins} min
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+            {chosenComplementaries.length > 0 && (
+              <div className="mt-2 flex items-center justify-between border-t border-gray-200 pt-2 text-sm">
+                <span className="text-gray-500">Total</span>
+                <span className="font-semibold text-gray-900">
+                  ${totalPrice.toFixed(2)} · {totalDurationMins} min
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-4">
           <label className="mb-1 block text-sm font-medium text-gray-700">Fecha</label>
@@ -216,7 +311,13 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
         {serviceId && (
           <div className="mt-4">
             <label className="mb-2 block text-sm font-medium text-gray-700">Hora</label>
-            {slots.length === 0 ? (
+            {comboDoesNotFit ? (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                La combinación de {totalDurationMins} min no cabe ese día: el
+                espacio más largo libre es de {maxContiguousMins} min. Quita
+                algún complementario.
+              </p>
+            ) : slots.length === 0 ? (
               <p className="text-sm text-gray-400">No hay horarios disponibles ese día</p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -254,7 +355,9 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
           </button>
           <button
             onClick={submit}
-            disabled={saving || !clientId || !serviceId || !selectedSlot}
+            disabled={
+              saving || !clientId || !serviceId || !selectedSlot || comboDoesNotFit
+            }
             className="flex-1 rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
           >
             {saving ? "Creando..." : "Crear cita"}

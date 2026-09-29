@@ -11,6 +11,7 @@ import {
 import { recordUsage } from "@/lib/inventory";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
 import { logActivity } from "@/lib/audit";
+import { validateSlot } from "@/lib/availability";
 
 export async function PATCH(
   req: NextRequest,
@@ -55,14 +56,21 @@ export async function PATCH(
   }
 
   if (typeof startTime === "number" && startTime !== appointment.startTime) {
-    const service = db
-      .select()
-      .from(schema.services)
-      .where(eq(schema.services.id, appointment.serviceId))
-      .get();
+    // Se preserva la duración ya reservada (end_time - start_time) en vez de
+    // recalcularla desde services.duration_mins: una cita con principal +
+    // complementarios dura la suma de todos, y una de curso dura lo que el
+    // curso dura, no lo que diga hoy el catálogo.
+    const currentDurationMins =
+      appointment.endTime !== null && appointment.startTime !== null
+        ? Math.round((appointment.endTime - appointment.startTime) / 60)
+        : 60;
 
-    const endTime =
-      startTime + Math.floor((service?.durationMins ?? 60) * 60);
+    const endTime = startTime + currentDurationMins * 60;
+
+    const availabilityError = validateSlot(startTime, endTime, id);
+    if (availabilityError) {
+      return NextResponse.json({ error: availabilityError }, { status: 409 });
+    }
 
     db.update(schema.appointments)
       .set({ startTime, endTime })
@@ -231,11 +239,20 @@ export async function DELETE(
     );
   }
 
-  const purchase = db
-    .select()
+  // Se leen TODAS las compras: una cita puede tener varias (principal +
+  // complementarios). Antes se tomaba solo la primera con .get(), así que el
+  // archivo de cancelaciones nunca reflejaba la combinación completa.
+  const purchaseRowsFull = db
+    .select({
+      id: schema.servicePurchases.id,
+      userId: schema.servicePurchases.userId,
+      serviceName: schema.servicePurchases.serviceName,
+      servicePrice: schema.servicePurchases.servicePrice,
+      isPrimary: schema.servicePurchases.isPrimary,
+    })
     .from(schema.servicePurchases)
     .where(eq(schema.servicePurchases.appointmentId, id))
-    .get();
+    .all();
 
   const photos = db
     .select({ url: schema.appointmentPhotos.url })
@@ -249,11 +266,20 @@ export async function DELETE(
     .where(eq(schema.services.id, appointment.serviceId))
     .get();
 
-  const purchaseRows = db
-    .select({ userId: schema.servicePurchases.userId })
-    .from(schema.servicePurchases)
-    .where(eq(schema.servicePurchases.appointmentId, id))
-    .all();
+  // Snapshot de la combinación: las compras van primero (son el precio realmente
+  // cobrado) y el catálogo completa si la cita no dejó compras (walk-in viejo).
+  const items = purchaseRowsFull.length
+    ? [...purchaseRowsFull]
+        .sort((a, b) => (b.isPrimary ?? 0) - (a.isPrimary ?? 0))
+        .map((p) => ({ name: p.serviceName, price: p.servicePrice }))
+    : service
+      ? [{ name: service.name, price: service.price }]
+      : [];
+
+  const archivedServiceName =
+    items.map((i) => i.name).join(" + ") || service?.name || "";
+  const archivedServicePrice =
+    items.reduce((acc, i) => acc + (i.price || 0), 0) || service?.price || 0;
 
   db.transaction((tx) => {
     tx.insert(schema.cancelledAppointments)
@@ -262,8 +288,9 @@ export async function DELETE(
         appointmentId: appointment.id,
         clientId: appointment.clientId,
         serviceId: appointment.serviceId,
-        serviceName: purchase?.serviceName ?? service?.name ?? "",
-        servicePrice: purchase?.servicePrice ?? service?.price ?? 0,
+        serviceName: archivedServiceName,
+        servicePrice: archivedServicePrice,
+        serviceItems: items.length ? JSON.stringify(items) : null,
         startTime: appointment.startTime ?? null,
         endTime: appointment.endTime ?? null,
         referencePhotoUrls: photos.length
@@ -303,7 +330,7 @@ export async function DELETE(
     }
   }
 
-  for (const p of purchaseRows) recomputeFinancialStatus(p.userId);
+  for (const p of purchaseRowsFull) recomputeFinancialStatus(p.userId);
 
   {
     const clientRow = db
@@ -315,8 +342,8 @@ export async function DELETE(
       entity: "appointments",
       action: "cancel",
       entityId: appointment.id,
-      label: `Cita cancelada: ${clientRow?.name ?? "Cliente"} – ${purchase?.serviceName ?? service?.name ?? "Servicio"}`,
-      metadata: { startTime: appointment.startTime, servicePrice: purchase?.servicePrice ?? service?.price ?? 0, cancelledBy: session.user.id },
+      label: `Cita cancelada: ${clientRow?.name ?? "Cliente"} – ${archivedServiceName || "Servicio"}`,
+      metadata: { startTime: appointment.startTime, servicePrice: archivedServicePrice, cancelledBy: session.user.id },
       actorId: session.user.id,
       actorName: session?.user?.name ?? null,
     });

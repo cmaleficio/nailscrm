@@ -74,8 +74,22 @@ export async function PATCH(
   const isGroup =
     body.isGroup !== undefined ? (body.isGroup ? 1 : 0) : existing.isGroup;
 
+  const isComplementary =
+    body.isComplementary !== undefined
+      ? body.isComplementary
+        ? 1
+        : 0
+      : existing.isComplementary;
+
+  if (isGroup && isComplementary) {
+    return NextResponse.json(
+      { error: "Un curso no puede ser un servicio complementario" },
+      { status: 400 }
+    );
+  }
+
   db.update(schema.services)
-    .set({ name, price, durationMins, description, isActive, isGroup })
+    .set({ name, price, durationMins, description, isActive, isGroup, isComplementary })
     .where(eq(schema.services.id, id))
     .run();
 
@@ -97,6 +111,7 @@ export async function PATCH(
     description,
     isActive,
     isGroup,
+    isComplementary,
   });
 }
 

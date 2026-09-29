@@ -13,6 +13,7 @@ type Service = {
   durationMins: number;
   isActive: number;
   isGroup: number;
+  isComplementary: number;
   photos: { id: string; url: string; position: number }[];
 };
 
@@ -23,6 +24,7 @@ type EditingState = {
   price: string;
   durationMins: string;
   isGroup: boolean;
+  isComplementary: boolean;
 };
 
 const EMPTY_FORM = {
@@ -31,6 +33,7 @@ const EMPTY_FORM = {
   price: "",
   durationMins: "",
   isGroup: false,
+  isComplementary: false,
 };
 
 export function ServicesContent() {
@@ -82,6 +85,7 @@ export function ServicesContent() {
           price: parseFloat(form.price),
           durationMins: parseInt(form.durationMins, 10),
           isGroup: form.isGroup,
+          isComplementary: form.isComplementary,
         }),
       });
       if (!res.ok) {
@@ -113,6 +117,7 @@ export function ServicesContent() {
           price: parseFloat(editing.price),
           durationMins: parseInt(editing.durationMins, 10),
           isGroup: editing.isGroup,
+          isComplementary: editing.isComplementary,
         }),
       });
       if (!res.ok) {
@@ -236,6 +241,7 @@ export function ServicesContent() {
       price: String(service.price),
       durationMins: String(service.durationMins),
       isGroup: service.isGroup === 1,
+      isComplementary: service.isComplementary === 1,
     });
   }
 
@@ -323,19 +329,48 @@ export function ServicesContent() {
               className={inputCls}
             />
           </div>
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 flex flex-wrap gap-4">
             <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
               <input
                 type="checkbox"
                 checked={form.isGroup}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, isGroup: e.target.checked }))
+                  setForm((prev) => ({
+                    ...prev,
+                    isGroup: e.target.checked,
+                    // Grupo y complementario son excluyentes (lo valida la API).
+                    isComplementary: e.target.checked ? false : prev.isComplementary,
+                  }))
                 }
                 className="h-4 w-4"
               />
               Es curso/grupo
             </label>
+            <label
+              className={`inline-flex items-center gap-2 text-sm font-medium ${
+                form.isGroup ? "cursor-not-allowed text-gray-400" : "cursor-pointer text-gray-700"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={form.isComplementary}
+                disabled={form.isGroup}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    isComplementary: e.target.checked,
+                    isGroup: e.target.checked ? false : prev.isGroup,
+                  }))
+                }
+                className="h-4 w-4"
+              />
+              Es complementario
+            </label>
           </div>
+          <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
+            Los complementarios se agregan a otra cita y suman su duración y su
+            precio. No se pueden marcar los dos a la vez.
+          </p>
         </div>
         <button
           onClick={handleCreate}
@@ -419,19 +454,53 @@ export function ServicesContent() {
                       className={inputCls}
                     />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 flex flex-wrap gap-4">
                     <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
                       <input
                         type="checkbox"
                         checked={editing.isGroup}
                         onChange={(e) =>
                           setEditing((prev) =>
-                            prev ? { ...prev, isGroup: e.target.checked } : prev
+                            prev
+                              ? {
+                                  ...prev,
+                                  isGroup: e.target.checked,
+                                  isComplementary: e.target.checked
+                                    ? false
+                                    : prev.isComplementary,
+                                }
+                              : prev
                           )
                         }
                         className="h-4 w-4"
                       />
                       Es curso/grupo
+                    </label>
+                    <label
+                      className={`inline-flex items-center gap-2 text-sm font-medium ${
+                        editing.isGroup
+                          ? "cursor-not-allowed text-gray-400"
+                          : "cursor-pointer text-gray-700"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editing.isComplementary}
+                        disabled={editing.isGroup}
+                        onChange={(e) =>
+                          setEditing((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  isComplementary: e.target.checked,
+                                  isGroup: e.target.checked ? false : prev.isGroup,
+                                }
+                              : prev
+                          )
+                        }
+                        className="h-4 w-4"
+                      />
+                      Es complementario
                     </label>
                   </div>
                 </div>
@@ -468,6 +537,16 @@ export function ServicesContent() {
                       >
                         {service.isActive === 1 ? "Activo" : "Inactivo"}
                       </span>
+                      {service.isComplementary === 1 && (
+                        <span className="rounded-lg bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-600">
+                          Complementario
+                        </span>
+                      )}
+                      {service.isGroup === 1 && (
+                        <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                          Curso/grupo
+                        </span>
+                      )}
                     </div>
                     {service.description && (
                       <p className="mt-1 text-sm text-gray-500">

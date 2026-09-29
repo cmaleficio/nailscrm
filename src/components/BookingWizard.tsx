@@ -6,6 +6,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { dateToDayStartTs, tsToLocalLabel } from "@/lib/time";
+import { MAX_COMPLEMENTARY_SERVICES } from "@/lib/booking-combos";
 
 type Service = {
   id: string;
@@ -13,6 +14,8 @@ type Service = {
   description: string | null;
   price: number;
   durationMins: number;
+  isComplementary: number;
+  isGroup: number;
 };
 
 type Slot = {
@@ -42,9 +45,11 @@ export function BookingWizard() {
   const [step, setStep] = useState(1);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [complementaryIds, setComplementaryIds] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [maxContiguousMins, setMaxContiguousMins] = useState<number>(0);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [referencePreviews, setReferencePreviews] = useState<string[]>([]);
@@ -74,7 +79,9 @@ export function BookingWizard() {
     if (serviceId) {
       const res = await fetch(`/api/services?id=${serviceId}`);
       const data = await res.json();
-      if (data) {
+      // Un complementario nunca puede ser el principal (lo rechaza la API),
+      // así que un enlace directo a uno se ignora en vez de fallar al confirmar.
+      if (data && data.isComplementary !== 1) {
         setSelectedService(data);
         setStep(2);
       }
@@ -98,23 +105,86 @@ export function BookingWizard() {
     void preselectedService();
   }, [preselectedService]);
 
-  const fetchSlots = useCallback(async (date: string) => {
-    if (!selectedService) return;
+  const selectedComplementaries = services.filter((s) =>
+    complementaryIds.includes(s.id)
+  );
+
+  const totalDurationMins =
+    (selectedService?.durationMins ?? 0) +
+    selectedComplementaries.reduce((acc, s) => acc + s.durationMins, 0);
+  const totalPrice =
+    (selectedService?.price ?? 0) +
+    selectedComplementaries.reduce((acc, s) => acc + s.price, 0);
+
+  // Si el hueco más largo del día no alcanza para la combinación, la respuesta
+  // correcta es quitar servicios (no la lista de espera). maxContiguousMins es
+  // 0 cuando el día está lleno, así que ese caso sí ofrece espera.
+  const comboDoesNotFit = maxContiguousMins > 0 && maxContiguousMins < totalDurationMins;
+
+  // El principal es opcional: si solo hay complementarios, /api/appointments
+  // sigue exigiendo serviceId, así que en ese caso se ancla con el primero.
+  const primaryService = selectedService ?? selectedComplementaries[0] ?? null;
+
+  const principalServices = services.filter((s) => s.isComplementary !== 1);
+  const complementaryServices = services.filter((s) => s.isComplementary === 1);
+  const selectedCount = selectedComplementaries.length + (selectedService ? 1 : 0);
+
+  function toggleComplementary(id: string) {
+    const alreadyOn = complementaryIds.includes(id);
+    // El principal no puede repetirse como complementario, y un curso no se
+    // combina: son las dos reglas que el backend vuelve a validar en el POST.
+    if (!alreadyOn) {
+      if (complementaryIds.length >= MAX_COMPLEMENTARY_SERVICES) return;
+      const service = services.find((s) => s.id === id);
+      if (!service || service.isComplementary !== 1 || service.isGroup) return;
+      if (selectedService && selectedService.id === id) return;
+    }
+    const next = alreadyOn
+      ? complementaryIds.filter((x) => x !== id)
+      : [...complementaryIds, id];
+    setComplementaryIds(next);
+    // La duración cambia, así que el slot elegido puede dejar de servir y la
+    // lista de slots que ya está en pantalla quedó calculada para otra
+    // combinación: hay que recargar si el usuario ya había elegido fecha.
+    setSelectedSlot(null);
+    if (selectedDate) void fetchSlots(selectedDate, next);
+  }
+
+  function choosePrimary(service: Service) {
+    setSelectedService(service);
+    const next = complementaryIds.filter((id) => id !== service.id);
+    setComplementaryIds(next);
+    setSelectedSlot(null);
+    if (selectedDate) void fetchSlots(selectedDate, next);
+  }
+
+  // Sin useCallback a propósito: primaryService se deriva de los servicios
+  // cargados, y el compilador de React no puede preservar la memoización
+  // manual con una dependencia derivada (react-hooks/preserve-manual-memoization).
+  // Los ids se reciben por parámetro y no del closure para que quien llama,
+  // que los acaba de calcular, no mande la lista anterior.
+  const fetchSlots = async (date: string, ids: string[] = complementaryIds) => {
+    if (!primaryService) return;
     setLoadingSlots(true);
+    const extras = ids
+      .filter((id) => id !== primaryService.id)
+      .map((id) => `addServiceIds=${encodeURIComponent(id)}`)
+      .join("&");
     const res = await fetch(
-      `/api/slots?date=${date}&serviceId=${selectedService.id}`
+      `/api/slots?date=${date}&serviceId=${primaryService.id}${extras ? `&${extras}` : ""}`
     );
     const data = await res.json();
     setSlots(data.slots || []);
+    setMaxContiguousMins(data.maxContiguousMins ?? 0);
     setLoadingSlots(false);
-  }, [selectedService]);
+  };
 
   function handleDateSelect(date: string) {
     setSelectedDate(date);
     setSelectedSlot(null);
     setWlStatus("idle");
     setWlError("");
-    fetchSlots(date);
+    void fetchSlots(date);
   }
 
   async function handleJoinWaitlist() {
@@ -157,7 +227,7 @@ export function BookingWizard() {
   }
 
   async function handleConfirm() {
-    if (!selectedService || !selectedSlot || status !== "authenticated") return;
+    if (!primaryService || !selectedSlot || status !== "authenticated") return;
 
     setSubmitting(true);
     setSubmitError("");
@@ -185,7 +255,10 @@ export function BookingWizard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          serviceId: selectedService.id,
+          serviceId: primaryService.id,
+          addServiceIds: complementaryIds.filter(
+            (id) => id !== primaryService.id
+          ),
           startTime: selectedSlot,
           referencePhotoUrl: urlsToSend[0] || "",
           referencePhotoUrls: urlsToSend,
@@ -291,42 +364,135 @@ export function BookingWizard() {
 
       {step === 1 && (
         <div>
-          <h2 className="mb-6 text-xl font-semibold text-gray-900">
+          <h2 className="mb-2 text-xl font-semibold text-gray-900">
             Elige tu servicio
           </h2>
+          <p className="mb-6 text-sm text-gray-500">
+            Puedes agregar hasta {MAX_COMPLEMENTARY_SERVICES} servicios
+            complementarios en la misma cita. Se reservan corridos y suman su
+            precio y su duración.
+          </p>
+
           <div className="space-y-3">
-            {services.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  setSelectedService(s);
-                  setStep(2);
-                }}
-                className={`w-full rounded-xl border p-4 text-left transition-colors hover:border-pink-main ${
-                  selectedService?.id === s.id
-                    ? "border-pink-main bg-pink-light"
-                    : "border-gray-200 bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
+            {principalServices.map((s) => {
+              const chosen = selectedService?.id === s.id;
+              return (
+                <div
+                  key={s.id}
+                  className={`rounded-xl border p-4 transition-colors ${
+                    chosen ? "border-pink-main bg-pink-light" : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <button
+                    onClick={() => {
+                      choosePrimary(s);
+                      setStep(2);
+                    }}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <p className="font-medium text-gray-900">{s.name}</p>
                     {s.description && (
                       <p className="mt-0.5 text-sm text-gray-500">
                         {s.description}
                       </p>
                     )}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">
-                      ${s.price.toFixed(2)}
+                    <p className="mt-1 text-xs text-gray-500">
+                      {s.durationMins} min · ${s.price.toFixed(2)}
                     </p>
-                    <p className="text-sm text-gray-500">{s.durationMins} min</p>
-                  </div>
+                  </button>
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
+
+          {complementaryServices.length > 0 && (
+            <div className="mt-8">
+              <h3 className="mb-1 text-sm font-semibold text-gray-900">
+                ¿Quieres agregar algo más?
+              </h3>
+              <p className="mb-3 text-xs text-gray-500">
+                Servicios complementarios: se suman a la misma cita y también
+                aparecen en tu cuenta.
+              </p>
+              <div className="space-y-2">
+                {complementaryServices.map((s) => {
+                  const on = complementaryIds.includes(s.id);
+                  const full =
+                    !on && complementaryIds.length >= MAX_COMPLEMENTARY_SERVICES;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition-colors ${
+                        on ? "border-purple-200 bg-purple-50" : "border-gray-200 bg-white"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {s.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          +${s.price.toFixed(2)} · +{s.durationMins} min
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleComplementary(s.id)}
+                        disabled={full}
+                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          on
+                            ? "bg-purple-100 text-purple-700"
+                            : full
+                              ? "cursor-not-allowed bg-gray-100 text-gray-300"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {on ? "Agregado ✓" : "+ Agregar"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {(selectedService || complementaryIds.length > 0) && (
+            <div className="mt-4 rounded-xl border border-purple-100 bg-purple-50/50 p-4">
+              <p className="mb-2 text-sm font-medium text-gray-900">
+                Tu cita ({selectedCount} {selectedCount === 1 ? "servicio" : "servicios"})
+              </p>
+              <ul className="mb-3 space-y-1 text-sm text-gray-600">
+                {selectedService && (
+                  <li className="flex items-center justify-between">
+                    <span>{selectedService.name}</span>
+                    <span className="text-gray-400">
+                      ${selectedService.price.toFixed(2)} · {selectedService.durationMins} min
+                    </span>
+                  </li>
+                )}
+                {selectedComplementaries.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between">
+                    <span className="text-purple-700">+ {s.name}</span>
+                    <span className="text-gray-400">
+                      ${s.price.toFixed(2)} · {s.durationMins} min
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-between border-t border-purple-100 pt-3 text-sm">
+                <span className="text-gray-500">Total</span>
+                <span className="font-semibold text-gray-900">
+                  ${totalPrice.toFixed(2)} · {totalDurationMins} min
+                </span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setStep(2)}
+            disabled={!primaryService}
+            className="mt-6 w-full rounded-xl bg-pink-main px-6 py-2.5 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
+          >
+            Continuar
+          </button>
         </div>
       )}
 
@@ -411,7 +577,28 @@ export function BookingWizard() {
                   <p className="text-sm text-gray-500">
                     No hay horarios disponibles para este día
                   </p>
-                  {wlStatus === "joined" || wlStatus === "already" ? (
+                  {/*
+                    Si cabe un servicio suelto pero no la combinación, la espera
+                    NO ayuda: quitar un servicio es lo que desbloquea el día. Por
+                    eso la lista de espera solo aparece cuando el día está lleno
+                    de verdad, y el nombre del servicio tampoco se elige todavía
+                    (la espera es por día).
+                  */}
+                  {comboDoesNotFit ? (
+                    <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-left">
+                      <p className="text-sm text-amber-800">
+                        Tu combinación de {totalDurationMins} min no cabe en
+                        este día: el espacio más largo libre es de{" "}
+                        {maxContiguousMins} min.
+                      </p>
+                      <button
+                        onClick={() => setStep(1)}
+                        className="mt-2 w-full rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light transition-colors"
+                      >
+                        Quitar o cambiar servicios
+                      </button>
+                    </div>
+                  ) : wlStatus === "joined" || wlStatus === "already" ? (
                     <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
                       {wlStatus === "already"
                         ? "Ya estás en la lista de espera para este día. Te avisaremos si se libera un espacio."
@@ -474,7 +661,7 @@ export function BookingWizard() {
             </button>
             <button
               onClick={() => setStep(3)}
-              disabled={!selectedSlot}
+              disabled={!selectedSlot || comboDoesNotFit}
               className="flex-1 rounded-xl bg-pink-main px-6 py-2.5 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
             >
               Continuar
@@ -483,29 +670,42 @@ export function BookingWizard() {
         </div>
       )}
 
-      {step === 3 && selectedService && (
+      {step === 3 && primaryService && (
         <div>
           <h2 className="mb-6 text-xl font-semibold text-gray-900">
             Confirma tu reserva
           </h2>
 
           <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4">
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Servicio</span>
-              <span className="text-sm font-medium text-gray-900">
-                {selectedService.name}
+            <div className="flex justify-between gap-4">
+              <span className="text-sm text-gray-500">
+                {selectedComplementaries.length > 0 ? "Servicios" : "Servicio"}
+              </span>
+              <span className="text-right text-sm font-medium text-gray-900">
+                {selectedComplementaries.length > 0 ? (
+                  <>
+                    {selectedService && <div>{selectedService.name}</div>}
+                    {selectedComplementaries.map((s) => (
+                      <div key={s.id} className="text-purple-700">
+                        + {s.name}
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  primaryService.name
+                )}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-gray-500">Precio</span>
               <span className="text-sm font-medium text-gray-900">
-                ${selectedService.price.toFixed(2)}
+                ${totalPrice.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-gray-500">Duración</span>
               <span className="text-sm font-medium text-gray-900">
-                {selectedService.durationMins} min
+                {totalDurationMins} min
               </span>
             </div>
             {selectedSlot && (

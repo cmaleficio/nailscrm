@@ -17,12 +17,22 @@ export async function GET(req: NextRequest) {
   const userId = searchParams.get("userId");
 
   if (appointmentId) {
-    const purchase = db
+    // Devuelve un ARRAY, no un objeto: una cita puede tener varias compras
+    // (principal + complementarios). Antes usaba .get() y devolvía solo la
+    // primera, así que las combinaciones mostraban un solo precio.
+    // El principal va primero, luego las complementarias por nombre.
+    const purchases = db
       .select()
       .from(schema.servicePurchases)
       .where(eq(schema.servicePurchases.appointmentId, appointmentId))
-      .get();
-    return NextResponse.json(purchase ?? null);
+      .all()
+      .sort((a, b) => {
+        const pa = a.isPrimary === 1 ? 0 : 1;
+        const pb = b.isPrimary === 1 ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return a.serviceName.localeCompare(b.serviceName, "es");
+      });
+    return NextResponse.json(purchases);
   }
 
   if (userId) {

@@ -114,6 +114,7 @@ Detalles que no se deben romper:
 - duration_mins: integer, not null
 - is_active: integer (boolean), default 1
 - is_group: integer (boolean), default 0 (1 = curso/servicio grupal; las sesiones de curso se detectan por esta flag, NUNCA por el nombre)
+- is_complementary: integer (boolean), default 0 (1 = servicio complementario: se agrega a OTRA cita y suma duración y precio). Es un flag por servicio, no una matriz de compatibilidad. `is_group` e `is_complementary` son **excluyentes** y la API de servicios lo rechaza con 400; un curso no se combina.
 
 ### Tabla: appointments
 - id: text, primary key
@@ -139,6 +140,7 @@ Detalles que no se deben romper:
 - service_id: text, foreign key → services.id
 - service_name: text, not null (snapshot de service_purchases)
 - service_price: real, not null (snapshot de service_purchases)
+- service_items: text (JSON array de `{ name, price }`, uno por servicio de la cita; null en cancelaciones antiguas)
 - start_time: integer (timestamp)
 - end_time: integer (timestamp)
 - reference_photo_urls: text (JSON array de urls de appointment_photos)
@@ -188,6 +190,7 @@ Detalles que no se deben romper:
 - service_description: text
 - service_price: real, not null
 - service_duration_mins: integer, not null
+- is_primary: integer (boolean), default 1 (1 = la compra del servicio principal de la cita; 0 = complementario). Una cita con N servicios genera N compras, todas con el mismo `appointment_id` y el mismo `user_id`; el `is_primary = 0` las ordena y las marca en la UI. En una cita de curso todas son `is_primary = 1` (una por alumno) y lo que las distingue es el `user_id`.
 - financial_status: text, default 'pending' (pending | partial | paid | void) — lo recalcula `recomputeFinancialStatus` según los pagos del cliente
 - completion_date: integer (timestamp, fecha de producción; se setea al completar la cita)
 - created_at: integer (timestamp)
@@ -385,6 +388,14 @@ Detalles que no se deben romper:
 - updated_at: integer (timestamp seconds)
 - updated_by: text, foreign key → users.id
 
+### Tabla: tracking_tags (snippet de etiquetas de analítica, singleton)
+- key: text, primary key (siempre `"head"`)
+- snippet: text, not null, default '' (el código que pega el superadmin: GA4, GTM, un pixel…)
+- is_enabled: integer (boolean), default 1 (apagado sin borrar el código)
+- updated_at: integer (timestamp seconds)
+- updated_by: text, foreign key → users.id
+- El snippet es **JS arbitrario que se ejecuta en el navegador de cada visitante**, por eso solo lo edita el superadmin (`isSuperAdmin`) y **no** existe clave en `PERMISSION_KEYS`: delegarlo a un sub-admin sería XSS almacenado.
+
 ## 🗺️ Estructura de Rutas
 
 ### Públicas
@@ -393,6 +404,22 @@ Detalles que no se deben romper:
 - `/book` → Wizard de reserva (3 pasos)
 - `/review/[id]` → Formulario de reseña post-cita
 - `/politicas` → Política de privacidad (documento legal)
+- `/condiciones` → Condiciones de servicio (documento legal). **La ruta es `/condiciones`, no `/terminos`.**
+- `/success` → Confirmación de cita reservada
+
+### 🔍 SEO: `robots.txt` y `sitemap.xml`
+- `src/app/robots.ts` y `src/app/sitemap.ts` (convención de metadata route de Next) son archivos **una línea**: delegan en `src/lib/seo.ts`, que es la **única fuente de verdad** para qué rutas son públicas. No hardcodear listas de rutas en los metadata routes ni en las páginas.
+- `src/lib/seo.ts` exporta `PUBLIC_INDEXABLE_ROUTES` (las 4 del sitemap), `ROBOTS_DISALLOWED_PATHS`, `ROBOTS_ALWAYS_ALLOWED_PATHS` (lo que **no** se puede bloquear), `NOINDEX_METADATA`, y los builders `buildSitemap`/`buildRobots`/`isDisallowedByPrefix`.
+- **Las 4 rutas del sitemap:** `/` (prio 1.0, weekly), `/book` (0.9, weekly), `/condiciones` (0.3, yearly), `/politicas` (0.3, yearly). La lista es **cerrada y estática**: el muro vive dentro de `/` (no hay `/gallery` público) y los servicios son un modal sobre `/` (no hay `/services/[id]`), así que no hay nada dinámico que enumerar. `/review/[id]` queda fuera porque su id es un UUID y la URL es un token, no contenido.
+- **Bloqueos:** `/api/`, `/dashboard`, `/profile`, `/complete-registration`, `/login`, `/success`, `/review/`. `/dashboard` cubre las 17 páginas del admin por prefijo. `Disallow: /api/` es defensivo: Googlebot no pide los XHR que dispara el cliente, así que no rompe nada.
+- **`/uploads/` NO se bloquea, a propósito:** las fotos del muro son el mayor activo SEO del salón (Google Images) y viven en `/public/uploads`. Las fotos de la pestaña "Producción" que no se publicaron al muro comparten ese directorio; su URL solo es adivinable por el hash del nombre, no por listado. **`_next/` tampoco**: bloquearlo impide que Google lea el CSS/JS y no renderice la página.
+- **Sin `lastModified`:** Google lo ignora en la práctica y sellarlo con `new Date()` en un archivo generado en build convertiría cada despliegue en un cambio de contenido inventado. `changefreq` cubre la señal. No lo "arregles" sin motivo.
+- `src/lib/site-url.ts` resuelve el origen: `NEXT_PUBLIC_SITE_URL` → `AUTH_URL` → `http://localhost:3001`. **Sin `NEXT_PUBLIC_SITE_URL` en producción el sitemap publicaría URLs de `localhost`**, que es peor que no tener sitemap. Como es estático, cambiarla exige rebuild. `next.config.ts` corre en build y no lee `.env`, así que el dominio canónico va literal ahí (junto a `allowedDevOrigins`).
+- `metadataBase` vive en el layout raíz (`src/app/layout.tsx`) para que los canonical y las URLs de OG salgan absolutas. **No** declarar `alternates.canonical` global: en el layout raíz haría que `/dashboard` y `/profile` declararan `/` como su versión canónica.
+- `NOINDEX_METADATA` va en las 3 públicas que no entran al sitemap (`/login`, `/success`, `/review/[id]`). Es redundante con el `Disallow` (Google no descarga una URL bloqueada, así que nunca ve el `noindex`), pero cubre a Bing y el caso de un enlace externo a una reseña.
+- `www` se redirige al apex con un `redirects()` por header `host` en `next.config.ts`, porque ambos hosts sirven el mismo contenido y eso es contenido duplicado.
+- **`robots.txt` y `sitemap.xml` están fuera del matcher de `src/proxy.ts`** (vía `PROXY_EXCLUDED_SEGMENTS` en `src/lib/tracking-scope.ts`): son los dos archivos más pedidos del sitio, los piden los rastreadores, no renderizan `<head>`, y con ellos dentro el proxy corría `auth()` en cada visita. Next exige strings estáticos en `config.matcher`, así que el lookahead está escrito a mano en el proxy y `tracking-scope.test.ts` **falla si deja de coincidir** con `proxyPathExclusionPattern()`.
+- **Lo que robots.txt NO protege:** el grafo de enlaces. `Header.tsx` emite hrefs a `/profile` y `/dashboard` en el HTML para visitors autenticados (Googlebot nunca lo está). La protección real de esas páginas es el `auth()` + `redirect()` de cada una.
 
 ### Protegidas (requieren auth)
 - `/dashboard` → Panel admin (agenda del día/semana con sesiones de curso grupal, pestaña **"Pendientes"** con citas sin completar (vencidas y futuras), pestaña "Espera" con la lista de espera y pestaña "Canceladas" con el archivo de citas canceladas)
@@ -406,15 +433,16 @@ Detalles que no se deben romper:
 - `/dashboard/settings` → Horario de trabajo por día de la semana
 - `/dashboard/settings/navigation` → Menú de navegación público editable
 - `/dashboard/exchange-rates` → Tasas BCV (alta manual, eliminación y backfill)
-- `/dashboard/services` → Gestión de servicios (flag "Es curso/grupo", fotos del servicio, eliminar si no tiene uso)
+- `/dashboard/services` → Gestión de servicios (flags "Es curso/grupo" y "Es complementario", excluyentes entre sí, con badge; fotos del servicio, eliminar si no tiene uso)
 - `/dashboard/gallery` → Fotos, con dos pestañas: "Muro de inspiración" (subida independiente de fotos por el admin para pre-llenar el muro, sin cita asociada) y **"Producción"** (archivo de solo lectura con todas las fotos finales de citas completadas, agrupado por día)
-- `/dashboard/admin-users` → Gestión de admins (solo superadmin)
+- `/dashboard/admin-users` → Gestión de admins (solo superadmin) + al pie la sección **"Etiquetas de analítica"** (snippet de GA/GTM inyectado en las páginas públicas, solo superadmin)
 - `/dashboard/legal` → Datos legales del salón (campos variables de las políticas de privacidad)
 - `/dashboard/legal/terms` → Condiciones de servicio editables
 - `/profile` → Portal de cliente (pasaporte de uñas + historial + estado de cuenta + "Mis pagos" con reporte de capturas)
 - `/complete-registration` → Completar registro (pedir teléfono tras OAuth de Google)
 
 ### APIs nuevas de permisos y pagos
+- `GET/PUT /api/admin/tracking-tags` (**solo superadmin**, sin clave de permiso) → lee y guarda el singleton `tracking_tags`. El PUT valida `MAX_SNIPPET_LENGTH` (20 000) y rechaza con 400 un snippet que no contenga ningún `<script>` (casi siempre es un pegado truncado). **Nunca** registra el snippet en el log: solo `{ bytes, tags, isEnabled }`, porque el código puede llevar IDs o claves de terceros.
 - `GET /api/my-permissions` (admin autenticado) → permisos del admin actual.
 - `GET /api/exchange-rate/current` (público) → tasa del día (usa `getTodayRate`).
 - `GET/POST /api/exchange-rate` y `DELETE /api/exchange-rate/[id]` (permiso `exchangeRates`) → gestión de tasas BCV; `GET /api/exchange-rate/refresh` y `GET /api/exchange-rate/backfill` aceptan el mismo permiso o `CRON_SECRET`.
@@ -430,7 +458,7 @@ Detalles que no se deben romper:
 - `POST /api/waitlist` (usuario autenticado) → se une con `preferredDate` (timestamp inicio de día); dedupe por cliente+fecha (409); rechaza fechas pasadas (400).
 - `PATCH /api/waitlist/[id]` (admin) → marca `notified`.
 - `DELETE /api/waitlist/[id]` → dueño de la entrada o admin.
-- `POST/GET /api/course-sessions` (admin, `appointments`): crea una sesión de curso grupal (1 `appointments` + N `course_enrollments` + N `service_purchases` pending, validando `services.is_group=1` y disponibilidad) y lista las sesiones con alumnos y saldo por alumno.
+- `POST/GET /api/course-sessions` (admin, `appointments`): crea una sesión de curso grupal (1 `appointments` + N `course_enrollments` + N `service_purchases` pending, validando `services.is_group=1` y disponibilidad) y lista las sesiones con alumnos y saldo por alumno. Rechaza `addServiceIds` con 400: una sesión cobra un precio por alumno y no admite complementarios.
 - `POST/DELETE /api/course-sessions/[id]/enrollments` (admin, `appointments`): inscribe/desinscribe un alumno registrado pre-completar (crea/borra su enrollment + `service_purchases`; 409 si ya está inscrito; 400 si la sesión está completada).
 - `GET /api/appointments?pendingOnly=1` (admin, permiso `appointments`): lista citas con `status IN ('pending','confirmed')` en la ventana `[hoy-60d, hoy+30d]`, ordenadas ascendente por `start_time`, con un campo derivado `isOverdue` (`start_time < hoy`). Alimenta la pestaña "Pendientes" del dashboard y permite al admin completar o cancelar citas de días anteriores sin tener que navegar el calendario.
 - `POST /api/risc/events` (público, sin auth, solo accesible vía HTTPS en dominio autorizado) → receptor de eventos RISC (Cross-Account Protection) de Google. Valida JWT con `google-auth-library`, deduplica por `jti` en `risc_events`, y en `sessions-revoked` / `tokens-revoked` borra las filas de `session` + `account` del usuario afectado, y en `account-disabled` bloquea al usuario (`users.locked_at` + `users.locked_reason`).
@@ -468,10 +496,17 @@ Detalles que no se deben romper:
 
 ## 🎨 Componentes UI Clave
 - AdminShell: shell del dashboard que recibe `permissions` (string[] | null) desde el layout de servidor y renderiza el sidebar con la navegación filtrada, el header móvil y `{children}`. Sin `fetch` de permisos (el HTML y la hidratación nacen del mismo snapshot).
+- TrackingTags: Server Component que renderiza el snippet de analítica con `<script>` **nativos**, no con `next/script`. Se monta **solo** en el `<head>` de `src/app/layout.tsx` (el layout raíz), nunca en los layouts anidados. La lectura de BD es `getTrackingSettings()` en `src/lib/tracking-settings.ts` (a parte de `src/lib/tracking-tags.ts` porque ese es puro y se testea en node).
+- **Por qué el tag va en el layout raíz y no en `(public)`/`(client)`**: el layout raíz es el **único** que puede escribir en `<head>`; uno anidado renderiza dentro de `<body>`, y React 19 solo sube a `<head>` los `<script async src>`, **nunca los inline**. Es decir, desde los layouts anidados el externo acababa en `<head>` y el `gtag('config')` inline en `<body>` — medio tag, que es justo lo que Google pide evitar. Con el tag en el raíz, **externo e inline van juntos y en orden en `<head>`**, manteniendo el orden que pegó el admin (el snippet oficial de GA4 ya trae `async src` → inline).
+- **El gating lo decide `src/proxy.ts` vía header, no una allowlist**: el layout raíz no sabe en qué ruta está, así que el proxy marca el alcance con `x-tracking-scope: public` (`NextResponse.next({ request: { headers } })`) y el layout solo monta si `shouldRenderTracking()` (en `src/lib/tracking-scope.ts`) ve ese valor. El portal del cliente (`/profile`, `/complete-registration`) **sí** lleva etiquetas: es experiencia pública. El `matcher` del proxy se amplió a las páginas (excluyendo `api`, `_next`, `uploads`, `robots.txt`, `sitemap.xml`, `favicon.ico`, donde no hay `<head>` que renderizar y `auth()` no debe correr por archivo), pero **el guard de auth de `/dashboard` y `/profile` es seguridad y no se toca**: `requiresAuth()` reproduce exactamente el comportamiento anterior. `isAdminPath()` compara **con frontera** (`=== "/dashboard" || startsWith("/dashboard/")`) y no con `startsWith("/dashboard")` pelado, para que una futura `/dashboard-preview` no se quede sin tracking por un bug de prefijo. `shouldRenderTracking()` **falla cerrado**: cualquier valor distinto de `public` (incluido `null`, que es lo que llega al dashboard) no monta nada. En el dashboard tampoco se lee SQLite, porque la llamada va detrás del `&&`.
+- **Por qué `<script>` nativos y NO `next/script`**: Google(tag) no detectaba la etiqueta con `strategy="afterInteractive"` porque Next solo emitía `<link rel="preload" as="script">` y el script real se insertaba tras la hidratación; el crawler ve el HTML inicial y no encuentra el tag. Con `<script src async>` nativo el `src` va en el HTML inicial y Google lo detecta, sin necesidad de `afterInteractive`.
+- **El inline necesita `type="text/javascript"` o React 19 lo destruye**: en `react-dom-client`, el `case "script"` de `createElement` hace `didWarnScriptTags || isScriptDataBlock(newProps) || console.error("Encountered a script tag while rendering React component...")` y acto seguido **sustituye el nodo por un `<div>` vacío** (`nextResource.innerHTML = "<script></script>"; removeChild(firstChild)`). Es decir, el inline sí salía en el HTML del servidor (por eso Google lo detectaba) pero en el cliente React lo reemplaza por un div inerte: el `gtag('config')` nunca corría y no había pageview en navegaciones suaves. La **única** exención es `isScriptDataBlock`, que devuelve `true` cuando el `type` es un MIME de JavaScript válido (`application/javascript`, `text/javascript`, `text/jscript`, `text/x-javascript`, etc., pero **no** `module`/`importmap`/`speculationrules`). Por eso `renderTag()` pone `type="text/javascript"` en cada bloque inline: es lo correcto semánticamente y además lo que evita el warning y el descarte. El `<script src>` externo **no** lleva `type` a propósito, porque un `type` no-JS lo metería en el mismo `case` destructivo. Cubierto por 4 tests en `src/components/TrackingTags.test.tsx` (uno replica la lista de `isScriptDataBlock` para que el `type` no se rompa en una actualización de React). Nota: `next/script` con `beforeInteractive` solo es válido en el layout raíz, que es justamente el layout que **no** debe llevar el tag, así que no es una opción aquí.
+- **Por qué el snippet se parsea y no se inyecta crudo**: `parseTrackingSnippet()` (`src/lib/tracking-tags.ts`, 19 tests) descompone el texto en `<script src>` y bloques inline reales. Un `<div dangerouslySetInnerHTML>` **no ejecuta** los scripts que se insertan (spec HTML) y `next/script` con `dangerouslySetInlineScript` los volvería texto inerte. El parser descarta comentarios y etiquetas que no sean script, tolera `>` dentro de atributos entrecomillados, cierra en el primer `</script>` y acepta scripts sin cerrar.
 - ServiceCard: card de servicio con carrusel de fotos, nombre, duración, precio, botón "Agendar". El frame es un botón que abre el `PhotoLightbox` con todas las fotos del servicio; cada card monta su propio visor.
 - AppointmentCard: card de cita con hora, cliente, servicio, foto referencia. La referencia se renderiza con `PhotoThumb` solo si llega `onOpenPhoto` (el `PhotoLightbox` vive una sola vez en `DashboardContent`, que pasa `openPhoto` tanto en la vista Día como en la de Pendientes).
 - ClientCRMPanel: panel lateral con notas técnicas, stats, botón WhatsApp y contactos editables (nombre, teléfono, dirección y **email** — el email editable ayuda a unificar duplicados de Google)
 - ClientCRMPanel: el bloque "Contacto" permite editar también el **email** del cliente; el `PATCH /api/clients/[id]` lo valida (400 formato inválido) y rechaza duplicados con 409, para que al iniciar sesión con Google el `linkGoogleAccount` enlace al usuario existente en vez de crear uno duplicado
+- ClientCRMPanel: el bloque "Servicio adquirido" (renombrado a "Servicios adquiridos" cuando hay más de uno) lista las N compras de la cita con `isPrimary` para marcar la principal, y el selector elige cuál edita el `PATCH /api/purchases/[id]`. Antes hacía `if (data.id)` sobre una respuesta que ahora es un **array**: sin este cambio el bloque desaparecía entero en las citas con complementarios.
 - ClientCRMPanel: el carrusel de referencias usa `client.photoGroups` (nuevo campo de `GET /api/clients/[id]`, fotos `reference` agrupadas por cita) en vez del fetch a `/api/appointments/[id]/photos`. Al abrirse desde la agenda prioriza la cita del `appointmentId` recibido; con más de un grupo muestra el selector "Modelos de otra visita" (pills de fecha) para cambiar de cita.
 - ClientCRMPanel: **pasaporte de uñas** en el mismo drawer, debajo de las referencias. Segundo carrusel "Trabajos finalizados" alimentado por `client.passportGroups` (fotos `kind = 'final'` de citas `status = 'completed'`, agrupadas por cita). Lleva **su propio** estado `passportAppointmentId` y su propio selector "Trabajo de otra visita": referencias y trabajos finalizados son juegos de citas distintos (una cita completada puede no tener fotos de referencia y una pendiente no tiene fotos finales), así que un selector único los mezclaría. `passportGroups` usa `services.name` y **no** el snapshot de `service_purchases`, porque una sesión de curso tiene una fila de compra por alumno y el `LEFT JOIN` multiplicaría cada foto tantas veces como alumnos tenga la cita (mismo fan-out latente en `src/app/(client)/profile/page.tsx:70-73`).
 - PhotoLightbox: **visor de fotos compartido** a pantalla completa (`z-[70]`, sobre los diálogos `z-50` del admin). Pellizco, rueda del ratón, arrastre con anclaje al punto tocado, doble toque/clic, teclado (`Esc`, flechas, `+`/`-`/`0`), contador `n / total`, porcentaje de zoom, botones Alejar/Acercar/Restablecer, pie de foto y prop `footer` (el muro público lo usa para el CTA "Agendar"). La descarga baja el **original a resolución completa** con nombre slugificado (`src/lib/download-name.ts`); si la URL es de otro origen, el botón pasa a "Abrir" con `target="_blank"`. La matemática de zoom/pan está en `src/lib/zoom.ts` (funciones puras, 23 tests). Los efectos del visor tienen cobertura de render en `src/components/PhotoLightbox.test.tsx` (6 tests) vía `jsdom` con dobles de `ResizeObserver`, `clientWidth/clientHeight` y `naturalWidth/naturalHeight`, porque jsdom no tiene motor de layout ni implementa `ResizeObserver`; ese archivo atrapa exactamente la regresión de medir el viewport con `[]`.
@@ -484,10 +519,13 @@ Detalles que no se deben romper:
 - GalleryGrid: grid masonry/pinterest para muro de inspiración; cada foto abre el `PhotoLightbox` con un snapshot de lo cargado (para que el scroll infinito no altere la lista mientras se navega) y el CTA "Agendar similar" va en el `footer` del visor (soporta fotos de citas y fotos sueltas del admin)
 - FilterPills: pills horizontales para filtrar galería (Todas, Acrílicas, Gel, etc)
 - BookingWizard: wizard de 3 pasos para reserva (con selección de modelos del muro y CTA "Unirme a la lista de espera" cuando el día no tiene slots disponibles)
+- **Servicios principales + complementarios** (`services.is_complementary`): el paso 1 del wizard lista los servicios normales (elegibles como principal) y, en una sección aparte, los servicios con `is_complementary = 1` (los únicos que se pueden añadir con "+ Agregar"), con tope `MAX_COMPLEMENTARY_SERVICES = 4` de `src/lib/booking-combos.ts`. Un complementario nunca puede ser principal, así que un enlace `?serviceId=` directo a uno se ignora (la API responde 400). El total de precio y duración se muestra en vivo y se repite en el paso 3.
+- **Refresco de slots al cambiar la combinación**: `fetchSlots(date, ids)` recibe los ids por parámetro (no del closure) y `toggleComplementary`/`choosePrimary` la vuelven a llamar si ya había fecha elegida; si no, los slots en pantalla quedarían calculados para otra duración. En `NewAppointmentDialog` la combinación se elige antes de la fecha, así que alcanza con invalidar el slot.
+- **Distinción "no cabe" vs "día lleno"**: `GET /api/slots` devuelve `maxContiguousMins` (el mayor bloque corrido libre) además de `hasAvailability`. Cuando `0 < maxContiguousMins < totalDurationMins` la UI **no** ofrece lista de espera (esperar no sirve: quitar un servicio es lo que desbloquea) y bloquea "Continuar" con un mensaje que lleva a quitar servicios. La lista de espera se reserva para `maxContiguousMins === 0` (día lleno de verdad).
 - CompleteRegistrationForm: formulario para pedir teléfono tras registrarse con Google
 - StatsBanner: banner con total_visits y total_revenue del cliente
 - LoginForm: formulario de login/registro por correo y contraseña
-- NewAppointmentDialog: crea citas para walk-ins (clientes no registrados) desde la agenda
+- NewAppointmentDialog: crea citas para walk-ins (clientes no registrados) desde la agenda. Admite los mismos complementarios que el wizard (multi-selección, total en vivo, y bloqueo con `maxContiguousMins` cuando la combinación no cabe).
 - AddServiceDialog: diálogo "Servicio realizado" para registrar un servicio ya hecho sin cita previa (walk-in retrospectivo o ajuste manual de CXC) — campos: cliente, servicio, fecha/hora (default hoy, permite pasado), precio (default `service.price`, editable hasta 150%) y notas. Llama `POST /api/purchases` con `appointmentId: null`. Disponible desde la agenda (`+ Servicio realizado`), `/dashboard/balances` (por cliente) y el panel CRM.
 - EditCostDialog: mini-diálogo para corregir manualmente el `avg_cost` de un producto de inventario. Pide nuevo costo (USD) y motivo obligatorio (≥3 chars). Visible en la fila de cada producto de la tabla de inventario solo si el admin tiene el permiso `adjustInventory`. Crea una fila en el kardex con `kind: "cost_adjust"`, `quantity: 0` y `unit_cost_usd: nuevo valor`.
 - CourseSessionDialog: crea sesiones de curso grupal desde la agenda (elige servicio `is_group`, fecha/hora con slots y multi-selección de alumnos de `/api/clients`; muestra precio por alumno y total; llama `POST /api/course-sessions`)

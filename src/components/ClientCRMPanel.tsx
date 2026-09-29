@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
 import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
@@ -54,6 +54,7 @@ type Purchase = {
   serviceDescription: string | null;
   servicePrice: number;
   serviceDurationMins: number;
+  isPrimary: number;
 };
 
 export function ClientCRMPanel({
@@ -68,6 +69,7 @@ export function ClientCRMPanel({
   const [client, setClient] = useState<ClientData | null>(null);
   const [techNotes, setTechNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [editingPurchase, setEditingPurchase] = useState(false);
   const [purchaseForm, setPurchaseForm] = useState<Purchase | null>(null);
@@ -120,18 +122,34 @@ export function ClientCRMPanel({
       });
   }, [clientId]);
 
+  // Una cita puede tener N compras (principal + complementarios). El endpoint
+  // las devuelve ordenadas con el principal primero, así que purchases[0] es el
+  // que se abre por defecto. Al recargar tras un PATCH conservamos la
+  // selección para no saltar al principal debajo del dedo del admin.
+  const applyPurchases = useCallback((list: Purchase[], keepSelectedId?: string) => {
+    setPurchases(list);
+    setPurchase((prev) => {
+      const target =
+        list.find((p) => p.id === (keepSelectedId ?? prev?.id)) ?? list[0] ?? null;
+      setPurchaseForm(target);
+      return target;
+    });
+  }, []);
+
   useEffect(() => {
-    if (!appointmentId) return;
+    if (!appointmentId) {
+      setPurchases([]);
+      setPurchase(null);
+      setPurchaseForm(null);
+      return;
+    }
     fetch(`/api/purchases?appointmentId=${appointmentId}`)
       .then((r) => r.json())
-      .then((data) => {
-        if (data && data.id) {
-          setPurchase(data);
-          setPurchaseForm(data);
-        }
+      .then((data: Purchase[]) => {
+        if (Array.isArray(data)) applyPurchases(data);
       })
       .catch(() => {});
-  }, [appointmentId]);
+  }, [appointmentId, applyPurchases]);
 
   async function saveNotes() {
     setSaving(true);
@@ -164,6 +182,9 @@ export function ClientCRMPanel({
         throw new Error(data.error || "No se pudo guardar");
       }
       setPurchase(purchaseForm);
+      setPurchases((prev) =>
+        prev.map((p) => (p.id === purchaseForm.id ? purchaseForm : p))
+      );
       setEditingPurchase(false);
       setPurchaseSuccess("Servicio adquirido actualizado");
     } catch (e) {
@@ -190,10 +211,7 @@ export function ClientCRMPanel({
       }
       const fresh = await fetch(`/api/purchases?appointmentId=${appointmentId}`);
       const data = await fresh.json();
-      if (data?.id) {
-        setPurchase(data);
-        setPurchaseForm(data);
-      }
+      if (Array.isArray(data)) applyPurchases(data, purchase.id);
       setEditingPurchase(false);
       setPurchaseSuccess("Servicio sincronizado con el catálogo actual");
     } catch (e) {
@@ -503,10 +521,10 @@ export function ClientCRMPanel({
           </button>
         </div>
 
-        {purchase && (
+        {purchases.length > 0 && (
           <div className="mb-6 rounded-xl border border-gray-200 p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Servicio adquirido
+              {purchases.length > 1 ? "Servicios adquiridos" : "Servicio adquirido"}
             </p>
             {purchaseSuccess && (
               <p className="mb-2 rounded-lg bg-green-50 px-2 py-1.5 text-xs text-green-600">
@@ -518,83 +536,74 @@ export function ClientCRMPanel({
                 {purchaseError}
               </p>
             )}
-            {!editingPurchase ? (
-              <div>
-                <p className="font-medium text-gray-900">{purchase.serviceName}</p>
-                {purchase.serviceDescription && (
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {purchase.serviceDescription}
-                  </p>
-                )}
-                <p className="mt-1 text-sm text-gray-600">
-                  ${purchase.servicePrice.toFixed(2)} ·{" "}
-                  {purchase.serviceDurationMins} min
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+            {purchases.length > 1 && (
+              <div className="mb-3 space-y-1.5">
+                {purchases.map((p) => (
                   <button
-                    onClick={() => setEditingPurchase(true)}
-                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+                    key={p.id}
+                    onClick={() => {
+                      setPurchase(p);
+                      setPurchaseForm(p);
+                      setEditingPurchase(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                      p.id === purchase?.id
+                        ? "bg-pink-light text-gray-900"
+                        : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                    }`}
                   >
-                    Editar
+                    <span className="min-w-0 truncate font-medium">
+                      {p.isPrimary === 1 ? p.serviceName : `+ ${p.serviceName}`}
+                    </span>
+                    <span className="shrink-0 text-xs text-gray-400">
+                      ${p.servicePrice.toFixed(2)} · {p.serviceDurationMins} min
+                    </span>
                   </button>
-                  <button
-                    onClick={syncPurchaseToCatalog}
-                    disabled={purchaseSaving}
-                    className="rounded-lg bg-pink-light px-3 py-1.5 text-xs font-medium text-pink-700 hover:bg-pink-main disabled:opacity-50 transition-colors"
-                  >
-                    {purchaseSaving ? "Sincronizando..." : "Usar versión actual del catálogo"}
-                  </button>
-                </div>
+                ))}
               </div>
-            ) : (
-              <div>
-                <div className="space-y-2">
-                  <div>
-                    <label className="mb-0.5 block text-xs font-medium text-gray-600">
-                      Nombre
-                    </label>
-                    <input
-                      value={purchaseForm?.serviceName ?? ""}
-                      onChange={(e) =>
-                        setPurchaseForm((prev) =>
-                          prev ? { ...prev, serviceName: e.target.value } : prev
-                        )
-                      }
-                      className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
-                    />
+            )}
+            {purchase && (
+              <div className={purchases.length > 1 ? "border-t border-gray-100 pt-3" : ""}>
+              {!editingPurchase ? (
+                <div>
+                  <p className="font-medium text-gray-900">{purchase.serviceName}</p>
+                  {purchase.serviceDescription && (
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {purchase.serviceDescription}
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm text-gray-600">
+                    ${purchase.servicePrice.toFixed(2)} ·{" "}
+                    {purchase.serviceDurationMins} min
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setEditingPurchase(true)}
+                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={syncPurchaseToCatalog}
+                      disabled={purchaseSaving}
+                      className="rounded-lg bg-pink-light px-3 py-1.5 text-xs font-medium text-pink-700 hover:bg-pink-main disabled:opacity-50 transition-colors"
+                    >
+                      {purchaseSaving ? "Sincronizando..." : "Usar versión actual del catálogo"}
+                    </button>
                   </div>
-                  <div>
-                    <label className="mb-0.5 block text-xs font-medium text-gray-600">
-                      Descripción
-                    </label>
-                    <textarea
-                      value={purchaseForm?.serviceDescription ?? ""}
-                      onChange={(e) =>
-                        setPurchaseForm((prev) =>
-                          prev
-                            ? { ...prev, serviceDescription: e.target.value }
-                            : prev
-                        )
-                      }
-                      rows={2}
-                      className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+                </div>
+              ) : (
+                <div>
+                  <div className="space-y-2">
                     <div>
                       <label className="mb-0.5 block text-xs font-medium text-gray-600">
-                        Precio ($)
+                        Nombre
                       </label>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={purchaseForm?.servicePrice ?? 0}
+                        value={purchaseForm?.serviceName ?? ""}
                         onChange={(e) =>
                           setPurchaseForm((prev) =>
-                            prev
-                              ? { ...prev, servicePrice: parseFloat(e.target.value) || 0 }
-                              : prev
+                            prev ? { ...prev, serviceName: e.target.value } : prev
                           )
                         }
                         className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
@@ -602,43 +611,82 @@ export function ClientCRMPanel({
                     </div>
                     <div>
                       <label className="mb-0.5 block text-xs font-medium text-gray-600">
-                        Duración (min)
+                        Descripción
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="5"
-                        value={purchaseForm?.serviceDurationMins ?? 0}
+                      <textarea
+                        value={purchaseForm?.serviceDescription ?? ""}
                         onChange={(e) =>
                           setPurchaseForm((prev) =>
                             prev
-                              ? {
-                                  ...prev,
-                                  serviceDurationMins: parseInt(e.target.value, 10) || 0,
-                                }
+                              ? { ...prev, serviceDescription: e.target.value }
                               : prev
                           )
                         }
+                        rows={2}
                         className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-gray-600">
+                          Precio ($)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={purchaseForm?.servicePrice ?? 0}
+                          onChange={(e) =>
+                            setPurchaseForm((prev) =>
+                              prev
+                                ? { ...prev, servicePrice: parseFloat(e.target.value) || 0 }
+                                : prev
+                            )
+                          }
+                          className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-gray-600">
+                          Duración (min)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="5"
+                          value={purchaseForm?.serviceDurationMins ?? 0}
+                          onChange={(e) =>
+                            setPurchaseForm((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    serviceDurationMins: parseInt(e.target.value, 10) || 0,
+                                  }
+                                : prev
+                            )
+                          }
+                          className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:border-pink-main focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={savePurchase}
+                      disabled={purchaseSaving}
+                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                    >
+                      {purchaseSaving ? "Guardando..." : "Guardar"}
+                    </button>
+                    <button
+                      onClick={() => setEditingPurchase(false)}
+                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                    >
+                      Cancelar
+                    </button>
                   </div>
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={savePurchase}
-                    disabled={purchaseSaving}
-                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
-                  >
-                    {purchaseSaving ? "Guardando..." : "Guardar"}
-                  </button>
-                  <button
-                    onClick={() => setEditingPurchase(false)}
-                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+              )}
               </div>
             )}
           </div>

@@ -45,7 +45,11 @@ export function getOverlappingBlockouts(
     );
 }
 
-export function validateSlot(startTime: number, endTime: number): string | null {
+export function validateSlot(
+  startTime: number,
+  endTime: number,
+  excludeAppointmentId?: string
+): string | null {
   if (startTime <= Math.floor(Date.now() / 1000)) {
     return "No puedes reservar en el pasado";
   }
@@ -60,7 +64,23 @@ export function validateSlot(startTime: number, endTime: number): string | null 
   if (startMin < openMin || endMin > closeMin) {
     return "El horario está fuera del horario de trabajo";
   }
-  if (getOverlappingAppointments(startTime, endTime).length > 0) {
+  // Al reprogramar, la propia cita no puede solaparse consigo misma: sin
+  // excluirla, mover una cita un rato siempre daría conflicto consigo misma.
+  if (excludeAppointmentId) {
+    const conflicts = db
+      .select({ id: schema.appointments.id })
+      .from(schema.appointments)
+      .where(
+        and(
+          sql`${schema.appointments.id} <> ${excludeAppointmentId}`,
+          sql`${schema.appointments.status} IN ('pending', 'confirmed')`,
+          lt(schema.appointments.startTime, endTime),
+          gt(schema.appointments.endTime, startTime)
+        )
+      )
+      .all();
+    if (conflicts.length > 0) return "Ese horario ya está ocupado";
+  } else if (getOverlappingAppointments(startTime, endTime).length > 0) {
     return "Ese horario ya está ocupado";
   }
   if (getOverlappingBlockouts(startTime, endTime).length > 0) {

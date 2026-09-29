@@ -58,6 +58,7 @@ export const services = sqliteTable("services", {
   durationMins: integer("duration_mins").notNull(),
   isActive: integer("is_active").default(1),
   isGroup: integer("is_group").notNull().default(0),
+  isComplementary: integer("is_complementary").notNull().default(0),
 });
 
 export const appointments = sqliteTable(
@@ -120,6 +121,7 @@ export const servicePurchases = sqliteTable("service_purchases", {
   serviceDescription: text("service_description"),
   servicePrice: real("service_price").notNull(),
   serviceDurationMins: integer("service_duration_mins").notNull(),
+  isPrimary: integer("is_primary").notNull().default(1),
   financialStatus: text("financial_status")
     .$type<"pending" | "partial" | "paid" | "void">()
     .notNull()
@@ -334,6 +336,7 @@ export const cancelledAppointments = sqliteTable(
     serviceId: text("service_id").references(() => services.id),
     serviceName: text("service_name").notNull(),
     servicePrice: real("service_price").notNull().default(0),
+    serviceItems: text("service_items"),
     startTime: integer("start_time"),
     endTime: integer("end_time"),
     referencePhotoUrls: text("reference_photo_urls"),
@@ -427,6 +430,19 @@ export const navItems = sqliteTable("nav_items", {
   openInNewTab: integer("open_in_new_tab").notNull().default(0),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+});
+
+/**
+ * Snippet de etiquetas de analítica que se inyecta en las páginas públicas.
+ * Singleton con key = "head". Solo lo edita el superadmin porque es inyección
+ * de JS arbitrario (ver src/lib/tracking-tags.ts).
+ */
+export const trackingTags = sqliteTable("tracking_tags", {
+  key: text("key").primaryKey(),
+  snippet: text("snippet").notNull().default(""),
+  isEnabled: integer("is_enabled").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
 });
 
 export const riscEvents = sqliteTable("risc_events", {

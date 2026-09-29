@@ -88,6 +88,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Grupo y complementario son roles excluyentes: una sesión de curso cobra un
+  // precio por alumno y no se combina, así que no puede ser complementario.
+  const isGroup = body.isGroup ? 1 : 0;
+  const isComplementary = body.isComplementary ? 1 : 0;
+  if (isGroup && isComplementary) {
+    return NextResponse.json(
+      { error: "Un curso no puede ser un servicio complementario" },
+      { status: 400 }
+    );
+  }
+
   const service = {
     id: crypto.randomUUID(),
     name,
@@ -96,7 +107,8 @@ export async function POST(req: NextRequest) {
     price,
     durationMins,
     isActive: body.isActive === false ? 0 : 1,
-    isGroup: body.isGroup ? 1 : 0,
+    isGroup,
+    isComplementary,
   };
 
   db.insert(schema.services).values(service).run();
@@ -105,7 +117,7 @@ export async function POST(req: NextRequest) {
     action: "create",
     entityId: service.id,
     label: `Servicio creado: ${service.name}`,
-    metadata: { price: service.price, durationMins: service.durationMins, isGroup: service.isGroup },
+    metadata: { price: service.price, durationMins: service.durationMins, isGroup: service.isGroup, isComplementary: service.isComplementary },
     actorId: session?.user?.id,
     actorName: session?.user?.name ?? null,
   });

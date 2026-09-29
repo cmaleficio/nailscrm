@@ -5,6 +5,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { validateSlot } from "@/lib/availability";
 import { logActivity } from "@/lib/audit";
+import { parseComplementaryIds } from "@/lib/booking-combos";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -12,10 +13,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   const body = await req.json();
-  const { serviceId, startTime, clientIds } = body;
+  const { serviceId, startTime, clientIds, addServiceIds } = body;
 
   if (!serviceId || typeof startTime !== "number" || !Array.isArray(clientIds) || clientIds.length === 0) {
     return NextResponse.json({ error: "serviceId, startTime y clientIds son requeridos" }, { status: 400 });
+  }
+
+  // Una sesión de curso cobra un precio por alumno y todos los alumnos comparten
+  // el mismo horario; mezclar servicios complementarios no tiene sentido aquí.
+  if (parseComplementaryIds(addServiceIds).length > 0) {
+    return NextResponse.json(
+      { error: "Una sesión de curso no admite servicios complementarios" },
+      { status: 400 }
+    );
   }
 
   const service = db.select().from(schema.services).where(eq(schema.services.id, serviceId)).get();

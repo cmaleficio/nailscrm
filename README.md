@@ -34,6 +34,7 @@ Copiar `.env.template` a `.env` y completar:
 | `ADMIN_EMAIL` | Email del admin principal (superadmin) |
 | `CRON_SECRET` | Secreto para los cron de la tasa BCV: refresh diario (`/api/exchange-rate/refresh`) y backfill de gaps (`/api/exchange-rate/backfill`) |
 | `NEXT_PUBLIC_SALON_NAME` | Nombre mostrado del salón |
+| `NEXT_PUBLIC_SITE_URL` | Origen público del sitio, sin barra final (ej. `https://tu-dominio.com`). Lo usan `robots.txt`, `sitemap.xml` y el `metadataBase` del layout raíz. Si no se define cae a `AUTH_URL` y después a `http://localhost:3001`, y un sitemap lleno de `localhost` no lo indexa nadie. Es estático: cambiarla exige `npm run build`. |
 | `RISC_SERVICE_ACCOUNT_JSON_PATH` | (Opcional) Ruta al JSON key del service account de Google RISC (Cross-Account Protection). Crear el SA con rol `RISC Service Agent` en GCP y guardar el JSON fuera del repo. |
 | `RISC_RECEIVER_URL` | (Opcional) URL pública del receptor de eventos RISC, normalmente `https://<tu-dominio>/api/risc/events`. Solo se usa al ejecutar `npm run risc:register`. |
 
@@ -70,6 +71,7 @@ npx tsc --noEmit      # typecheck
 
 ## Funcionalidades principales
 
+- **SEO:** `robots.txt` y `sitemap.xml` generados por Next (`src/app/robots.ts` y `src/app/sitemap.ts`), con la lista de rutas en `src/lib/seo.ts` como única fuente de verdad para los dos. El sitemap expone solo las 4 rutas públicas con valor SEO (`/`, `/book`, `/politicas`, `/condiciones`) y `robots.txt` bloquea el dashboard, el portal de cliente, las APIs y las páginas públicas sin valor de búsqueda (`/login`, `/success`, `/review/[id]`, que además llevan `noindex`). **Las fotos de `/public/uploads` no se bloquean a propósito**: son el mayor activo del sitio en Google Images. `www` redirige al dominio canónico. El origen sale de `NEXT_PUBLIC_SITE_URL`.
 - **Reserva en 3 pasos:** elige servicio, horario y confirmas. En el último paso puedes subir fotos de referencia o elegir modelos del muro de inspiración. Si el día no tiene horarios disponibles, puedes unirte a la lista de espera con un clic.
 - **Lista de espera:** los clientes que se unen aparecen en la pestaña "Espera" del dashboard; el admin los contacta por WhatsApp (queda marcado como notificado) o elimina la entrada.
 - **Muro de inspiración:** fotos finales de citas compartidas y fotos destacadas subidas por el admin desde `/dashboard/gallery` (pre-llenado del muro sin necesidad de completar una cita), filtrables por servicio. Al hacer clic en una foto puedes agendar un servicio similar con ese modelo (si la foto tiene servicio asociado).
@@ -85,7 +87,8 @@ npx tsc --noEmit      # typecheck
 - **Estados financieros** en `/dashboard/financials`: P&L mensual con dos vistas — **Recaudación** (ingresos por pagos cobrados en el mes) y **Producción** (ingresos por servicios completados en el mes), cada uno con desglose por servicio, además de gastos por categoría y utilidad.
 - **Configuración independiente por módulo** en `/dashboard/brand` (identidad), `/dashboard/settings` (horario de trabajo), `/dashboard/exchange-rates` (tasas BCV), `/dashboard/legal` y `/dashboard/legal/terms` (documentos legales) y `/dashboard/settings/navigation` (menú público). El legacy `settings` se expande a estos cinco permisos al leer un admin existente.
 - **CRM de clientes** en `/dashboard/clients`: listado con búsqueda, alta manual, notas técnicas, teléfono/dirección/correo editables (el correo editable ayuda a unificar duplicados de Google), stats de visitas e ingresos, saldo pendiente con registro de pagos y botón de WhatsApp.
-- **Cursos y servicios grupales:** los servicios pueden marcarse como "curso/grupo" (`is_group`) y el admin crea sesiones de curso desde la agenda seleccionando fecha/hora y varios alumnos; cada alumno inscrito genera su propia compra/CXC individual, la sesión aparece como bloque en la agenda (badge "Curso · N alumnos") y en `/dashboard/balances` se ve el desglose por ítem con badge de estado financiero y filtro por estado.
+- **Servicios principales + complementarios:** una cita puede llevar un servicio principal y hasta **4 complementarios**, que se reservan **corridos** (sin buffer) y suman duración y precio, tanto en `/book` como en la agenda del admin. En `/dashboard/services` cada servicio se marca como "Es complementario"; es un flag por servicio, no una matriz de compatibilidad. El principal es opcional (se pueden combinar solo complementarios). Si la combinación no cabe en el día, el sistema lo explica y pide quitar servicios en vez de ofrecer la lista de espera, que queda reservada para los días realmente llenos.
+- **Cursos y servicios grupales:** los servicios pueden marcarse como "curso/grupo" (`is_group`) y el admin crea sesiones de curso desde la agenda seleccionando fecha/hora y varios alumnos; cada alumno inscrito genera su propia compra/CXC individual, la sesión aparece como bloque en la agenda (badge "Curso · N alumnos") y en `/dashboard/balances` se ve el desglose por ítem con badge de estado financiero y filtro por estado. Un curso se puede agendar solo, pero **no se combina** con servicios complementarios (las dos flags son excluyentes).
 - **Reseñas post-cita:** tras completar una cita, la clienta puede dejar su reseña (estrellas + comentario) desde `/review/[id]` o el botón "Dejar reseña" en su perfil.
 - **Fotos de servicios:** gestor en `/dashboard/services` y carrusel en las tarjetas del home. Los servicios se muestran **del más barato al más costoso** (tiebreaker por nombre) tanto en el home público como en el dashboard admin y en la API `/api/services`.
 - **Muro del admin:** en `/dashboard/gallery` se suben fotos sueltas al muro (múltiples a la vez, con servicio asociado opcional y descripción).
@@ -103,14 +106,14 @@ src/
     api/               # API routes (auth, appointments, admins, gallery, services, slots, upload, suppliers, bills, inventory, financials…)
   components/          # UI (BookingWizard, AppointmentCard, ClientCRMPanel, GalleryGrid, PhotoLightbox, PhotoThumb, PhotoCarousel, NewAppointmentDialog, BlockoutDialog, RegisterPaymentDialog, ReportPaymentDialog, BillFormDialog, SupplierPaymentDialog, MovementDialog, …)
   db/                  # conexión SQLite + schema Drizzle
-  lib/                 # auth, auth.config, authz, calendar, slots, workingHours, availability, time, bcv, upload, zoom, download-name
+  lib/                 # auth, auth.config, authz, calendar, slots, workingHours, availability, time, bcv, upload, zoom, download-name, seo, site-url
 ```
 
 ## Roles
 
 - **Cliente:** reserva, próximas citas y pasaporte en `/profile`.
 - **Admin:** agenda día/semana, completar citas con fotos y pago (opcional, la deuda queda pendiente si no se marca), crear sesiones de curso grupal, citas walk-in, bloques de tiempo, reprogramar (re-sincroniza Google Calendar), CRM (incluye saldo), cuentas por cobrar con desglose por ítem y filtro de estado, compras, cuentas por pagar, inventario, estados financieros (Recaudación + Producción), servicios, identidad, horario, tasas, legal y navegación. Los accesos a cada módulo se controlan por permisos asignados en `/dashboard/admin-users`.
-- **Superadmin (`ADMIN_EMAIL`):** gestión de admins y sus permisos en `/dashboard/admin-users`.
+- **Superadmin (`ADMIN_EMAIL`):** gestión de admins y sus permisos en `/dashboard/admin-users`, más la sección "Etiquetas de analítica" al pie de esa misma pantalla, donde se pega el snippet de Google Analytics / Google Tag Manager (o cualquier otro tag). Se inyecta solo en las páginas públicas (inicio, reservas, reseñas y portal del cliente), nunca en el dashboard, y no se expone a los sub-admins porque es JavaScript arbitrario que correría en el navegador de cada visitante. Hay un botón "Generar" que arma el snippet oficial de gtag.js a partir del Measurement ID, y un interruptor para apagar las etiquetas sin borrarlas.
 
 ## 📚 Base de Conocimiento
 
