@@ -68,6 +68,7 @@
 - Modificar: `src/app/api/gallery/route.ts:77-82`
 - Modificar: `src/app/api/production-photos/route.ts:132-137`
 - Modificar: `src/app/api/clients/[id]/route.ts:236-242`
+- Modificar: `src/app/(client)/profile/page.tsx:88-94` (select de compras de citas completadas)
 
 **Interfaces:**
 - Consume: nada (es la base de todo lo demás).
@@ -318,14 +319,15 @@ export function remainingCombination(purchases: RemainingPurchase[]): {
 
 - [ ] **Paso 4: los 5 llamadores deben seguir compilando**
 
-`PurchaseSummaryRow` ahora exige `id` y `serviceDurationMins`. En los cuatro selects de los callers añade las columnas que falten (los `.select({...})` de `schema.servicePurchases`):
+`PurchaseSummaryRow` ahora exige `id` y `serviceDurationMins`, y hay **cinco** selects de `schema.servicePurchases` que alimentan a `summarizePurchases`. Añade las columnas que falten en cada uno:
 
 - `src/app/api/appointments/route.ts:140-147` → añadir `serviceDurationMins: schema.servicePurchases.serviceDurationMins,` después de `servicePrice` (ya trae `id`).
 - `src/app/api/gallery/route.ts:77-82` → añadir `id: schema.servicePurchases.id,` y `serviceDurationMins: schema.servicePurchases.serviceDurationMins,`.
 - `src/app/api/production-photos/route.ts:132-137` → idem.
 - `src/app/api/clients/[id]/route.ts:236-242` → idem.
+- `src/app/(client)/profile/page.tsx:88-94` → idem (el de las citas completadas).
 
-Regla: en ninguno de los cuatro se **lee** `id` ni `serviceDurationMins` todavía; solo se seleccionan porque el tipo lo pide. No los propagues a la respuesta JSON en esta tarea: nada los necesita todavía y `production-photos` ya calcula los días con la subconsulta de `appointment_photos`.
+Regla: en ninguno de los cinco se **lee** `id` ni `serviceDurationMins` todavía; solo se seleccionan porque el tipo lo pide. No los propagues a la respuesta JSON en esta tarea: nada los necesita todavía, y `production-photos` ya calcula los días con la subconsulta de `appointment_photos`.
 
 - [ ] **Paso 5: correr los tests y el typecheck**
 
@@ -342,7 +344,7 @@ Esperado: 0 errores. Si el typecheck falla solo con "la propiedad id/serviceDura
 - [ ] **Paso 6: commit**
 
 ```
-git add src/lib/appointment-purchases.ts src/lib/appointment-purchases.test.ts "src/app/api/appointments/route.ts" "src/app/api/gallery/route.ts" "src/app/api/production-photos/route.ts" "src/app/api/clients/[id]/route.ts"
+git add src/lib/appointment-purchases.ts src/lib/appointment-purchases.test.ts "src/app/api/appointments/route.ts" "src/app/api/gallery/route.ts" "src/app/api/production-photos/route.ts" "src/app/api/clients/[id]/route.ts" "src/app/(client)/profile/page.tsx"
 git commit -m "refactor(compras): items por compra y helper remainingCombination"
 ```
 
@@ -474,7 +476,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 });
   }
 
-  const isAdmin = hasPermission(session, "appointments");
+  const isAdmin = await hasPermission(session, "appointments");
   if (!isAdmin && appointment.clientId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
@@ -622,27 +624,20 @@ export async function DELETE(
 }
 ```
 
-**Correcciones obligatorias antes de escribir el archivo** (están en el texto de arriba y hay que dejarlas así):
+**Firmas de los ayudantes (verificadas en el repo, no las inventes):**
 
-- El comentario de la compra debe decir: `// La compra se filtra por cita además de por id: sin esto, una dueña podría borrar el servicio de otra cita.`
-- El comentario del conteo debe decir: `// Contar ANTES de borrar incluye la compra que se va: con 1 sola no quedaría nada.`
-- Los comentarios van en español. No copies texto en inglés ni la palabra "account".
-- `recomputeFinancialStatus` se llama con un solo argumento si su firma real es `(userId)`. **Verifica la firma en `src/lib/financial-status.ts` antes de escribir** y ajústala; la que hay en el repo es `recomputeFinancialStatus(userId: string)`.
-- `logActivity` toma `(actorId, actorName, entity, action, entityId, label, metadata)`. **Verifica la firma en `src/lib/audit.ts` antes de escribir** y ajústala al orden real de argumentos.
+- `recomputeFinancialStatus(userId: string): void` — un solo argumento, sin `db` (`src/lib/financial-status.ts`).
+- `logActivity(dbc: AuditDb, params: LogActivityParams): void` — dos argumentos, el segundo un objeto con `{ actorId?, actorName?, entity, action, entityId, label, metadata }` (`src/lib/audit.ts`). `"purchases"` está en `AUDIT_ENTITIES` y `"delete"` en `AUDIT_ACTIONS`.
 
-- [ ] **Paso 2: verificar firmas de los ayudantes**
-
-Abre `src/lib/financial-status.ts` y `src/lib/audit.ts` y confirma la firma exacta de `recomputeFinancialStatus` y `logActivity`. Ajusta la llamada del paso 1 al orden real. No inventes firmas: si `logActivity` no acepta un objeto, pásale los argumentos posicionales en el orden que declare.
-
-- [ ] **Paso 3: typecheck y lint**
+- [ ] **Paso 2: typecheck y lint**
 
 ```
 npx tsc --noEmit
 npm run lint
 ```
-Esperado: 0 errores. `hasPermission(session, "appointments")` es el patrón de `hasPermission` de `src/lib/authz.ts`; si devuelve `Promise<boolean>`, awaits.
+Esperado: 0 errores. `hasPermission` es `async` en `src/lib/authz.ts`, así que el `await` del código de arriba es obligatorio.
 
-- [ ] **Paso 4: probar el endpoint a mano contra el servidor de desarrollo**
+- [ ] **Paso 3: probar el endpoint a mano contra el servidor de desarrollo**
 
 ```
 npm run dev
@@ -656,7 +651,7 @@ curl -i -X DELETE "http://localhost:3001/api/appointments/<ID_CITA_DEMO>/service
 
 Comprueba, en este orden: (a) sin sesión → 401; (b) `purchaseId` inexistente → 404 `Ese servicio no pertenece a la cita`; (c) con la cita demo de 1 solo servicio → 400 `La cita debe tener al menos un servicio`; (d) sobre una cita con principal + complementario → 200, y en la base de datos la fila borrada, `end_time` = `start_time + duración restante`, y `service_id` apuntando al servicio que quedó. Si la cita del demo no tiene complementarios, crea uno desde el panel de admin o inserta la fila a mano para poder probar el caso (d), y acuérdate de borrarlo después.
 
-- [ ] **Paso 5: commit**
+- [ ] **Paso 4: commit**
 
 ```
 git add "src/app/api/appointments/[id]/services/route.ts"
@@ -1163,10 +1158,9 @@ git commit -m "feat(crm): quitar un servicio suelto desde el panel del admin"
     preselectedId: string | null
   ): { principal: T[]; complementary: T[] };
   function clearPreselected<T extends { id: string }>(
-    services: T[],
-    preselectedId: string,
     selectedPrimary: T | null,
-    selectedComplementaries: T[]
+    selectedComplementaries: T[],
+    preselectedId: string
   ): { primary: T | null; complementaries: T[] };
   ```
 
@@ -1223,22 +1217,23 @@ describe("partitionBookingServices", () => {
 });
 
 describe("clearPreselected", () => {
-  const catalogo = [svc("a", 0), svc("c", 1)];
+  const a = svc("a", 0);
+  const c = svc("c", 1);
 
   it("si era el principal, lo suelta", () => {
-    const r = clearPreselected(catalogo, "a", catalogo[0], []);
+    const r = clearPreselected(a, [], "a");
     expect(r.primary).toBeNull();
     expect(r.complementaries).toEqual([]);
   });
 
   it("si era complementario, lo quita de los complementarios y conserva el resto", () => {
-    const r = clearPreselected(catalogo, "c", null, [catalogo[0], catalogo[1]]);
+    const r = clearPreselected(null, [a, c], "c");
     expect(r.primary).toBeNull();
     expect(r.complementaries.map((s) => s.id)).toEqual(["a"]);
   });
 
   it("es idempotente cuando el id no está en ninguna de las dos listas", () => {
-    const r = clearPreselected(catalogo, "zzz", null, [catalogo[0]]);
+    const r = clearPreselected(null, [a], "zzz");
     expect(r.complementaries.map((s) => s.id)).toEqual(["a"]);
   });
 });
@@ -1291,10 +1286,9 @@ export function partitionBookingServices<
 
 /** Estado tras pulsar "Cambiar": la cita vuelve a no tener nada elegido. */
 export function clearPreselected<T extends { id: string }>(
-  services: T[],
-  preselectedId: string,
   selectedPrimary: T | null,
-  selectedComplementaries: T[]
+  selectedComplementaries: T[],
+  preselectedId: string
 ): { primary: T | null; complementaries: T[] } {
   return {
     primary:
@@ -1304,16 +1298,6 @@ export function clearPreselected<T extends { id: string }>(
     complementaries: selectedComplementaries.filter((s) => s.id !== preselectedId),
   };
 }
-```
-
-`clearPreselected` recibe `services` solo por simetría de firma con los otros dos helpers; no lo usa. Si el lint se queja de un parámetro sin usar (`@typescript-eslint/no-unused-vars`), quítalo de la firma y ajusta los tres call sites del test. Es preferible **no** tener un parámetro muerto: en ese caso la firma queda
-
-```ts
-export function clearPreselected<T extends { id: string }>(
-  selectedPrimary: T | null,
-  selectedComplementaries: T[],
-  preselectedId: string
-): { primary: T | null; complementaries: T[] };
 ```
 
 - [ ] **Paso 4: correr los tests y verlos pasar**
