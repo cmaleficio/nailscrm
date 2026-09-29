@@ -162,8 +162,8 @@ Guardas, en orden (la primera que falla corta):
 | 2 | la cita no existe | 404 |
 | 3 | no es admin y no es la dueña | 403 `No autorizado` |
 | 4 | `status === "completed"` | 400 `No se puede quitar un servicio de una cita completada` |
-| 5 | la cita tiene ≤ 1 compra | 400 `La cita debe tener al menos un servicio. Para eliminarla del todo, cancela la cita.` |
-| 6 | la compra no existe o no es de esa cita | 404 `Ese servicio no pertenece a la cita` |
+| 5 | la compra no existe o no es de esa cita | 404 `Ese servicio no pertenece a la cita` |
+| 6 | es la última compra de la cita | 400 `La cita debe tener al menos un servicio. Para eliminarla del todo, cancela la cita.` |
 | 7 | la cita tiene `course_enrollments` | 400 `Los alumnos de una sesión de curso se gestionan desde la sesión` |
 
 Efectos, en **una transacción**:
