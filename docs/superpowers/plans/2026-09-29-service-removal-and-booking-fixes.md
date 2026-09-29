@@ -1140,8 +1140,8 @@ git commit -m "feat(crm): quitar un servicio suelto desde el panel del admin"
 ### Tarea 6: paso 1 del wizard con `?serviceId=`
 
 **Archivos:**
-- Crear: `src/lib/booking-combos.test.ts`
-- Modificar: `src/lib/booking-combos.ts` (añadir al final)
+- Modificar (anexar al final): `src/lib/booking-combos.ts` — **ya existe y no está commiteado**; contiene `MAX_COMPLEMENTARY_SERVICES`, `parseComplementaryIds`, `resolveBookingServices` y `formatServiceNames`. No lo reescribas: añade las 3 funciones al final del archivo.
+- Modificar (anexar al final): `src/lib/booking-combos.test.ts` — **ya existe y no está commiteado**; tiene 18 tests de `parseComplementaryIds`, `formatServiceNames` y `resolveBookingServices`. Anexa las 3 describes nuevas al final y no toques las existentes. **Crear el archivo desde cero borraría 18 tests previos.**
 - Modificar: `src/components/BookingWizard.tsx:77-95, 128-129, 386-390, 457-487`
 
 **Interfaces:**
@@ -1305,7 +1305,7 @@ export function clearPreselected<T extends { id: string }>(
 ```
 npx vitest run src/lib/booking-combos.test.ts
 ```
-Esperado: PASS (9 tests).
+Esperado: PASS (9 tests nuevos; el archivo tenía 18 previos y los 27 en verde).
 
 - [ ] **Paso 5: estado `preselectedId` y quitar el salto al paso 2**
 
