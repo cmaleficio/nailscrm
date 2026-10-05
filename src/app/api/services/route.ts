@@ -25,12 +25,19 @@ export async function GET(req: NextRequest) {
   const includeInactive = searchParams.get("includeInactive") === "1";
 
   if (id) {
+    // Pedir por id no puede saltarse el filtro de `isActive`: un catálogo
+    // desactivado sigue siendo información de negocio (precio y duración de
+    // algo que el salón todavía no publica) y este endpoint es público.
+    const session = await auth();
     const service = db
       .select()
       .from(schema.services)
       .where(eq(schema.services.id, id))
       .get();
     if (!service) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (!service.isActive && !(await hasPermission(session, "services"))) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     return NextResponse.json(withPhotos([service])[0]);
