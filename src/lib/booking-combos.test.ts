@@ -111,7 +111,7 @@ describe("resolveBookingServices", () => {
     );
   });
 
-  it("rechaza una principal inexistente, inactiva o complementaria", () => {
+  it("rechaza una principal inexistente o inactiva", () => {
     expect(resolveBookingServices(all, "nope", null).error).toBe(
       "El servicio principal no existe"
     );
@@ -121,9 +121,66 @@ describe("resolveBookingServices", () => {
       null
     );
     expect(inactive.error).toBe("El servicio principal está inactivo");
-    expect(resolveBookingServices(all, "matiz", null).error).toBe(
-      "Elige como principal un servicio que no sea complementario"
+  });
+
+  it("un principal que es complementario no es un principal: se resuelve como cita solo de complementarios", () => {
+    // Ambas UIs anclan con el primer complementario elegido cuando no hay
+    // principal, así que el id llega en el slot de serviceId. Antes esto era un
+    // 400 que rompía /book?serviceId=<COMPLEMENTARIO> sin principal.
+    const r = resolveBookingServices(all, "matiz", null);
+    expect(r.error).toBeNull();
+    expect(r.principal).toBeNull();
+    expect(r.complementaries.map((c) => c.id)).toEqual(["matiz"]);
+    expect(r.services.map((s) => s.id)).toEqual(["matiz"]);
+    expect(r.anchorServiceId).toBe("matiz");
+    expect(r.totalDurationMins).toBe(15);
+    expect(r.totalPrice).toBe(5);
+  });
+
+  it("el principal complementario se suma a los del input sin duplicarse y ancla primero", () => {
+    const r = resolveBookingServices(all, "matiz", ["matiz", "diseno"]);
+    expect(r.error).toBeNull();
+    expect(r.principal).toBeNull();
+    expect(r.complementaries.map((c) => c.id)).toEqual(["matiz", "diseno"]);
+    expect(r.anchorServiceId).toBe("matiz");
+    expect(r.totalDurationMins).toBe(45);
+    expect(r.totalPrice).toBe(13);
+  });
+
+  it("el principal complementario se valida como complementario (inactivo, curso, no marcado)", () => {
+    const inactive = resolveBookingServices(
+      [svc({ id: "m", isComplementary: 1, isActive: 0 })],
+      "m",
+      null
     );
+    expect(inactive.error).toBe('El servicio "Servicio m" está inactivo');
+
+    const cursoComp = svc({ id: "cc", isGroup: 1, isComplementary: 1 });
+    expect(resolveBookingServices([cursoComp], "cc", null).error).toBe(
+      "Un curso no se puede agregar como servicio complementario"
+    );
+  });
+
+  it("el principal complementario cuenta para el tope de complementarios", () => {
+    const many = Array.from({ length: MAX_COMPLEMENTARY_SERVICES }, (_, i) =>
+      svc({ id: `c${i}`, isComplementary: 1 })
+    );
+    const rows = [...all, ...many];
+    // 4 del input + el principal anclado = 5, uno por encima del tope.
+    expect(resolveBookingServices(rows, "matiz", many.map((m) => m.id)).error).toBe(
+      `Puedes agregar hasta ${MAX_COMPLEMENTARY_SERVICES} servicios complementarios`
+    );
+    // 3 del input + el principal anclado = 4, exactamente el tope.
+    const ok = resolveBookingServices(rows, "matiz", many.slice(0, 3).map((m) => m.id));
+    expect(ok.error).toBeNull();
+    expect(ok.complementaries).toHaveLength(MAX_COMPLEMENTARY_SERVICES);
+  });
+
+  it("no pliega una principal normal: sigue siendo principal", () => {
+    const r = resolveBookingServices(all, "full", ["matiz"]);
+    expect(r.principal?.id).toBe("full");
+    expect(r.complementaries.map((c) => c.id)).toEqual(["matiz"]);
+    expect(r.anchorServiceId).toBe("full");
   });
 
   it("deja agendar un curso solo, pero nunca combinado", () => {

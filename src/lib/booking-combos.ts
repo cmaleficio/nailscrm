@@ -44,8 +44,7 @@ export function resolveBookingServices(
   complementaryInput: string | string[] | null | undefined
 ): ComboResolution {
   const byId = new Map(services.map((s) => [s.id, s]));
-  const complementaries = parseComplementaryIds(complementaryInput);
-  const principal = principalId ? byId.get(principalId) ?? null : null;
+  const anchor = principalId ? byId.get(principalId) ?? null : null;
 
   const fail = (error: string): ComboResolution => ({
     services: [],
@@ -57,7 +56,19 @@ export function resolveBookingServices(
     error,
   });
 
-  if (principalId && !principal) return fail("El servicio principal no existe");
+  if (principalId && !anchor) return fail("El servicio principal no existe");
+
+  // Un complementario que llega en el slot de principal no es un principal: es
+  // el ancla que ambas UIs usan para calcular slots cuando la cita se compone
+  // solo de complementarios. Se pliega a la lista en vez de fallar, y así pasa
+  // por las mismas validaciones que cualquier otro complementario (activo,
+  // marcado, no curso) y cuenta para el tope.
+  let principal = anchor;
+  let complementaries = parseComplementaryIds(complementaryInput);
+  if (anchor?.isComplementary) {
+    principal = null;
+    complementaries = [anchor.id, ...complementaries.filter((id) => id !== anchor.id)];
+  }
 
   if (!principal && complementaries.length === 0) {
     return fail("Elige al menos un servicio");
@@ -71,9 +82,6 @@ export function resolveBookingServices(
 
   if (principal) {
     if (!principal.isActive) return fail("El servicio principal está inactivo");
-    if (principal.isComplementary) {
-      return fail("Elige como principal un servicio que no sea complementario");
-    }
     if (principal.isGroup && complementaries.length > 0) {
       // Un curso SOLO sí se puede agendar: hoy POST /api/appointments lo trata
       // como cualquier otro servicio (1 cita + 1 compra, sin inscripción; las

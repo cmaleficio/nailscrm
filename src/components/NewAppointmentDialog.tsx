@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { todayStr, dateTimeToTs } from "@/lib/time";
-import { MAX_COMPLEMENTARY_SERVICES } from "@/lib/booking-combos";
+import {
+  MAX_COMPLEMENTARY_SERVICES,
+  partitionBookingServices,
+} from "@/lib/booking-combos";
 
 type Props = {
   onClose: () => void;
@@ -48,10 +51,22 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
       .catch(() => {});
   }, []);
 
+  // El reparto principal/complementarios es el mismo del wizard: un
+  // complementario nunca es principal, así que no puede vivir en el desplegable.
+  const { principal: principalServices, complementary: complementaryServices } =
+    partitionBookingServices(services, null);
+
   const principal = services.find((s) => s.id === serviceId) ?? null;
   const chosenComplementaries = services.filter((s) =>
     complementaryIds.includes(s.id)
   );
+
+  // El principal es opcional: una cita puede componerse solo de
+  // complementarios, y en ese caso el ancla para slots y para el POST es el
+  // primero elegido. El backend pliega un complementario que llega en el slot de
+  // serviceId (resolveBookingServices), así que esto no inventa un principal.
+  const anchorService = principal ?? chosenComplementaries[0] ?? null;
+  const anchorServiceId = anchorService?.id ?? "";
 
   const totalDurationMins =
     (principal?.durationMins ?? 0) +
@@ -74,13 +89,13 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
   }
 
   useEffect(() => {
-    if (!serviceId || !date) return;
+    if (!anchorServiceId || !date) return;
     const extras = complementaryIds
-      .filter((id) => id !== serviceId)
+      .filter((id) => id !== anchorServiceId)
       .map((id) => `addServiceIds=${encodeURIComponent(id)}`)
       .join("&");
     fetch(
-      `/api/slots?date=${date}&serviceId=${serviceId}${extras ? `&${extras}` : ""}`
+      `/api/slots?date=${date}&serviceId=${anchorServiceId}${extras ? `&${extras}` : ""}`
     )
       .then((r) => r.json())
       .then((data) => {
@@ -89,7 +104,7 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
         setSelectedSlot("");
       })
       .catch(() => {});
-  }, [serviceId, complementaryIds, date]);
+  }, [anchorServiceId, complementaryIds, date]);
 
   const searchClients = useCallback(async (q: string) => {
     const res = await fetch(`/api/clients?q=${encodeURIComponent(q)}`);
@@ -128,7 +143,7 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
   }
 
   async function submit() {
-    if (!clientId || !serviceId || !selectedSlot) return;
+    if (!clientId || !anchorServiceId || !selectedSlot) return;
     setSaving(true);
     setError("");
     try {
@@ -138,8 +153,8 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId,
-          serviceId,
-          addServiceIds: complementaryIds.filter((id) => id !== serviceId),
+          serviceId: anchorServiceId,
+          addServiceIds: complementaryIds.filter((id) => id !== anchorServiceId),
           startTime,
         }),
       });
@@ -244,17 +259,15 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
             className={inputCls}
           >
             <option value="">Elegir servicio...</option>
-            {services
-              .filter((s) => s.isComplementary !== 1)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — ${s.price.toFixed(2)} · {s.durationMins} min
-                </option>
-              ))}
+            {principalServices.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} — ${s.price.toFixed(2)} · {s.durationMins} min
+              </option>
+            ))}
           </select>
         </div>
 
-        {serviceId && (
+        {complementaryServices.length > 0 && (
           <div className="mt-4">
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Complementarios{" "}
@@ -263,8 +276,8 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
               </span>
             </label>
             <div className="max-h-40 space-y-1 overflow-y-auto">
-              {services
-                .filter((s) => s.isComplementary === 1 && s.id !== serviceId)
+              {complementaryServices
+                .filter((s) => s.id !== serviceId)
                 .map((s) => {
                   const on = complementaryIds.includes(s.id);
                   return (
@@ -308,7 +321,7 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
           />
         </div>
 
-        {serviceId && (
+        {anchorServiceId && (
           <div className="mt-4">
             <label className="mb-2 block text-sm font-medium text-gray-700">Hora</label>
             {comboDoesNotFit ? (
@@ -356,7 +369,7 @@ export function NewAppointmentDialog({ onClose, onCreated }: Props) {
           <button
             onClick={submit}
             disabled={
-              saving || !clientId || !serviceId || !selectedSlot || comboDoesNotFit
+              saving || !clientId || !anchorServiceId || !selectedSlot || comboDoesNotFit
             }
             className="flex-1 rounded-xl bg-pink-main px-4 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
           >
