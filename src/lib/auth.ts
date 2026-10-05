@@ -37,6 +37,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!user?.passwordHash) return null;
 
+        // Una cuenta bloqueada por RISC no puede volver a entrar. El token ya
+        // emitido lo mata `isAdmin()` en cada request, pero sin esto el usuario
+        // podría autenticarse de nuevo y obtener un JWT fresco.
+        if (user.lockedAt) return null;
+
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
@@ -82,6 +87,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async signIn({ user, account, profile }) {
       const email = user.email;
+      // Google puede mantener la sesión de un lado y bloquear la cuenta del otro
+      // (`account-disabled` en RISC). Sin esta comprobación, la cuenta
+      // bloqueada recuperaba el acceso en el siguiente login con Google.
+      if (user.id) {
+        const lock = db
+          .select({ lockedAt: schema.users.lockedAt })
+          .from(schema.users)
+          .where(eq(schema.users.id, user.id))
+          .get();
+        if (lock?.lockedAt) return false;
+      }
       if (email && email === process.env.ADMIN_EMAIL) {
         try {
           db.update(schema.users)
