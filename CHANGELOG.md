@@ -7,6 +7,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 ## [Sin publicar]
 
 ### Nuevo
+- Se puede **editar y borrar un pago ya acreditado** (permiso `balances`): montos, tasa, fecha y cita vinculada. La moneda no se edita, y `reference`, `notes` y la foto quedan como registro de origen. Al borrar, si el pago venía de una captura aprobada, la captura **vuelve a `pending`** en vez de dejar el pago bloqueado por la FK, conservando la evidencia y el review anterior.
 - Se puede quitar un servicio suelto de una cita sin cancelar la visita: la clienta lo hace desde `/profile` ("Quitar" por servicio) y el admin desde el panel CRM. La compra se borra, el horario y el total se recalculan, y el estado de cuenta y Google Calendar quedan al día.
 - Google Calendar: las actualizaciones de evento pueden cambiar también el título del evento, además del horario.
 
