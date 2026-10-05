@@ -37,11 +37,37 @@ const nextConfig: NextConfig = {
   // Defensa en profundidad para /public/uploads: los archivos se sirven en el mismo
   // origen que la app, así que se prohíbe que el navegador adivine el Content-Type de
   // un archivo que se subió con una extensión engañosa.
+  //
+  // El bloque `/(.*)` no lleva CSP a propósito: `tracking_tags` es JavaScript
+  // arbitrario que pega el superadmin (GA4, GTM, un pixel) y se renderiza con
+  // `<script>` nativos en el `<head>` del layout raíz. Una CSP con
+  // `script-src` cerrado rompería el tag, y aflojar la CSP para que quepa
+  // código de terceros no aporta seguridad. Lo que sí se puede fijar sin
+  // depender del contenido del snippet son los controles de abajo.
+  // `next.config.ts` corre tanto en dev como en producción, así que aquí no se
+  // pone HSTS: en desarrollo el dominio se sirve por http y fijarlo dejaría al
+  // navegador reescribiendo a https contra un servidor que no habla https.
+  // HSTS lo emite Cloudflare en el borde, que es donde corresponde.
   async headers() {
     return [
       {
         source: "/uploads/:path*",
         headers: [{ key: "X-Content-Type-Options", value: "nosniff" }],
+      },
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            // El salon no usa cámara ni micrófono: la agenda pide por texto y
+            // las fotos se suben como archivo. Cercarlo por defecto evita que
+            // una dependencia maliciosa pida permisos que la app no usa.
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
       },
     ];
   },

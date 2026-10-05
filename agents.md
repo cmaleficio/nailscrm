@@ -597,6 +597,11 @@ Detalles que no se deben romper:
 - Las reglas `kind → tabla / permiso / columna de dueño` viven en `PRIVATE_MEDIA_RULES` (`src/lib/private-media.ts`). **Un kind nuevo obliga a:** añadirlo a `PRIVATE_MEDIA_KINDS`, darle su regla, pasar `kind` en el `FormData` del diálogo que lo sube, y decidir quién lo ve.
 - **Migración de lo que ya estaba en `public/uploads`**: `npm run db:backfill:media` (idempotente, se puede correr las veces que haga falta). **Copia** a un UUID distinto por fila en vez de mover, porque el mismo archivo puede estar en varias filas y de varios kinds (en los datos demo una captura aparece a la vez como `receipt` y como `payment`), y el original de `public/uploads` solo se borra cuando ninguna fila lo apunta.
 
+### Cabeceras de seguridad (`next.config.ts`)
+- Global (`source: "/(.*)"`): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` y `Permissions-Policy` con cámara, micrófono y geolocalización cerrados (el salón no usa ninguno: la agenda pide por texto y las fotos se suben como archivo).
+- **Sin CSP a propósito.** `tracking_tags` es JavaScript arbitrario que pega el superadmin (GA4, GTM, un pixel) y se renderiza con `<script>` nativos en el `<head>` del layout raíz. Una `script-src` cerrada rompería el tag, y aflojar la CSP para que quepa código de terceros no aporta seguridad.
+- **Sin HSTS.** `next.config.ts` corre también en dev, donde el dominio se sirve por http y fijarlo dejaría al navegador reescribiendo a https contra un servidor que no habla https. HSTS lo emite Cloudflare en el borde, que es donde corresponde.
+
 ## 🚫 Fuera del Alcance (MVP)
 - Pasarelas de pago (Stripe/MercadoPago)
 - Multi-empleado (roles complejos)
