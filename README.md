@@ -32,7 +32,7 @@ Copiar `.env.template` a `.env` y completar:
 | `AUTH_FACEBOOK_SECRET` | App Secret de Facebook (opcional) |
 | `NEXTAUTH_SECRET` | Secreto para firmar sesiones |
 | `ADMIN_EMAIL` | Email del admin principal (superadmin) |
-| `CRON_SECRET` | Secreto para los cron de la tasa BCV: refresh diario (`/api/exchange-rate/refresh`) y backfill de gaps (`/api/exchange-rate/backfill`) |
+| `CRON_SECRET` | Secreto para los cron de la tasa BCV: refresh diario (`/api/exchange-rate/refresh`) y backfill de gaps (`/api/exchange-rate/backfill`). Se envía **solo** por el header `Authorization: Bearer <secreto>`; la variante `?secret=` en el query string se retiró porque una URL con query acaba en los logs del túnel, en el `Referer` y en el historial del navegador. |
 | `NEXT_PUBLIC_SALON_NAME` | Nombre mostrado del salón |
 | `NEXT_PUBLIC_SITE_URL` | Origen público del sitio, sin barra final (ej. `https://tu-dominio.com`). Lo usan `robots.txt`, `sitemap.xml` y el `metadataBase` del layout raíz. Si no se define cae a `AUTH_URL` y después a `http://localhost:3001`, y un sitemap lleno de `localhost` no lo indexa nadie. Es estático: cambiarla exige `npm run build`. |
 | `RISC_SERVICE_ACCOUNT_JSON_PATH` | (Opcional) Ruta al JSON key del service account de Google RISC (Cross-Account Protection). Crear el SA con rol `RISC Service Agent` en GCP y guardar el JSON fuera del repo. |
