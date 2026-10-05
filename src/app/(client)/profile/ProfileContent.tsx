@@ -9,6 +9,7 @@ import { ReportPaymentDialog } from "@/components/ReportPaymentDialog";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
 import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 import { PhotoThumb } from "@/components/PhotoThumb";
+import { maskPhone, type NameCandidate } from "@/lib/name-match";
 
 type ProfileUser = {
   name: string;
@@ -67,6 +68,12 @@ type Props = {
   upcomingAppointments: UpcomingAppointment[];
   balanceUsd: number;
   statementItems: StatementItem[];
+  /**
+   * Clientas con nombre similar calculadas en el servidor
+   * (vacía si el interruptor está apagado o no hay
+   * coincidencias). Para "¿No es tu expediente?".
+   */
+  duplicateCandidates?: NameCandidate[];
 };
 
 type Receipt = {
@@ -78,9 +85,13 @@ type Receipt = {
   photoUrl: string;
   reviewNotes: string | null;
   createdAt: number;
+  /** Cifras con las que el salón acreditó el pago; null si sigue sin aprobarse. */
+  paymentAmountUsd: number | null;
+  paymentAmountVes: number | null;
+  paymentRate: number | null;
 };
 
-export function ProfileContent({ user, appointments, upcomingAppointments, balanceUsd, statementItems }: Props) {
+export function ProfileContent({ user, appointments, upcomingAppointments, balanceUsd, statementItems, duplicateCandidates = [] }: Props) {
   const router = useRouter();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -89,6 +100,10 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
   const [removeError, setRemoveError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [reassignConfirmId, setReassignConfirmId] = useState<string | null>(null);
+  const [reassigningId, setReassigningId] = useState<string | null>(null);
+  const [reassignError, setReassignError] = useState("");
+  const [reassignDone, setReassignDone] = useState("");
   const lightbox = usePhotoLightbox();
 
   const longDate = useCallback(
@@ -147,6 +162,32 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
     router.refresh();
   }
 
+  async function handleReassign(candidate: NameCandidate) {
+    setReassigningId(candidate.id);
+    setReassignError("");
+    setReassignDone("");
+    try {
+      const res = await fetch("/api/identity/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: candidate.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo unir el expediente");
+      }
+      // El expediente absorbido pasó a esta cuenta; al
+      // refrescar, el perfil muestra el historial unido.
+      setReassignConfirmId(null);
+      setReassignDone(candidate.name);
+      router.refresh();
+    } catch (e) {
+      setReassignError(e instanceof Error ? e.message : "Error inesperado");
+    } finally {
+      setReassigningId(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       {/* Header */}
@@ -198,6 +239,78 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
           Agendar nueva cita
         </Link>
       </div>
+
+      {/* ¿No es tu expediente? */}
+      {duplicateCandidates.length > 0 && !reassignDone && (
+        <section className="mb-10 rounded-xl border border-pink-200 bg-pink-50 p-4">
+          <h2 className="text-sm font-semibold text-gray-900">
+            ¿No es tu expediente?
+          </h2>
+          <p className="mt-1 text-xs text-gray-600">
+            Si ya eras clienta con otro correo, une este perfil con tu
+            expediente anterior para conservar citas, pagos y saldo.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {duplicateCandidates.map((c) => (
+              <li
+                key={c.id}
+                className="rounded-lg border border-pink-100 bg-white px-3 py-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">
+                      {c.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {maskPhone(c.phone)} · {c.totalVisits ?? 0}{" "}
+                      {c.totalVisits === 1 ? "visita" : "visitas"}
+                    </p>
+                  </div>
+                  {reassignConfirmId === c.id ? (
+                    <span className="flex shrink-0 items-center gap-1">
+                      <button
+                        onClick={() => void handleReassign(c)}
+                        disabled={reassigningId !== null}
+                        className="rounded-lg bg-pink-main px-2.5 py-1 text-xs font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
+                      >
+                        {reassigningId === c.id ? "Uniendo..." : "Sí, unir"}
+                      </button>
+                      <button
+                        onClick={() => setReassignConfirmId(null)}
+                        className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                      >
+                        No
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setReassignError("");
+                        setReassignConfirmId(c.id);
+                      }}
+                      className="shrink-0 rounded-lg border border-pink-200 bg-white px-2.5 py-1 text-xs font-medium text-pink-600 hover:bg-pink-50 transition-colors"
+                    >
+                      Unir expedientes
+                    </button>
+                  )}
+                </div>
+                {reassignConfirmId === c.id && user.totalVisits > 0 && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Esto moverá tu historial actual ({user.totalVisits}{" "}
+                    {user.totalVisits === 1 ? "visita" : "visitas"}) al
+                    expediente de {c.name}.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          {reassignError && (
+            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+              {reassignError}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Próximas citas */}
       <section className="mb-10">
@@ -454,6 +567,18 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
                   {r.status === "rejected" && r.reviewNotes && (
                     <p className="text-xs text-red-600">Motivo: {r.reviewNotes}</p>
                   )}
+                  {/* Si el salón acreditó otra cifra, la clienta tiene que verlo aquí y
+                      no solo en el estado de cuenta: es su dinero y ya lo reportó. */}
+                  {r.status === "approved" &&
+                    r.paymentAmountUsd !== null &&
+                    Math.abs(r.paymentAmountUsd - r.amountUsd) > 0.004 && (
+                      <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                        Se acreditó ${r.paymentAmountUsd.toFixed(2)}
+                        {r.paymentAmountVes !== null && ` (${r.paymentAmountVes.toFixed(2)} Bs)`}
+                        {r.paymentRate !== null && ` a tasa ${r.paymentRate.toFixed(2)}`}, distinto a lo
+                        que reportaste. Si no corresponde, escríbenos.
+                      </p>
+                    )}
                 </div>
                 <span
                   className={`rounded-lg px-2 py-1 text-xs font-medium ${

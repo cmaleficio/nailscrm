@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
 import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
+import { EditPaymentDialog, type EditableAppointment } from "@/components/EditPaymentDialog";
 
 type BalanceItem = {
   id: string;
@@ -12,6 +13,8 @@ type BalanceItem = {
   financialStatus: string;
   completionDate: number | null;
   startTime: number | null;
+  /** Alimenta el selector de cita de EditPaymentDialog. */
+  appointmentId: string | null;
 };
 
 type BalanceClient = {
@@ -25,12 +28,14 @@ type BalanceClient = {
 
 type Payment = {
   id: string;
+  userId: string;
   amountUsd: number;
-  currency: string;
+  currency: "USD" | "VES";
   amountVes: number | null;
   rate: number | null;
   reference: string;
   paidAt: number | null;
+  appointmentId: string | null;
   notes: string | null;
 };
 
@@ -46,6 +51,36 @@ type Receipt = {
   reviewNotes: string | null;
   paymentId: string | null;
   createdAt: number;
+  /** Cifras del pago acreditado; null mientras la captura siga sin aprobarse. */
+  paymentAmountUsd: number | null;
+  paymentAmountVes: number | null;
+  paymentRate: number | null;
+  paymentPaidAt: number | null;
+  paymentAppointmentId: string | null;
+  paymentCurrency: "USD" | "VES" | null;
+};
+
+const fmtDateTs = (ts: number) =>
+  new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "America/Caracas" }).format(
+    new Date(ts * 1000)
+  );
+
+/**
+ * Las citas de una clienta salen de sus `items`, que ya traen `appointmentId`. Se
+ * deduplican porque una cita con servicios complementarios tiene N compras, todas
+ * con el mismo `appointmentId`.
+ */
+const appointmentsFromItems = (items: BalanceItem[]): EditableAppointment[] => {
+  const seen = new Map<string, EditableAppointment>();
+  for (const item of items) {
+    if (!item.appointmentId || seen.has(item.appointmentId)) continue;
+    const date = item.startTime ?? item.completionDate;
+    seen.set(item.appointmentId, {
+      id: item.appointmentId,
+      label: `${item.serviceName} · ${date ? fmtDateTs(date) : "sin fecha"}`,
+    });
+  }
+  return [...seen.values()];
 };
 
 export function BalancesContent() {
@@ -59,6 +94,17 @@ export function BalancesContent() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"balances" | "receipts">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  // El diálogo de edición se abre desde dos lugares: el historial de pagos de una
+  // clienta y la pestaña de capturas aprobadas. `editing` guarda solo el pago, y
+  // cada punto de entrada resuelve su clienta y sus citas.
+  const [editing, setEditing] = useState<Payment | null>(null);
+  const [editingContext, setEditingContext] = useState<{
+    clientId: string;
+    clientName: string;
+    balanceUsd: number | null;
+    appointments: EditableAppointment[];
+    lockAmount: boolean;
+  } | null>(null);
   const [receiptFilter, setReceiptFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
   const lightbox = usePhotoLightbox();
   const [searchTerm, setSearchTerm] = useState("");
@@ -129,13 +175,56 @@ export function BalancesContent() {
   }
 
   async function deletePayment(clientId: string, paymentId: string) {
-    if (!window.confirm("¿Eliminar este pago?")) return;
-    await fetch(`/api/payments/${paymentId}`, { method: "DELETE" });
+    const linked = receipts.find((r) => r.paymentId === paymentId);
+    const warn = linked
+      ? "Este pago viene de una captura de pago aprobada.\n\n" +
+        "Al eliminarlo, la captura vuelve a 'Pendientes' para volver a revisarla. " +
+        "La imagen y las notas del review se conservan."
+      : "¿Eliminar este pago?";
+    if (!window.confirm(warn)) return;
+    const res = await fetch(`/api/payments/${paymentId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error || "No se pudo eliminar el pago");
+      return;
+    }
     setPayments((prev) => ({
       ...prev,
       [clientId]: (prev[clientId] ?? []).filter((p) => p.id !== paymentId),
     }));
     await loadBalances();
+    // El pago borrado suele liberar una captura: si estamos en esa pestaña, la fila
+    // tiene que reaparecer como pendiente.
+    if (tab === "receipts") await loadReceipts();
+  }
+
+  /**
+   * Abre el editor desde la pestaña de capturas. La clienta puede no estar en
+   * `clients` (esa lista solo trae quienes deben algo), así que el balance y las
+   * citas son mejores-esfuerzo: el diálogo funciona igual sin ellos, solo pierde la
+   * vista previa del saldo y el selector de cita.
+   */
+  function openEditFromReceipt(r: Receipt) {
+    const client = clients.find((c) => c.clientId === r.clientId);
+    setEditing({
+      id: r.paymentId as string,
+      userId: r.clientId,
+      amountUsd: r.paymentAmountUsd as number,
+      currency: r.paymentCurrency ?? "VES",
+      amountVes: r.paymentAmountVes,
+      rate: r.paymentRate,
+      paidAt: r.paymentPaidAt,
+      appointmentId: r.paymentAppointmentId,
+      reference: "",
+      notes: null,
+    });
+    setEditingContext({
+      clientId: r.clientId,
+      clientName: r.clientName ?? "Cliente",
+      balanceUsd: client?.balanceUsd ?? null,
+      appointments: client ? appointmentsFromItems(client.items) : [],
+      lockAmount: true,
+    });
   }
 
   async function deletePurchase(clientId: string, purchaseId: string) {
@@ -157,7 +246,7 @@ export function BalancesContent() {
   const statusLabel = (status: string) =>
     status === "partial" ? "Abonado" : status === "paid" ? "Pagado" : "Pendiente";
 
-  const statusBadgeClass = (status: string) => {
+const statusBadgeClass = (status: string) => {
     if (status === "paid") return "bg-green-100 text-green-700";
     if (status === "partial") return "bg-amber-100 text-amber-700";
     return "bg-red-100 text-red-600";
@@ -328,12 +417,29 @@ export function BalancesContent() {
                                 </p>
                                 {p.notes && <p className="text-xs text-gray-400">{p.notes}</p>}
                               </div>
-                              <button
-                                onClick={() => void deletePayment(c.clientId, p.id)}
-                                className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
-                              >
-                                Eliminar
-                              </button>
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditing(p);
+                                    setEditingContext({
+                                      clientId: c.clientId,
+                                      clientName: c.name,
+                                      balanceUsd: c.balanceUsd,
+                                      appointments: appointmentsFromItems(c.items),
+                                      lockAmount: receipts.some((r) => r.paymentId === p.id),
+                                    });
+                                  }}
+                                  className="rounded-lg bg-pink-main px-2 py-1 text-xs font-medium text-white hover:bg-pink-dark"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={() => void deletePayment(c.clientId, p.id)}
+                                  className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -397,6 +503,19 @@ export function BalancesContent() {
                     </p>
                     <p className="text-xs text-gray-400">{fmtDate(r.createdAt)}</p>
                     {r.reviewNotes && <p className="mt-1 text-xs text-red-600">{r.reviewNotes}</p>}
+                    {/* Si el pago acreditado ya no coincide con lo que reportó la
+                        clienta, la diferencia tiene que verse aquí: es la razón por la
+                        que existe el join a `payments`. */}
+                    {r.paymentId &&
+                      r.paymentAmountUsd !== null &&
+                      Math.abs(r.paymentAmountUsd - r.amountUsd) > 0.004 && (
+                        <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                          Acreditado <span className="font-semibold">${r.paymentAmountUsd.toFixed(2)}</span>
+                          {r.paymentAmountVes !== null && ` · ${r.paymentAmountVes.toFixed(2)} Bs`}
+                          {r.paymentRate !== null && ` @ ${r.paymentRate.toFixed(2)}`} — editado
+                          {r.paymentPaidAt && ` · fecha ${fmtDate(r.paymentPaidAt)}`}
+                        </p>
+                      )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {r.status === "pending" ? (
@@ -415,13 +534,27 @@ export function BalancesContent() {
                         </button>
                       </>
                     ) : (
-                      <span
-                        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                          r.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                        }`}
-                      >
-                        {r.status === "approved" ? "Aprobada" : "Rechazada"}
-                      </span>
+                      <>
+                        <span
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                            r.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                          }`}
+                        >
+                          {r.status === "approved" ? "Aprobada" : "Rechazada"}
+                        </span>
+                        {/* Editar el pago acreditado, no la captura: la captura es el
+                            reporte de la clienta y no se toca. */}
+                        {r.status === "approved" && r.paymentId && r.paymentAmountUsd !== null && (
+                          <button
+                            onClick={() =>
+                              openEditFromReceipt(r)
+                            }
+                            className="rounded-xl bg-pink-main px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-dark transition-colors"
+                          >
+                            Editar pago
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -439,6 +572,28 @@ export function BalancesContent() {
           onSaved={() => {
             setRegistering(null);
             void loadBalances();
+          }}
+        />
+      )}
+
+      {editing && editingContext && (
+        <EditPaymentDialog
+          payment={{
+            ...editing,
+            clientName: editingContext.clientName,
+          }}
+          appointments={editingContext.appointments}
+          balanceUsd={editingContext.balanceUsd}
+          lockAmount={editingContext.lockAmount}
+          onClose={() => {
+            setEditing(null);
+            setEditingContext(null);
+          }}
+          onSaved={() => {
+            setEditing(null);
+            setEditingContext(null);
+            void loadBalances();
+            void loadReceipts();
           }}
         />
       )}

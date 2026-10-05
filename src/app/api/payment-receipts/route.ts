@@ -28,9 +28,19 @@ export async function GET(req: NextRequest) {
       reviewNotes: schema.paymentReceipts.reviewNotes,
       paymentId: schema.paymentReceipts.paymentId,
       createdAt: schema.paymentReceipts.createdAt,
+      // Cifras del pago acreditado, si ya fue aprobado. La captura guarda lo que
+      // la clienta reportó; si el admin lo editó después, las dos cosas ya no
+      // coinciden y la UI tiene que poder mostrar las dos.
+      paymentAmountUsd: schema.payments.amountUsd,
+      paymentAmountVes: schema.payments.amountVes,
+      paymentRate: schema.payments.rate,
+      paymentPaidAt: schema.payments.paidAt,
+      paymentAppointmentId: schema.payments.appointmentId,
+      paymentCurrency: schema.payments.currency,
     })
     .from(schema.paymentReceipts)
-    .leftJoin(schema.users, eq(schema.users.id, schema.paymentReceipts.clientId));
+    .leftJoin(schema.users, eq(schema.users.id, schema.paymentReceipts.clientId))
+    .leftJoin(schema.payments, eq(schema.payments.id, schema.paymentReceipts.paymentId));
 
   if (admin) {
     const status = req.nextUrl.searchParams.get("status");

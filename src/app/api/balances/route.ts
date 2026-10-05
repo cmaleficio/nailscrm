@@ -46,6 +46,8 @@ export async function GET() {
       financialStatus: string;
       completionDate: number | null;
       startTime: number | null;
+      /** Para vincular el pago a una cita concreta al editarlo. */
+      appointmentId: string | null;
     }[];
   }[] = [];
 
@@ -66,6 +68,7 @@ export async function GET() {
         financialStatus: schema.servicePurchases.financialStatus,
         completionDate: schema.servicePurchases.completionDate,
         startTime: schema.appointments.startTime,
+        appointmentId: schema.servicePurchases.appointmentId,
       })
       .from(schema.servicePurchases)
       .leftJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
