@@ -54,6 +54,7 @@ export function SupplierPaymentDialog({ bill, onClose, onSaved }: Props) {
     setError("");
     try {
       const form = new FormData();
+      form.append("kind", "supplier-payment");
       form.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: form });
       if (!res.ok) throw new Error("No se pudo subir la captura");

@@ -230,7 +230,7 @@ Detalles que no se deben romper:
 - created_by: text, foreign key → users.id
 - created_at: integer (timestamp)
 - El saldo se calcula en vivo: `Σ service_purchases.service_price de purchases no-void − Σ payments.amount_usd`.
-- `photo_url` (opcional): captura de la transferencia al registrar un pago de cliente.
+- `photo_url` (opcional): captura de la transferencia al registrar un pago de cliente. Es **media privada**: su valor es `/api/media/payment/<uuid>.<ext>`, no `/uploads/...` (ver "Media privada").
 
 ### Tabla: payment_receipts (capturas de pago reportadas por el cliente)
 - id: text, primary key
@@ -557,6 +557,8 @@ Detalles que no se deben romper:
 - `npm run db:seed:client` → regenera datos demo del cliente (clienta@email.com / Cliente123!)
 - `npm run db:seed:finance` → regenera datos demo de finanzas (proveedores, bancos, facturas, inventario y uso por servicio)
 - `npm run db:seed:privacy` → inserta/actualiza la fila `legal_settings` con los 9 campos de la política de privacidad (placeholders editables luego en `/dashboard/legal`)
+- `npm run db:backfill:rates` → scrapea la serie histórica del BCV e inserta las fechas que falten en `exchange_rates` (idempotente)
+- `npm run db:backfill:media` → mueve a `private-uploads/` las capturas de pago y fotos de inventario que estaban en `public/uploads` y reescribe la `photo_url` de cada fila a `/api/media/<kind>/<file>` (idempotente)
 - `npm run risc:register` → registra el endpoint `/api/risc/events` en el stream de Google RISC (requiere `RISC_SERVICE_ACCOUNT_JSON_PATH` y `RISC_RECEIVER_URL`); usar una vez al configurar el proyecto y re-registrar si cambia la URL
 - `npm run build && npm start` → producción local
 - `npm run lint` → ESLint
@@ -585,6 +587,15 @@ Detalles que no se deben romper:
 - Hay un tope de 25 MB (`MAX_UPLOAD_BYTES`).
 - `next.config.ts` sirve `/uploads/:path*` con `X-Content-Type-Options: nosniff` como defensa en profundidad. Si añades otra ruta estática con archivos subidos por usuarios, aplícale el mismo header.
 - Al cambiar la validación, corre los tests de `src/lib/image-upload.test.ts` **y** la comprobación contra los archivos reales del repo (ver `CHANGELOG.md`); los fixtures sintéticos no detectan un offset mal calculado en la caja ISO BMFF de HEIC.
+
+### Media privada: `private-uploads/` y `/api/media/[kind]/[file]`
+- **Dos destinos, y la diferencia es deliberada.** `POST /api/upload` decide por el campo `kind` del `FormData`: sin `kind` (o con uno desconocido) el archivo va a `public/uploads/`; con un `kind` de `PRIVATE_MEDIA_KINDS` va a `private-uploads/`, que está **fuera de `public/`** y por tanto no lo sirve el servidor de estáticos.
+- **Por qué el split**: `public/uploads` es público y sin sesión, y `/uploads/` está a propósito **fuera** del `Disallow` de robots.txt por el SEO de Google Images. Eso sirve para las fotos del muro, del catálogo y del logo (el activo de SEO del salón) y **no** para una captura de transferencia bancaria, donde van el nombre, el alias y a veces el teléfono de la clienta.
+- **Columnas que son media privada**: `payment_receipts.photo_url`, `payments.photo_url`, `supplier_payments.photo_url` e `inventory_items.photo_url`. Su valor es `/api/media/<kind>/<uuid>.<ext>`, no `/uploads/...`.
+- **`GET /api/media/[kind]/[file]` autoriza por la FILA, no por la URL**: busca la fila cuyo `photo_url` sea exactamente esa URL y exige sesión + (clienta dueña o admin con el permiso del módulo, según `PRIVATE_MEDIA_RULES`). Un archivo huérfano —subido y nunca ligado a una fila— da 404, y por eso no se sirve solo porque alguien se sepa la URL. `Cache-Control: private, no-store` y `nosniff`: no debe quedar en el caché del túnel, del navegador ni del back-forward cache.
+- El nombre del archivo lo pone el servidor (`${crypto.randomUUID()}.${ext}`), así que `parsePrivateMediaFile()` acepta **solo** un UUID con extensión de la lista cerrada y nada más: un `../../` no llega a construirse. El path en disco se arma con ese UUID, nunca con la URL.
+- Las reglas `kind → tabla / permiso / columna de dueño` viven en `PRIVATE_MEDIA_RULES` (`src/lib/private-media.ts`). **Un kind nuevo obliga a:** añadirlo a `PRIVATE_MEDIA_KINDS`, darle su regla, pasar `kind` en el `FormData` del diálogo que lo sube, y decidir quién lo ve.
+- **Migración de lo que ya estaba en `public/uploads`**: `npm run db:backfill:media` (idempotente, se puede correr las veces que haga falta). **Copia** a un UUID distinto por fila en vez de mover, porque el mismo archivo puede estar en varias filas y de varios kinds (en los datos demo una captura aparece a la vez como `receipt` y como `payment`), y el original de `public/uploads` solo se borra cuando ninguna fila lo apunta.
 
 ## 🚫 Fuera del Alcance (MVP)
 - Pasarelas de pago (Stripe/MercadoPago)

@@ -43,6 +43,11 @@ dev.db-shm
 public/uploads/*
 !public/uploads/.gitkeep
 
+# media privada: capturas de pago y fotos de inventario. Fuera de public/ a
+# propósito, así que además hay que ignorar el directorio entero.
+private-uploads/*
+!private-uploads/.gitkeep
+
 # vercel
 .vercel
 

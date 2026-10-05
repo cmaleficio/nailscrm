@@ -85,6 +85,26 @@ export function detectImageType(buffer: Buffer): DetectImageResult {
 }
 
 /**
+ * MIME a partir de la extensión canónica. Sirve para responder las media
+ * privada desde `/api/media`: como el archivo se sirve desde un route handler
+ * y no desde el servidor de estáticos, hay que poner el `Content-Type` a mano,
+ * y ponerlo con `nosniff` es lo que impide que el navegador lo interprete como
+ * otra cosa.
+ */
+const MIME_BY_EXTENSION: Record<AcceptedImageExtension, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  heic: "image/heic",
+};
+
+export function mimeTypeForExtension(extension: string): string | null {
+  return MIME_BY_EXTENSION[extension as AcceptedImageExtension] ?? null;
+}
+
+/**
  * Valida tamaño y contenido, y devuelve la extensión con la que debe guardarse.
  * La extensión devuelta la decide el servidor a partir de los magic bytes, nunca
  * a partir del nombre que envió el cliente.

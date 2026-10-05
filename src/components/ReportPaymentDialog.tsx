@@ -33,6 +33,7 @@ export function ReportPaymentDialog({ balanceUsd, appointments, onClose, onSaved
     setError("");
     try {
       const form = new FormData();
+      form.append("kind", "receipt");
       form.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: form });
       if (!res.ok) throw new Error("No se pudo subir la captura");

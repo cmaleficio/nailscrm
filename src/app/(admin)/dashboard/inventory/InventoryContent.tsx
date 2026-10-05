@@ -121,6 +121,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
     setConfirmError("");
     try {
       const form = new FormData();
+      form.append("kind", "inventory");
       form.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: form });
       if (!res.ok) throw new Error("No se pudo subir la foto");
