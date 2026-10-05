@@ -77,7 +77,7 @@ Detalles que no se deben romper:
 - Drizzle con queries SQL puras, evitar abstracciones complejas
 - Imágenes en /public/uploads (MVP local)
 - Timezone local del salón para TODAS las fechas
-- Privacidad por defecto: solo nombre de pila en muro público
+- Privacidad por defecto: solo nombre de pila en muro público. El truncado va **en el servidor**, con `publicFirstName()` en `src/lib/public-name.ts`, no en el componente: `GET /api/gallery` y `/review/[id]` son públicos y sin sesión, así que si se truncara al pintar, el nombre completo ya habría salido en la respuesta y bastaría con abrir las devtools.
 - Google Calendar: solo escritura (push), no lectura bidireccional
 - WhatsApp: deep links (wa.me), no API oficial
 - Mantenimiento: cada cambio relevante (funcionalidad nueva/quitada o bug corregido) obliga a actualizar AGENTS.md (si aplica), CHANGELOG.md y README.md en el mismo commit.

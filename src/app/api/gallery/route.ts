@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/db/index";
 import { like, sql, eq, and, or, desc, inArray } from "drizzle-orm";
 import { summarizePurchases } from "@/lib/appointment-purchases";
+import { publicFirstName } from "@/lib/public-name";
 
 type GalleryItem = {
   id: string;
@@ -139,7 +140,9 @@ export async function GET(req: NextRequest) {
     ...apRows.map((r) => ({
       id: `ap_${r.id}`,
       url: r.url ?? "/placeholder.svg",
-      clientName: r.clientName,
+      // El muro es público y sin sesión: sale el nombre de pila, no el completo.
+      // El truncado es del servidor a propósito (ver `publicFirstName`).
+      clientName: publicFirstName(r.clientName),
       serviceName: galleryNameByAppointment.get(r.appointmentId) ?? r.serviceName,
       serviceId: r.serviceId,
       appointmentId: r.appointmentId,

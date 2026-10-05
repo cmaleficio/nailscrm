@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { ReviewForm } from "./ReviewForm";
 import { getSalonName } from "@/lib/brand";
 import { NOINDEX_METADATA } from "@/lib/seo";
+import { publicFirstName } from "@/lib/public-name";
 
 // La URL es un token de la cita, no contenido: nunca va al sitemap y no se
 // indexa aunque alguien la comparta.
@@ -82,7 +83,7 @@ export default async function ReviewPage({
                   : ""}
               </p>
               <p className="mt-1 text-xs text-gray-400">
-                Reseña de {row.clientName?.trim().split(/\s+/)[0] ?? "la clienta"}
+                Reseña de {publicFirstName(row.clientName) ?? "la clienta"}
               </p>
             </div>
             <ReviewForm appointmentId={id} alreadyReviewed={row.reviewRating != null} />
