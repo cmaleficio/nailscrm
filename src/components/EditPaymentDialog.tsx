@@ -232,10 +232,36 @@ export function EditPaymentDialog({
             </div>
             {newBalance !== null && (
               <div className="mt-0.5">
-                Balance de la clienta:{" "}
-                <span className="font-semibold text-gray-900">${newBalance.toFixed(2)}</span>
+                {newBalance < -0.004 ? (
+                  <>
+                    Saldo a favor:{" "}
+                    <span className="font-semibold text-amber-700">
+                      ${Math.abs(newBalance).toFixed(2)}
+                    </span>
+                  </>
+                ) : newBalance > 0.004 ? (
+                  <>
+                    Balance de la clienta:{" "}
+                    <span className="font-semibold text-gray-900">${newBalance.toFixed(2)}</span>
+                  </>
+                ) : (
+                  <>
+                    Balance de la clienta:{" "}
+                    <span className="font-semibold text-green-700">sin deuda</span>
+                  </>
+                )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Aviso, no bloqueo: dejar plata de más es legítimo (anticipo), pero el
+            admin tiene que verlo antes de guardar, no al releer la lista. */}
+        {newBalance !== null && newBalance < -0.004 && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Este pago deja un <strong>saldo a favor</strong> de $
+            {Math.abs(newBalance).toFixed(2)} para {payment.clientName}: ese excedente
+            quedará como anticipo para su próxima visita.
           </div>
         )}
 

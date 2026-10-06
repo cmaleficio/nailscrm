@@ -5,6 +5,7 @@ import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
 import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 import { EditPaymentDialog, type EditableAppointment } from "@/components/EditPaymentDialog";
+import { previewPayment, paymentKindLabel, PAYMENT_EPS, type PaymentKind } from "@/lib/payment-split";
 
 type BalanceItem = {
   id: string;
@@ -21,7 +22,11 @@ type BalanceClient = {
   clientId: string;
   name: string;
   phone: string | null;
+  dueUsd: number;
+  paidUsd: number;
   balanceUsd: number;
+  /** max(0, paidUsd - dueUsd): sobrepago, se muestra como saldo a favor. */
+  creditUsd: number;
   unpaidAppointments: number;
   items: BalanceItem[];
 };
@@ -37,6 +42,10 @@ type Payment = {
   paidAt: number | null;
   appointmentId: string | null;
   notes: string | null;
+  /** Reparto derivado al leer: no es columna de la BD. */
+  kind?: PaymentKind;
+  appliedUsd?: number;
+  creditUsd?: number;
 };
 
 type Receipt = {
@@ -85,6 +94,7 @@ const appointmentsFromItems = (items: BalanceItem[]): EditableAppointment[] => {
 
 export function BalancesContent() {
   const [totalUsd, setTotalUsd] = useState(0);
+  const [totalCreditUsd, setTotalCreditUsd] = useState(0);
   const [clients, setClients] = useState<BalanceClient[]>([]);
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -115,6 +125,7 @@ export function BalancesContent() {
       const res = await fetch("/api/balances");
       const data = await res.json();
       setTotalUsd(data.totalUsd ?? 0);
+      setTotalCreditUsd(data.totalCreditUsd ?? 0);
       setClients(Array.isArray(data.clients) ? data.clients : []);
     } finally {
       setLoading(false);
@@ -148,6 +159,25 @@ export function BalancesContent() {
   }, [tab, loadReceipts]);
 
   async function reviewReceipt(id: string, action: "approve" | "reject") {
+    // Aprobar una captura que excede la deuda deja un anticipo. No es un error
+    // (así funciona cuando la clienta paga de más), pero el admin tiene que
+    // saberlo ANTES de acreditarlo, no enterarse al ver el saldo negativo.
+    if (action === "approve") {
+      const receipt = receipts.find((r) => r.id === id);
+      const client = receipt ? clients.find((c) => c.clientId === receipt.clientId) : undefined;
+      if (receipt && client) {
+        const preview = previewPayment(client.dueUsd, client.paidUsd, receipt.amountUsd);
+        if (preview.creditUsd > PAYMENT_EPS) {
+          const ok = window.confirm(
+            `Este pago excede lo que ${client.name} debe.\n\n` +
+              `Deuda: $${preview.remainingUsd.toFixed(2)} · Pago: $${receipt.amountUsd.toFixed(2)}\n\n` +
+              `$${preview.appliedUsd.toFixed(2)} cubre la deuda y $${preview.creditUsd.toFixed(2)} ` +
+              "quedan como saldo a favor de la clienta.\n\n¿Acreditar el pago completo?"
+          );
+          if (!ok) return;
+        }
+      }
+    }
     const notes = action === "reject" ? window.prompt("Motivo del rechazo:") ?? "" : "";
     const res = await fetch(`/api/payment-receipts/${id}`, {
       method: "PATCH",
@@ -275,6 +305,13 @@ const statusBadgeClass = (status: string) => {
         <p className="text-sm text-gray-500">
           Total adeudado:{" "}
           <span className="font-semibold text-gray-900">${totalUsd.toFixed(2)}</span>
+          {totalCreditUsd > 0.004 && (
+            <>
+              {" · "}
+              Saldos a favor:{" "}
+              <span className="font-semibold text-amber-700">${totalCreditUsd.toFixed(2)}</span>
+            </>
+          )}
         </p>
       </div>
 
@@ -345,9 +382,17 @@ const statusBadgeClass = (status: string) => {
                       <p className="text-sm text-gray-500">{c.unpaidAppointments} cita(s) sin pagar</p>
                     </button>
                     <div className="flex shrink-0 flex-col items-end gap-2">
-                      <p className="rounded-lg bg-pink-light px-3 py-1.5 text-sm font-bold text-gray-900">
-                        ${c.balanceUsd.toFixed(2)}
-                      </p>
+                      {c.balanceUsd > 0.004 ? (
+                        <p className="rounded-lg bg-pink-light px-3 py-1.5 text-sm font-bold text-gray-900">
+                          ${c.balanceUsd.toFixed(2)}
+                        </p>
+                      ) : c.balanceUsd < -0.004 ? (
+                        <p className="rounded-lg bg-amber-100 px-3 py-1.5 text-sm font-bold text-amber-800">
+                          Saldo a favor ${c.creditUsd.toFixed(2)}
+                        </p>
+                      ) : (
+                        <p className="rounded-lg bg-green-100 px-3 py-1.5 text-sm font-bold text-green-700">Al día</p>
+                      )}
                       <button
                         onClick={() => setRegistering(c)}
                         className="rounded-xl bg-pink-main px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-pink-light transition-colors"
@@ -411,6 +456,21 @@ const statusBadgeClass = (status: string) => {
                               <div>
                                 <p className="text-sm font-medium text-gray-900">
                                   ${p.amountUsd.toFixed(2)} {p.currency === "VES" && `· ${p.amountVes?.toFixed(2)} Bs`}
+                                  {p.kind && (
+                                    <span
+                                      className={
+                                        p.kind === "anticipo"
+                                          ? "ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                                          : p.kind === "completo"
+                                            ? "ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
+                                            : "ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
+                                      }
+                                    >
+                                      {p.kind === "anticipo"
+                                        ? `${paymentKindLabel("anticipo")} $${(p.creditUsd ?? 0).toFixed(2)}`
+                                        : paymentKindLabel(p.kind)}
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   Ref: {p.reference} · {fmtDate(p.paidAt)}
@@ -545,14 +605,25 @@ const statusBadgeClass = (status: string) => {
                         {/* Editar el pago acreditado, no la captura: la captura es el
                             reporte de la clienta y no se toca. */}
                         {r.status === "approved" && r.paymentId && r.paymentAmountUsd !== null && (
-                          <button
-                            onClick={() =>
-                              openEditFromReceipt(r)
-                            }
-                            className="rounded-xl bg-pink-main px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-dark transition-colors"
-                          >
-                            Editar pago
-                          </button>
+                          <>
+                            <button
+                              onClick={() =>
+                                openEditFromReceipt(r)
+                              }
+                              className="rounded-xl bg-pink-main px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-dark transition-colors"
+                            >
+                              Editar pago
+                            </button>
+                            {/* La captura aprobada es una de las vías para meter un pago
+                                errado (un monto mal reportado se acredita tal cual), así
+                                que aquí también tiene que haber salida. */}
+                            <button
+                              onClick={() => void deletePayment(r.clientId, r.paymentId as string)}
+                              className="rounded-xl bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-300 transition-colors"
+                            >
+                              Eliminar pago
+                            </button>
+                          </>
                         )}
                       </>
                     )}

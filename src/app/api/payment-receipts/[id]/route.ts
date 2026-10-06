@@ -4,6 +4,7 @@ import { db, schema } from "@/db/index";
 import { eq } from "drizzle-orm";
 import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
+import { splitForPayment } from "@/lib/payment-split-db";
 import { logActivity } from "@/lib/audit";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -52,16 +53,27 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         .run();
     });
     recomputeFinancialStatus(receipt.clientId);
+    // Reparto con el pago ya insertado: la UI necesita saber si aprobar esta
+    // captura dejó un anticipo (pago mayor que la deuda) antes de confirmar.
+    const split = splitForPayment(receipt.clientId, paymentId);
     logActivity(db, {
       entity: "payment_receipts",
       action: action === "approve" ? "approve" : "reject",
       entityId: receipt.id,
       label: `Captura de pago ${action === "approve" ? "aprobada" : "rechazada"}: $${receipt.amountUsd}`,
-      metadata: { amountVes: receipt.amountVes, rate: receipt.rate, notes },
+      metadata: {
+        amountVes: receipt.amountVes,
+        rate: receipt.rate,
+        notes,
+        paymentId,
+        appliedUsd: split.appliedUsd,
+        creditUsd: split.creditUsd,
+        kind: split.kind,
+      },
       actorId: session?.user?.id,
       actorName: session?.user?.name ?? null,
     });
-    return NextResponse.json({ success: true, paymentId });
+    return NextResponse.json({ success: true, paymentId, ...split });
   }
 
   if (action === "reject") {

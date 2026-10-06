@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { todayStr, dateToDayStartTs } from "@/lib/time";
+import { previewPayment, paymentKindLabel, PAYMENT_EPS } from "@/lib/payment-split";
 
 type Props = {
   clientId: string;
@@ -24,6 +25,41 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Deuda y pagado actuales de la clienta, para poder mostrar qué hace este
+  // pago con la deuda antes de guardarlo.
+  const [account, setAccount] = useState<{ dueUsd: number; paidUsd: number } | null>(null);
+  const [confirmCredit, setConfirmCredit] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    // `/api/balances` es la misma fuente que la lista de cuentas por cobrar y
+    // exige el MISMO permiso que registrar el pago, así que nunca falla aquí.
+    fetch("/api/balances")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data || !Array.isArray(data.clients)) return;
+        const row = data.clients.find((c: { clientId: string }) => c.clientId === clientId);
+        setAccount({ dueUsd: row?.dueUsd ?? 0, paidUsd: row?.paidUsd ?? 0 });
+      })
+      .catch(() => {
+        if (alive) setAccount(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [clientId]);
+
+  const ves = parseFloat(amountVes);
+  const rate = dateRate.rate !== null ? dateRate.rate : parseFloat(manualRate);
+  const amountUsd =
+    ves > 0 && rate > 0 ? Math.round((ves / rate) * 100) / 100 : 0;
+
+  const preview = account && amountUsd > 0 ? previewPayment(account.dueUsd, account.paidUsd, amountUsd) : null;
+  const isCredit = !!preview && preview.creditUsd > PAYMENT_EPS;
+
+  useEffect(() => {
+    setConfirmCredit(false);
+  }, [amountUsd]);
 
   useEffect(() => {
     if (!paidDate) return;
@@ -206,6 +242,47 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
           <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
         )}
 
+        {preview && (
+          <div
+            className={`mt-4 rounded-xl border p-3 ${
+              isCredit ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"
+            }`}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Qué va a hacer este pago
+            </p>
+            <p className="mt-1 text-sm text-gray-700">
+              Deuda actual:{" "}
+              <span className="font-semibold">${preview.remainingUsd.toFixed(2)}</span>
+            </p>
+            <p className="mt-1 text-sm text-gray-700">
+              <span className={`font-semibold ${isCredit ? "text-amber-700" : "text-gray-900"}`}>
+                {paymentKindLabel(preview.kind)}
+              </span>{" "}
+              de ${amountUsd.toFixed(2)}
+              {preview.appliedUsd > 0 && <> → cubre ${preview.appliedUsd.toFixed(2)}</>}
+              {isCredit && <> y deja ${preview.creditUsd.toFixed(2)} de saldo a favor</>}
+            </p>
+            {preview.nextBalanceUsd <= PAYMENT_EPS && !isCredit && (
+              <p className="mt-1 text-xs text-green-700">Queda sin deuda.</p>
+            )}
+            {isCredit && (
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-amber-800">
+                <input
+                  type="checkbox"
+                  checked={confirmCredit}
+                  onChange={(e) => setConfirmCredit(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+                />
+                <span>
+                  Entiendo que ${preview.creditUsd.toFixed(2)} queda como <strong>saldo a favor</strong> de{" "}
+                  {clientName} (anticipo para su próxima visita).
+                </span>
+              </label>
+            )}
+          </div>
+        )}
+
         <div className="mt-6 flex gap-3">
           <button
             onClick={onClose}
@@ -216,7 +293,7 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
           </button>
           <button
             onClick={submit}
-            disabled={saving}
+            disabled={saving || (isCredit && !confirmCredit)}
             className="flex-1 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
             {saving ? "Guardando..." : "Guardar pago"}

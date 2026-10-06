@@ -6,6 +6,7 @@ import { hasPermission } from "@/lib/authz";
 import { recomputeFinancialStatus } from "@/lib/financial-status";
 import { logActivity } from "@/lib/audit";
 import { resolvePaymentAmount } from "@/lib/payment-edit";
+import { splitForPayment } from "@/lib/payment-split-db";
 import { dateToDayStartTs } from "@/lib/time";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -118,6 +119,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   recomputeFinancialStatus(payment.userId);
 
+  // Reparto con la cifra NUEVA: si el admin agrandó el pago, lo que era
+  // "abono" puede pasar a ser "anticipo", y la respuesta debe decirlo.
+  const split = splitForPayment(payment.userId, id);
+
   const before = {
     amountUsd: payment.amountUsd,
     amountVes: payment.amountVes,
@@ -135,12 +140,20 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     action: "update",
     entityId: payment.id,
     label: `Pago editado: $${after.amountUsd} (${payment.currency})`,
-    metadata: { before, after, changed, userId: payment.userId },
+    metadata: {
+      before,
+      after,
+      changed,
+      userId: payment.userId,
+      appliedUsd: split.appliedUsd,
+      creditUsd: split.creditUsd,
+      kind: split.kind,
+    },
     actorId: session?.user?.id,
     actorName: session?.user?.name ?? null,
   });
 
-  return NextResponse.json({ ...payment, ...after });
+  return NextResponse.json({ ...payment, ...after, ...split });
 }
 
 /**

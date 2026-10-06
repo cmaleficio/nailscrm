@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { todayStr, dateToDayStartTs } from "@/lib/time";
+import { previewPayment, paymentKindLabel, PAYMENT_EPS } from "@/lib/payment-split";
 
 type Props = {
   appointmentId: string;
@@ -40,6 +41,28 @@ export function CompleteAppointmentDialog({
   const [usageSel, setUsageSel] = useState<Record<string, string>>({});
   const [paidTotal, setPaidTotal] = useState<number | null>(null);
   const [shareToGallery, setShareToGallery] = useState(false);
+  // Deuda total de la clienta (servicios no anulados) para explicar qué hace
+  // el pago de "ahora" con la cuenta, no solo con este servicio.
+  const [dueUsd, setDueUsd] = useState<number | null>(null);
+  const [confirmCredit, setConfirmCredit] = useState(false);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let alive = true;
+    fetch("/api/balances")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data || !Array.isArray(data.clients)) return;
+        const row = data.clients.find((c: { clientId: string }) => c.clientId === clientId);
+        setDueUsd(row?.dueUsd ?? 0);
+      })
+      .catch(() => {
+        if (alive) setDueUsd(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [clientId]);
 
   useEffect(() => {
     if (clientId) {
@@ -53,6 +76,19 @@ export function CompleteAppointmentDialog({
         .catch(() => setPaidTotal(null));
     }
   }, [clientId]);
+
+  const vesAmt = parseFloat(amountVes);
+  const effRate = dateRate.rate !== null ? dateRate.rate : parseFloat(manualRate);
+  const amountUsd = vesAmt > 0 && effRate > 0 ? Math.round((vesAmt / effRate) * 100) / 100 : 0;
+  const preview =
+    paid && dueUsd !== null && paidTotal !== null && amountUsd > 0
+      ? previewPayment(dueUsd, paidTotal, amountUsd)
+      : null;
+  const isCredit = !!preview && preview.creditUsd > PAYMENT_EPS;
+
+  useEffect(() => {
+    setConfirmCredit(false);
+  }, [amountUsd, paid]);
 
   useEffect(() => {
     fetch("/api/inventory/items")
@@ -352,10 +388,54 @@ export function CompleteAppointmentDialog({
                 Pagado por el cliente en total:{" "}
                 <span className="font-semibold text-pink-main">${paidTotal.toFixed(2)}</span>
               </p>
-              {paidTotal >= servicePrice && (
+              {dueUsd !== null && (
+                <p className="mt-1 text-sm text-gray-700">
+                  Deuda total de {clientName}:{" "}
+                  <span className="font-semibold text-gray-900">
+                    ${Math.max(0, dueUsd - paidTotal).toFixed(2)}
+                  </span>
+                  <span className="ml-1 text-xs text-gray-500">(servicios ${dueUsd.toFixed(2)})</span>
+                </p>
+              )}
+              {!isCredit && paidTotal >= servicePrice && (
                 <p className="mt-1 text-xs text-gray-500">
                   Esta caja parece ya cubierta por abonos.
                 </p>
+              )}
+            </div>
+          )}
+
+          {preview && (
+            <div
+              className={`mt-3 rounded-xl border p-3 ${
+                isCredit ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Qué va a hacer este pago
+              </p>
+              <p className="mt-1 text-sm text-gray-700">
+                <span className={`font-semibold ${isCredit ? "text-amber-700" : "text-gray-900"}`}>
+                  {paymentKindLabel(preview.kind)}
+                </span>{" "}
+                de ${amountUsd.toFixed(2)}
+                {preview.appliedUsd > 0 && <> → cubre ${preview.appliedUsd.toFixed(2)}</>}
+                {isCredit && <> y deja ${preview.creditUsd.toFixed(2)} de saldo a favor</>}
+                {preview.nextBalanceUsd <= PAYMENT_EPS && !isCredit && <> · queda sin deuda</>}
+              </p>
+              {isCredit && (
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-amber-800">
+                  <input
+                    type="checkbox"
+                    checked={confirmCredit}
+                    onChange={(e) => setConfirmCredit(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+                  />
+                  <span>
+                    Entiendo que ${preview.creditUsd.toFixed(2)} queda como <strong>saldo a favor</strong> de{" "}
+                    {clientName} (anticipo para su próxima visita).
+                  </span>
+                </label>
               )}
             </div>
           )}
@@ -375,7 +455,7 @@ export function CompleteAppointmentDialog({
           </button>
           <button
             onClick={confirm}
-            disabled={saving}
+            disabled={saving || (isCredit && !confirmCredit)}
             className="flex-1 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
             {saving ? "Completando..." : "Confirmar completado"}
