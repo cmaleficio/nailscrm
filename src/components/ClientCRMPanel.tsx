@@ -453,9 +453,21 @@ export function ClientCRMPanel({
               Registrar servicio
             </button>
           </div>
-          <p className="mt-2 text-2xl font-bold text-gray-900">
-            ${(client.balanceUsd ?? 0).toFixed(2)}
-          </p>
+          {(client.balanceUsd ?? 0) > 0.004 ? (
+            <p className="mt-2 text-2xl font-bold text-gray-900">
+              ${(client.balanceUsd ?? 0).toFixed(2)}
+            </p>
+          ) : (client.balanceUsd ?? 0) < -0.004 ? (
+            <p className="mt-2 text-2xl font-bold text-amber-700">
+              ${Math.abs(client.balanceUsd ?? 0).toFixed(2)}
+              <span className="ml-2 align-middle text-xs font-medium text-amber-600">a favor</span>
+            </p>
+          ) : (
+            <p className="mt-2 text-2xl font-bold text-green-700">
+              $0.00
+              <span className="ml-2 align-middle text-xs font-medium text-green-600">al día</span>
+            </p>
+          )}
           {(client.payments ?? []).length > 0 && (
             <div className="mt-3 space-y-1 border-t border-gray-100 pt-3">
               {client.payments.slice(0, 5).map((p) => (

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/db/index";
-import { eq, and, sql, isNull, or, ne, inArray } from "drizzle-orm";
+import { eq, and, sql, ne, inArray } from "drizzle-orm";
 import { hasAnyPermission } from "@/lib/authz";
 import { logActivity } from "@/lib/audit";
 import { summarizePurchases } from "@/lib/appointment-purchases";
@@ -95,22 +95,20 @@ export async function GET(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
+  // Deuda con la MISMA definición que /api/balances y /profile: todo servicio
+  // no anulado, sin importar si la cita ya se completó. Antes aquí solo
+  // contaban las citas terminadas, y el mismo cliente salía con dos saldos
+  // distintos según el panel donde se mirara (y el reparto de un pago tenía
+  // dos "deudas" posibles).
   const dueRow = db
     .select({
       due: sql<number>`coalesce(sum(${schema.servicePurchases.servicePrice}), 0)`,
     })
     .from(schema.servicePurchases)
-    .leftJoin(
-      schema.appointments,
-      eq(schema.appointments.id, schema.servicePurchases.appointmentId)
-    )
     .where(
       and(
-        or(
-          eq(schema.appointments.status, "completed"),
-          isNull(schema.servicePurchases.appointmentId)
-        ),
-        eq(schema.servicePurchases.userId, id)
+        eq(schema.servicePurchases.userId, id),
+        ne(schema.servicePurchases.financialStatus, "void")
       )
     )
     .get();
@@ -262,6 +260,8 @@ export async function GET(
 
   return NextResponse.json({
     ...client,
+    dueUsd: Math.round((dueRow?.due ?? 0) * 100) / 100,
+    paidUsd: Math.round((paidRow?.paid ?? 0) * 100) / 100,
     balanceUsd: Math.round(((dueRow?.due ?? 0) - (paidRow?.paid ?? 0)) * 100) / 100,
     payments,
     photoGroups: [...photoGroups.values()],

@@ -81,8 +81,12 @@ export function ReportPaymentDialog({ balanceUsd, appointments, onClose, onSaved
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
         <h3 className="text-lg font-semibold text-gray-900">Reportar pago</h3>
         <p className="mt-1 text-sm text-gray-500">
-          Saldo pendiente:{" "}
-          <span className="font-semibold text-gray-900">${balanceUsd.toFixed(2)}</span>
+          {balanceUsd > 0.004 ? "Saldo pendiente" : "Saldo a favor"}:{" "}
+          <span
+            className={`font-semibold ${balanceUsd > 0.004 ? "text-gray-900" : "text-amber-700"}`}
+          >
+            ${balanceUsd > 0.004 ? balanceUsd.toFixed(2) : Math.abs(balanceUsd).toFixed(2)}
+          </span>
         </p>
 
         <div className="mt-4 space-y-3">

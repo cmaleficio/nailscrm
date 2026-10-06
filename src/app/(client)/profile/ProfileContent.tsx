@@ -524,11 +524,19 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
             </button>
           )}
         </div>
-        {balanceUsd > 0 ? (
+        {balanceUsd > 0.004 ? (
           <p className="mb-3 text-sm text-gray-500">
             Debes{" "}
             <span className="font-semibold text-gray-900">${balanceUsd.toFixed(2)}</span>.
             Paga en Bs y adjunta la captura; el salón la aprobará.
+          </p>
+        ) : balanceUsd < -0.004 ? (
+          <p className="mb-3 text-sm text-gray-500">
+            Tienes un saldo a favor de{" "}
+            <span className="font-semibold text-amber-700">
+              ${Math.abs(balanceUsd).toFixed(2)}
+            </span>
+            . Se aplicará a tus próximos servicios.
           </p>
         ) : (
           <p className="mb-3 text-sm text-gray-500">No tienes saldo pendiente.</p>
