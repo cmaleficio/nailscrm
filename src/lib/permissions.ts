@@ -1,4 +1,4 @@
-export const PERMISSION_KEYS = [
+﻿export const PERMISSION_KEYS = [
   "appointments",
   "clients",
   "balances",
@@ -17,6 +17,8 @@ export const PERMISSION_KEYS = [
   "adminUsers",
   "paymentApproval",
   "activityLog",
+  "mergeClients",
+  "backups",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -75,10 +77,12 @@ export const PERMISSION_LABELS: Record<string, string> = {
   workingHours: "Horarios",
   exchangeRates: "Tasas",
   legalSettings: "Legal",
-  navigation: "Navegación",
+  navigation: "NavegaciÃ³n",
   services: "Servicios",
-  gallery: "Muro de inspiración",
-  adminUsers: "Gestión de admins",
+  gallery: "Muro de inspiraciÃ³n",
+  adminUsers: "GestiÃ³n de admins",
   paymentApproval: "Aprobar pagos",
   activityLog: "Log de actividad",
+  mergeClients: "Fusionar clientes",
+  backups: "Respaldos y restauración",
 };
