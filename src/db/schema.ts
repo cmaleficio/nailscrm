@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+﻿import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -235,6 +235,7 @@ export const inventoryItems = sqliteTable("inventory_items", {
   subcategory: text("subcategory"),
   maxUses: integer("max_uses"),
   usesConsumed: integer("uses_consumed").notNull().default(0),
+  totalUses: integer("total_uses").notNull().default(0),
   isExhausted: integer("is_exhausted").notNull().default(0),
   createdAt: integer("created_at"),
 });
@@ -433,14 +434,26 @@ export const navItems = sqliteTable("nav_items", {
 });
 
 /**
- * Snippet de etiquetas de analítica que se inyecta en las páginas públicas.
- * Singleton con key = "head". Solo lo edita el superadmin porque es inyección
+ * Snippet de etiquetas de analÃ­tica que se inyecta en las pÃ¡ginas pÃºblicas.
+ * Singleton con key = "head". Solo lo edita el superadmin porque es inyecciÃ³n
  * de JS arbitrario (ver src/lib/tracking-tags.ts).
  */
 export const trackingTags = sqliteTable("tracking_tags", {
   key: text("key").primaryKey(),
   snippet: text("snippet").notNull().default(""),
   isEnabled: integer("is_enabled").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
+});
+
+/**
+ * Ajustes globales del salÃ³n (clave/valor). Singleton por clave:
+ * hoy solo "detectDuplicateClients" (Â¿Ya eres cliente? en el
+ * registro con Google). Ver src/lib/app-settings.ts.
+ */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
   updatedAt: integer("updated_at").notNull(),
   updatedBy: text("updated_by").references(() => users.id),
 });
@@ -471,3 +484,42 @@ export const activityLogs = sqliteTable(
     index("activity_logs_entity_idx").on(t.entity),
   ]
 );
+
+export const backupSettings = sqliteTable("backup_settings", {
+  key: text("key").primaryKey(),
+  enabled: integer("enabled").notNull().default(0),
+  frequency: text("frequency").notNull().default("daily"),
+  hour: integer("hour").notNull().default(21),
+  minute: integer("minute").notNull().default(0),
+  dayOfWeek: integer("day_of_week"),
+  dayOfMonth: integer("day_of_month"),
+  driveScope: text("drive_scope").notNull().default("db"),
+  rcloneRemote: text("rclone_remote").default(""),
+  driveFolder: text("drive_folder").default(""),
+  lastRunAt: integer("last_run_at"),
+  lastStatus: text("last_status"),
+  lastRunId: text("last_run_id"),
+  updatedAt: integer("updated_at").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
+  notifyOnFailure: integer("notify_on_failure").default(0),
+});
+
+export const backupRuns = sqliteTable("backup_runs", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  frequency: text("frequency"),
+  driveScope: text("drive_scope"),
+  status: text("status").notNull(),
+  startedAt: integer("started_at").notNull(),
+  finishedAt: integer("finished_at"),
+  backupPath: text("backup_path"),
+  dbZipPath: text("db_zip_path"),
+  dbSizeBytes: integer("db_size_bytes"),
+  publicSizeBytes: integer("public_size_bytes"),
+  privateSizeBytes: integer("private_size_bytes"),
+  driveUploaded: integer("drive_uploaded").default(0),
+  drivePath: text("drive_path"),
+  error: text("error"),
+  durationMs: integer("duration_ms"),
+  triggeredBy: text("triggered_by").references(() => users.id),
+});

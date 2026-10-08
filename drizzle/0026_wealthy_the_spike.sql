@@ -1,0 +1,40 @@
+CREATE TABLE `backup_runs` (
+	`id` text PRIMARY KEY NOT NULL,
+	`type` text NOT NULL,
+	`frequency` text,
+	`drive_scope` text,
+	`status` text NOT NULL,
+	`started_at` integer NOT NULL,
+	`finished_at` integer,
+	`backup_path` text,
+	`db_zip_path` text,
+	`db_size_bytes` integer,
+	`public_size_bytes` integer,
+	`private_size_bytes` integer,
+	`drive_uploaded` integer DEFAULT 0,
+	`drive_path` text,
+	`error` text,
+	`duration_ms` integer,
+	`triggered_by` text,
+	FOREIGN KEY (`triggered_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `backup_settings` (
+	`key` text PRIMARY KEY NOT NULL,
+	`enabled` integer DEFAULT 0 NOT NULL,
+	`frequency` text DEFAULT 'daily' NOT NULL,
+	`hour` integer DEFAULT 21 NOT NULL,
+	`minute` integer DEFAULT 0 NOT NULL,
+	`day_of_week` integer,
+	`day_of_month` integer,
+	`drive_scope` text DEFAULT 'db' NOT NULL,
+	`rclone_remote` text DEFAULT '',
+	`drive_folder` text DEFAULT '',
+	`last_run_at` integer,
+	`last_status` text,
+	`last_run_id` text,
+	`updated_at` integer NOT NULL,
+	`updated_by` text,
+	`notify_on_failure` integer DEFAULT 0,
+	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
