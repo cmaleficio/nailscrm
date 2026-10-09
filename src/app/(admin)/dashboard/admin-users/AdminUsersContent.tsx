@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { PERMISSION_KEYS, PERMISSION_LABELS } from "@/lib/permissions";
-import { TrackingTagsSection } from "./TrackingTagsSection";`nimport { BackupRestoreSection } from "./BackupRestoreSection";
+import { TrackingTagsSection } from "./TrackingTagsSection";
+import { BackupRestoreSection } from "./BackupRestoreSection";
 
 type Admin = {
   id: string;
@@ -44,10 +45,10 @@ export function AdminUsersContent() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "No se pudo aÃ±adir admin");
+        throw new Error(data.error || "No se pudo añadir admin");
       }
       setEmail("");
-      setSuccess("Admin aÃ±adido");
+      setSuccess("Admin añadido");
       await fetchAdmins();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
@@ -122,7 +123,7 @@ export function AdminUsersContent() {
 
       <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
         <label className="mb-2 block text-sm font-medium text-gray-700">
-          AÃ±adir admin por email
+          Añadir admin por email
         </label>
         <div className="flex gap-2">
           <input
@@ -137,7 +138,7 @@ export function AdminUsersContent() {
             disabled={loading || !email}
             className="rounded-xl bg-pink-main px-6 py-2 text-sm font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors"
           >
-            {loading ? "AÃ±adiendo..." : "AÃ±adir"}
+            {loading ? "Añadiendo..." : "Añadir"}
           </button>
         </div>
         {error && (
@@ -182,7 +183,7 @@ export function AdminUsersContent() {
               </div>
               {!isSelf && (
                 <div className="mt-3 border-t border-gray-100 pt-3">
-                  <p className="mb-2 text-xs font-medium text-gray-600">Permisos por mÃ³dulo</p>
+                  <p className="mb-2 text-xs font-medium text-gray-600">Permisos por módulo</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
                     {PERMISSION_KEYS.map((key) => {
                       const checked = (admin.permissions ?? null) === null || (admin.permissions ?? []).includes(key);
@@ -207,7 +208,7 @@ export function AdminUsersContent() {
                     })}
                   </div>
                   {(admin.permissions ?? null) === null && (
-                    <p className="mt-2 text-xs text-gray-400">Acceso a todos los mÃ³dulos (por defecto).</p>
+                    <p className="mt-2 text-xs text-gray-400">Acceso a todos los módulos (por defecto).</p>
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
@@ -240,7 +241,7 @@ export function AdminUsersContent() {
                           }}
                           className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-600"
                         >
-                          <option value="">Copiar deâ€¦</option>
+                          <option value="">Copiar de…</option>
                           {admins
                             .filter((a) => a.email !== admin.email)
                             .map((a) => (
@@ -274,6 +275,9 @@ export function AdminUsersContent() {
       </div>
 
       <TrackingTagsSection />
+      <BackupRestoreSection />
     </div>
   );
 }
+
+
