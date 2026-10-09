@@ -1,1 +1,1 @@
-﻿console.log('ok');
+﻿console.log('backup-runner: run requested');

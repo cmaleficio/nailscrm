@@ -1,1 +1,1 @@
-﻿console.log('restore ok');
+﻿console.log('restore-runner: run requested');
