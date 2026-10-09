@@ -4,6 +4,8 @@ import { db, schema } from "@/db/index";
 import { eq, and, inArray, ne, sql } from "drizzle-orm";
 import { ProfileContent } from "./ProfileContent";
 import { summarizePurchases } from "@/lib/appointment-purchases";
+import { isDuplicateDetectionEnabled } from "@/lib/app-settings";
+import { findSimilarClients } from "@/lib/name-match";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -186,6 +188,16 @@ export default async function ProfilePage() {
 
   const balanceUsd = Math.round((due - paid) * 100) / 100;
 
+  // "¿No es tu expediente?": reasignación auto-gestionada
+  // para cuando la clienta se registró como nueva pero ya
+  // tenía expediente (o eligió mal en el registro).
+  const duplicateCandidates = isDuplicateDetectionEnabled(db)
+    ? findSimilarClients(db, user.name, {
+        excludeId: user.id,
+        excludeEmail: user.email,
+      })
+    : [];
+
   return (
     <ProfileContent
       user={{
@@ -197,6 +209,7 @@ export default async function ProfilePage() {
         totalVisits: user.totalVisits ?? 0,
         totalRevenue: user.totalRevenue ?? 0,
       }}
+      duplicateCandidates={duplicateCandidates}
       upcomingAppointments={upcomingAppointments.map((a) => {
         const s = upcomingSummaries.get(a.id);
         return {

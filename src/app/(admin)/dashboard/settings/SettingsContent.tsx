@@ -22,13 +22,23 @@ const inputCls =
 
 export function SettingsContent({
   canManageNavigation = false,
+  canManageClients = false,
+  initialDetectDuplicates = false,
 }: {
   canManageNavigation?: boolean;
+  canManageClients?: boolean;
+  initialDetectDuplicates?: boolean;
 }) {
   const [hours, setHours] = useState<Day[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [detectDuplicates, setDetectDuplicates] = useState(
+    initialDetectDuplicates
+  );
+  const [savingDetect, setSavingDetect] = useState(false);
+  const [detectError, setDetectError] = useState("");
+  const [detectSaved, setDetectSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/working-hours")
@@ -64,6 +74,32 @@ export function SettingsContent({
       setError(err instanceof Error ? err.message : "Error inesperado");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveDetectDuplicates(next: boolean) {
+    setSavingDetect(true);
+    setDetectError("");
+    setDetectSaved(false);
+    try {
+      const res = await fetch("/api/app-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "detectDuplicateClients",
+          value: next ? "1" : "0",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo guardar");
+      }
+      setDetectDuplicates(next);
+      setDetectSaved(true);
+    } catch (err) {
+      setDetectError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setSavingDetect(false);
     }
   }
 
@@ -143,6 +179,45 @@ export function SettingsContent({
           {saving ? "Guardando..." : "Guardar horario"}
         </button>
       </div>
+
+      {canManageClients && (
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-900">
+            Detección de clientes duplicados
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Cuando una clienta nueva entra con Google y ya existe una
+            con nombre similar, el registro le pregunta «¿Ya eres
+            cliente?» para unir expedientes en vez de duplicarlos.
+            Apagarla desactiva el aviso y la unión auto-gestionada.
+          </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={detectDuplicates}
+                onChange={(e) => void saveDetectDuplicates(e.target.checked)}
+                disabled={savingDetect}
+                className="h-4 w-4 rounded border-gray-300 text-pink-main focus:ring-pink-main"
+              />
+              ¿Ya eres cliente? en el registro con Google
+            </label>
+            {savingDetect && (
+              <span className="text-xs text-gray-400">Guardando...</span>
+            )}
+          </div>
+          {detectError && (
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              {detectError}
+            </p>
+          )}
+          {detectSaved && (
+            <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-600">
+              Ajuste guardado
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

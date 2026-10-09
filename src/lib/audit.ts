@@ -12,6 +12,7 @@ export const AUDIT_ENTITIES = [
   "suppliers", "expense_categories", "bank_accounts", "bills", "supplier_payments",
   "inventory_items", "inventory_movements", "risc_events",
   "brand_settings", "nav_items", "legal_settings", "tracking_tags",
+  "app_settings",
 ] as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
@@ -19,6 +20,7 @@ export type AuditEntity = (typeof AUDIT_ENTITIES)[number];
 export const AUDIT_ACTIONS = [
   "create", "update", "delete", "cancel", "complete",
   "approve", "reject", "report", "adjust", "enroll", "unenroll", "void",
+  "merge",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

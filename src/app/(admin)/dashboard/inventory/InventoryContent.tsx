@@ -4,6 +4,9 @@ import { Fragment, useState, useEffect, useCallback } from "react";
 import { MovementDialog } from "@/components/MovementDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EditCostDialog } from "@/components/EditCostDialog";
+import { CategoryChips } from "@/components/inventory/CategoryChips";
+import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
+import { photoDownloadName } from "@/lib/download-name";
 import { newId } from "@/lib/id";
 import { matchesInventoryItem } from "@/lib/inventory-search";
 
@@ -25,6 +28,7 @@ type InventoryItem = {
   subcategory: string | null;
   maxUses: number | null;
   usesConsumed: number;
+  totalUses: number;
   isExhausted: number;
 };
 
@@ -60,6 +64,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   const [movements, setMovements] = useState<Movement[]>([]);
   const [movementItem, setMovementItem] = useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
+  const [reopeningItem, setReopeningItem] = useState<InventoryItem | null>(null);
   const [confirmError, setConfirmError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -69,6 +74,8 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
   const [costEdit, setCostEdit] = useState<InventoryItem | null>(null);
   const [editForm, setEditForm] = useState({ name: "", unit: "", minStock: "0", isActive: 1, category: "", subcategory: "", maxUses: "" });
   const [savingUses, setSavingUses] = useState<string | null>(null);
+
+  const imageLightbox = usePhotoLightbox();
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -198,7 +205,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
     }
   }
 
-  async function toggleExhausted(item: InventoryItem) {
+  async function toggleExhausted(item: InventoryItem): Promise<boolean> {
     setBusy(true);
     setConfirmError("");
     try {
@@ -213,11 +220,19 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
       }
       setEditingId(null);
       await loadItems();
+      return true;
     } catch (err) {
       setConfirmError(err instanceof Error ? err.message : "Error inesperado");
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confirmReopen() {
+    if (!reopeningItem) return;
+    const ok = await toggleExhausted(reopeningItem);
+    if (ok) setReopeningItem(null);
   }
 
   async function confirmDeleteItem() {
@@ -337,17 +352,19 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                 placeholder="Nombre *"
                 className={inputCls}
               />
-              <input
+              <CategoryChips
+                label="Categoría"
                 value={newItemForm.category}
-                onChange={(e) => setNewItemForm({ ...newItemForm, category: e.target.value })}
-                placeholder="Categoría (ej: Esmalte)"
-                className={inputCls}
+                onChange={(v) => setNewItemForm({ ...newItemForm, category: v })}
+                type="category"
+                placeholder="Ej: Esmalte"
               />
-              <input
+              <CategoryChips
+                label="Subcategoría"
                 value={newItemForm.subcategory}
-                onChange={(e) => setNewItemForm({ ...newItemForm, subcategory: e.target.value })}
-                placeholder="Subcategoría (ej: Max Glow)"
-                className={inputCls}
+                onChange={(v) => setNewItemForm({ ...newItemForm, subcategory: v })}
+                type="subcategory"
+                placeholder="Ej: Max Glow"
               />
               <input
                 value={newItemForm.maxUses}
@@ -460,8 +477,18 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                         <tr className={`border-b border-gray-50 ${item.isActive === 0 ? "opacity-50" : ""}`}>
                         <td className="px-3 py-2">
                           {item.photoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.photoUrl} alt={item.name} className="h-10 w-10 rounded-lg object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const photos = [{ id: "0", url: item.photoUrl!, caption: item.name }];
+                                imageLightbox.open(photos, 0);
+                              }}
+                              className="h-10 w-10 rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity"
+                              aria-label={`Ver imagen de ${item.name}`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={item.photoUrl} alt={item.name} className="h-full w-full object-cover" />
+                            </button>
                           ) : (
                             <span className="block h-10 w-10 rounded-lg bg-gray-100" />
                           )}
@@ -480,7 +507,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                           )}
                           {item.maxUses != null && (
                             <span className="ml-1 text-xs text-gray-400">
-                              · {item.usesConsumed}/{item.maxUses} usos
+                              · {item.usesConsumed}/{item.maxUses} usos (total: {item.totalUses})
                             </span>
                           )}
                         </td>
@@ -548,12 +575,22 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                                 <input type="number" min="0" value={editForm.minStock} onChange={(e) => setEditForm({ ...editForm, minStock: e.target.value })} className={inputCls} />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <label className="mb-1 block text-xs font-medium text-gray-600">Categoría</label>
-                                <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} placeholder="Ej: Esmalte" className={inputCls} />
+                                <CategoryChips
+                                  label="Categoría"
+                                  value={editForm.category}
+                                  onChange={(v) => setEditForm({ ...editForm, category: v })}
+                                  type="category"
+                                  placeholder="Ej: Esmalte"
+                                />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <label className="mb-1 block text-xs font-medium text-gray-600">Subcategoría</label>
-                                <input value={editForm.subcategory} onChange={(e) => setEditForm({ ...editForm, subcategory: e.target.value })} placeholder="Ej: Max Glow" className={inputCls} />
+                                <CategoryChips
+                                  label="Subcategoría"
+                                  value={editForm.subcategory}
+                                  onChange={(v) => setEditForm({ ...editForm, subcategory: v })}
+                                  type="subcategory"
+                                  placeholder="Ej: Max Glow"
+                                />
                               </div>
                               <div className="w-28">
                                 <label className="mb-1 block text-xs font-medium text-gray-600">Máx. usos</label>
@@ -567,7 +604,7 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
                                 <button onClick={() => void saveEdit(item)} disabled={busy} className="rounded-xl bg-pink-main px-3 py-2 text-xs font-medium text-gray-900 hover:bg-pink-light disabled:opacity-50 transition-colors">
                                   Guardar
                                 </button>
-                                <button onClick={() => void toggleExhausted(item)} disabled={busy} className="rounded-xl bg-red-100 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-200 disabled:opacity-50 transition-colors">
+                                <button onClick={() => { if (item.isExhausted === 1) { setReopeningItem(item); } else { void toggleExhausted(item); } }} disabled={busy} className="rounded-xl bg-red-100 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-200 disabled:opacity-50 transition-colors">
                                   {item.isExhausted === 1 ? "Reabrir" : "Marcar agotado"}
                                 </button>
                                 <button onClick={() => setEditingId(null)} disabled={busy} className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-600 hover:bg-gray-200 transition-colors">
@@ -730,6 +767,21 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
         />
       )}
 
+      {reopeningItem && (
+        <ConfirmDialog
+          title="Reabrir producto"
+          message={`¿Reabrir ${reopeningItem.name}? Se reiniciarán sus usos actuales${reopeningItem.maxUses != null ? ` (quedará en 0 de ${reopeningItem.maxUses})` : ""} y volverá a estar disponible. El total histórico de usos (${reopeningItem.totalUses}) se conserva.`}
+          confirmLabel="Reabrir"
+          busy={busy}
+          error={confirmError}
+          onConfirm={() => void confirmReopen()}
+          onClose={() => {
+            setReopeningItem(null);
+            setConfirmError("");
+          }}
+        />
+      )}
+
       {deletingItem && (
         <ConfirmDialog
           title="Eliminar producto"
@@ -745,6 +797,32 @@ export function InventoryContent({ canAdjust = false }: { canAdjust?: boolean })
           }}
         />
       )}
+
+      <PhotoLightbox
+        photos={imageLightbox.photos}
+        index={imageLightbox.index}
+        onIndexChange={imageLightbox.onIndexChange}
+        onClose={imageLightbox.onClose}
+        footer={
+          imageLightbox.photos.length > 0 && imageLightbox.photos[imageLightbox.index] ? (
+            <a
+              href={imageLightbox.photos[imageLightbox.index].url}
+              download={photoDownloadName({
+                base: imageLightbox.photos[imageLightbox.index].caption,
+                url: imageLightbox.photos[imageLightbox.index].url,
+              })}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white/90 hover:bg-white/10"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth={2} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0 4-4m-4 4-4-4M4 19h16" />
+              </svg>
+              Descargar
+            </a>
+          ) : null
+        }
+      />
     </div>
   );
 }

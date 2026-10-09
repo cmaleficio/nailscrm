@@ -6,5 +6,6 @@ import { ClientsContent } from "./ClientsContent";
 export default async function ClientsPage() {
   const session = await auth();
   if (!(await hasPermission(session, "clients"))) redirect("/");
-  return <ClientsContent />;
+  const canMergeClients = await hasPermission(session, "mergeClients");
+  return <ClientsContent canMergeClients={canMergeClients} />;
 }

@@ -21,6 +21,14 @@ export function createInventoryIn(
     newStock > 0
       ? Math.round(((item.stock * item.avgCost + qty * unitCostUsd) / newStock) * 10000) / 10000
       : unitCostUsd;
+
+  if (item.maxUses != null) {
+    db.update(schema.inventoryItems)
+      .set({ usesConsumed: 0, isExhausted: 0, maxUses: item.maxUses + qty })
+      .where(eq(schema.inventoryItems.id, itemId))
+      .run();
+  }
+
   db.update(schema.inventoryItems)
     .set({ stock: newStock, avgCost: newAvg })
     .where(eq(schema.inventoryItems.id, itemId))
@@ -134,7 +142,7 @@ export function setExhausted(itemId: string, exhausted: boolean, createdBy: stri
       applyManualMovement(itemId, "adjust", 0, "Agotado (stock a 0)", createdBy);
     }
   } else if (!exhausted && item.isExhausted) {
-    db.update(schema.inventoryItems).set({ isExhausted: 0 }).where(eq(schema.inventoryItems.id, itemId)).run();
+    db.update(schema.inventoryItems).set({ isExhausted: 0, usesConsumed: 0 }).where(eq(schema.inventoryItems.id, itemId)).run();
   }
 }
 
@@ -189,8 +197,10 @@ export function recordUsage(
       .run();
 
     const newUses = (item.usesConsumed ?? 0) + 1;
+    const newTotalUses = (item.totalUses ?? 0) + 1;
     const hasMaxUses = item.maxUses != null;
-    const exhaustedNow = item.maxUses != null && newUses >= item.maxUses;
+    const adjustedMaxUses = hasMaxUses && newUses > item.maxUses! ? newUses : item.maxUses;
+    const exhaustedNow = adjustedMaxUses != null && newUses >= adjustedMaxUses;
 
     let newStock = item.stock;
     let movementQty = 0;
@@ -208,7 +218,9 @@ export function recordUsage(
       .set({
         stock: newStock,
         usesConsumed: newUses,
-        isExhausted: exhaustedNow ? 1 : item.isExhausted,
+        totalUses: newTotalUses,
+        maxUses: adjustedMaxUses,
+        isExhausted: exhaustedNow ? 1 : 0,
       })
       .where(eq(schema.inventoryItems.id, u.inventoryItemId))
       .run();

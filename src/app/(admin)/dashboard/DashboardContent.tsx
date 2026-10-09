@@ -46,6 +46,8 @@ type WaitlistEntry = {
 
 type Props = {
   today: string;
+  /** Permiso `mergeClients`: muestra "Fusionar cliente…" en el panel CRM. */
+  canMergeClients?: boolean;
 };
 
 const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -67,7 +69,7 @@ function fmtDate(d: Date): string {
   ).padStart(2, "0")}`;
 }
 
-export function DashboardContent({ today }: Props) {
+export function DashboardContent({ today, canMergeClients = false }: Props) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] =
@@ -845,6 +847,7 @@ export function DashboardContent({ today }: Props) {
           }}
           appointmentStatus={selectedAppointment.status}
           onChanged={refreshAll}
+          canMergeClients={canMergeClients}
         />
       )}
 

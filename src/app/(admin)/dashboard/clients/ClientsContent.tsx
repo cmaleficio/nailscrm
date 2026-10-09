@@ -19,7 +19,11 @@ type Client = {
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-pink-main focus:outline-none";
 
-export function ClientsContent() {
+export function ClientsContent({
+  canMergeClients = false,
+}: {
+  canMergeClients?: boolean;
+}) {
   const [clients, setClients] = useState<Client[]>([]);
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Client | null>(null);
@@ -218,6 +222,7 @@ export function ClientsContent() {
             setSelected(null);
             fetchClients(q);
           }}
+          canMergeClients={canMergeClients}
         />
       )}
 

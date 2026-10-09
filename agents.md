@@ -312,13 +312,14 @@ Detalles que no se deben romper:
 - photo_url: text (foto del producto, opcional)
 - category: text (categoría principal del producto, ej: "Esmalte"; los productos sin categoría no cuentan como esmalte)
 - subcategory: text (subcategoría/tipo exacto, ej: "Max Glow", "Emerald")
-- max_uses: integer (máximo de usos configurable por producto; al alcanzarlo se marca agotado)
-- uses_consumed: integer, default 0 (usos reales consumidos en citas)
-- is_exhausted: integer (boolean), default 0 (agotado manual o automático; al marcar se pone stock en 0)
+- max_uses: integer (máximo de usos configurable por producto; al alcanzarlo se marca agotado. Al cargar stock de un producto con máximo, se incrementa en la cantidad entrante)
+- uses_consumed: integer, default 0 (usos consumidos desde la última reposición/reapertura; es la cifra que se compara contra `max_uses` y se **resetea a 0** al cargar stock o al reabrir un producto agotado)
+- total_uses: integer, default 0 (acumulado histórico de usos, **nunca** se resetea; migración `drizzle/0025_tan_black_bird.sql` + backfill `total_uses = uses_consumed` sobre los datos previos)
+- is_exhausted: integer (boolean), default 0 (agotado manual o automático; al marcar se pone stock en 0; se **recalcula y persiste** en cada registro de uso: `uses_consumed >= max_uses` → 1, si no → 0)
 - notes: text
 - created_at: integer (timestamp)
 - `stockValue` = `stock * avg_cost` (se calcula en el API).
-- `usosRestantes` = `max_uses − uses_consumed` (badge "Agotado" si `uses_consumed >= max_uses` o `is_exhausted=1`).
+- `usosRestantes` = `max_uses − uses_consumed` (badge "Agotado" si `uses_consumed >= max_uses` o `is_exhausted=1`). La tabla de productos muestra las dos cifras: "X/Y usos (total: Z)".
 - Si se crea un producto sin `code` (desde inventario o desde el diálogo de compras), `POST /api/inventory/items` genera el siguiente código ascendente `PRD-<n>`.
 
 ### Tabla: appointment_usage (uso de productos por cita)
@@ -327,7 +328,7 @@ Detalles que no se deben romper:
 - inventory_item_id: text, foreign key → inventory_items.id
 - quantity: real, not null, default 1
 - unique index (appointment_id, inventory_item_id).
-- Se llena al completar una cita con `recordUsage(...)`: descuenta stock, crea un `inventory_movements` kind 'out' con `ref_type='usage'`/`ref_id=appointment_id` e incrementa `inventory_items.uses_consumed` (agotando si supera `max_uses`).
+- Se llena al completar una cita con `recordUsage(...)`: descuenta stock, crea un `inventory_movements` kind 'out' con `ref_type='usage'`/`ref_id=appointment_id`, incrementa `inventory_items.uses_consumed` **y** `total_uses`, sube `max_uses` si el uso lo superara (tope de seguridad para que `uses_consumed` nunca queda por encima) y recalcula `is_exhausted` persistente.
 
 ### Tabla: inventory_movements (kardex)
 - id: text, primary key
@@ -589,7 +590,7 @@ Detalles que no se deben romper:
 - MovementDialog: registra salidas/ajustes de stock (con motivo obligatorio en ajustes) desde Inventario
 - PurchasesContent: pestañas de facturas (grid maestro-detalle editable), proveedores y categorías en /dashboard/purchases
 - AccountsPayableContent: pestañas de por pagar, pagos realizados y bancos en /dashboard/accounts-payable. Cada pago de proveedor muestra la miniatura de su captura (`supplier_payments.photoUrl`, obligatoria) con acceso al `PhotoLightbox`.
-- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La pestaña de productos incluye buscador por nombre, código, código de barras, categoría y subcategoría, con coincidencia sin distinguir mayúsculas ni acentos. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`). Cada producto tiene botón "Editar costo" (`EditCostDialog`, requiere `adjustInventory`) que crea una fila `kind: "cost_adjust"` en el kardex con motivo obligatorio; el kardex muestra la fila con badge púrpura "Costo" y el valor `unit_cost_usd`.
+- InventoryContent: pestañas de productos (grid con foto/código/barras/categoría/subcategoría, máx usos y badge "Agotado"), kardex y uso por servicio en /dashboard/inventory. La pestaña de productos incluye buscador por nombre, código, código de barras, categoría y subcategoría, con coincidencia sin distinguir mayúsculas ni acentos. La edición permite `category`/`subcategory`/`max_uses` y botón "Marcar agotado"/"Reabrir" (`setExhausted`); reabrir pide confirmación (`ConfirmDialog`) porque reinicia `uses_consumed` a 0 y conserva `total_uses`. Cada producto tiene botón "Editar costo" (`EditCostDialog`, requiere `adjustInventory`) que crea una fila `kind: "cost_adjust"` en el kardex con motivo obligatorio; el kardex muestra la fila con badge púrpura "Costo" y el valor `unit_cost_usd`.
 - FinancialsContent: P&L mensual (ingresos, gastos, utilidad) en /dashboard/financials
 - GalleryContent: `/dashboard/gallery` tiene dos pestañas. **"Muro de inspiración"** (`WallTab`): subida múltiple, servicio asociado opcional y descripción; eliminar con confirmación. **"Producción"** (`ProductionTab`): archivo de solo lectura de todas las fotos finales de citas completadas, agrupado por día con encabezados `sticky` y paginado con "Cargar días anteriores". Filtros de rango de fechas, servicio y búsqueda por clienta con separación draft/aplicado (botón "Filtrar", como `/dashboard/activity`). Ambas pestañas montan **su propio** `PhotoLightbox` porque solo una está montada a la vez; ambas usan el mismo grid masonry `columns-2 sm:columns-3` con `break-inside-avoid` que ya usan `GalleryGrid` y el muro. El pie de cada foto (`caption`) lo arma el endpoint con `buildProductionCaption` y alimenta el pie del visor **y** el nombre de la descarga.
 - **Búsqueda sin acentos en SQL**: `src/db/index.ts` registra la función `fold` en la conexión SQLite (`sqlite.function("fold", { deterministic: true }, foldSearchText)`), que pliega diacríticos y baja a minúsculas. Hace falta porque el `LIKE` de SQLite no ignora tildes y el filtro de clientas del archivo de producción va en SQL (un filtro client-side rompería la paginación por día). El texto buscado se escapa con `escapeLikePattern` + `ESCAPE '\'` para que `%` y `_` sean literales. **Ojo al escribir ese `ESCAPE` dentro de un template literal de JS**: en el código hay que escribir `'\\'` (barra invertida real), porque escribir `'\ '` a mano colapsa a `''` y SQLite rechaza la consulta con "ESCAPE expression must be a single character". El resto de los buscadores del proyecto (`/dashboard/balances`, `/dashboard/inventory`) siguen siendo client-side.

@@ -21,5 +21,7 @@ export default async function DashboardPage() {
     .reverse()
     .join("-");
 
-  return <DashboardContent today={today} />;
+  const canMergeClients = await hasPermission(session, "mergeClients");
+
+  return <DashboardContent today={today} canMergeClients={canMergeClients} />;
 }

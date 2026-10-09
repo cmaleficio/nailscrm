@@ -6,6 +6,7 @@ import { PhotoLightbox, usePhotoLightbox } from "@/components/PhotoLightbox";
 import { RegisterPaymentDialog } from "@/components/RegisterPaymentDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddServiceDialog } from "@/components/AddServiceDialog";
+import { MergeClientsDialog } from "@/components/MergeClientsDialog";
 import { SALON_TIME_ZONE } from "@/lib/production-photos";
 
 type PhotoGroup = {
@@ -50,6 +51,8 @@ type Props = {
   appointmentStatus?: string;
   /** Se llama tras un cambio para que el padre refresque la agenda. */
   onChanged?: () => void;
+  /** Permiso `mergeClients`: muestra el botón "Fusionar cliente…". */
+  canMergeClients?: boolean;
 };
 
 type Purchase = {
@@ -71,6 +74,7 @@ export function ClientCRMPanel({
   onDeleted,
   appointmentStatus,
   onChanged,
+  canMergeClients = false,
 }: Props) {
   const [client, setClient] = useState<ClientData | null>(null);
   const [techNotes, setTechNotes] = useState("");
@@ -95,6 +99,7 @@ export function ClientCRMPanel({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [removingBusy, setRemovingBusy] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
   const lightbox = usePhotoLightbox();
 
   // Cuando el panel se abre desde la agenda se sabe la cita; desde
@@ -778,6 +783,15 @@ export function ClientCRMPanel({
           </a>
         )}
 
+        {canMergeClients && (
+          <button
+            onClick={() => setShowMerge(true)}
+            className="mt-3 w-full rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+          >
+            Fusionar cliente…
+          </button>
+        )}
+
         <button
           onClick={() => setConfirmDelete(true)}
           className="mt-3 w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
@@ -843,6 +857,30 @@ export function ClientCRMPanel({
           error={removeError}
           onConfirm={removeService}
           onClose={() => setRemovingPurchase(null)}
+        />
+      )}
+      {showMerge && (
+        <MergeClientsDialog
+          client={{
+            id: client.id,
+            name: client.name,
+            email: client.email,
+            phone: client.phone,
+            totalVisits: client.totalVisits,
+            totalRevenue: client.totalRevenue,
+          }}
+          onClose={() => setShowMerge(false)}
+          onMerged={() => {
+            setShowMerge(false);
+            // La clienta abierta quedó eliminada con la
+            // fusión: el padre cierra el panel y recarga.
+            if (onDeleted) {
+              onDeleted();
+            } else {
+              onChanged?.();
+              onClose();
+            }
+          }}
         />
       )}
       </div>
