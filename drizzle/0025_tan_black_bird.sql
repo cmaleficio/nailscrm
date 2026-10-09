@@ -1,0 +1,1 @@
+ALTER TABLE `inventory_items` ADD `total_uses` integer DEFAULT 0 NOT NULL;

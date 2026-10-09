@@ -17,6 +17,7 @@
     "db:seed:privacy": "tsx src/db/seed-privacy.ts",
     "db:backfill:rates": "tsx src/db/backfill-rates.ts",
     "db:backfill:media": "tsx src/db/backfill-private-media.ts",
+    "db:backfill:allocations": "tsx src/db/backfill-allocations.ts",
     "risc:register": "tsx scripts/register-risc.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:reset": "tsx src/db/reset-fresh.ts",

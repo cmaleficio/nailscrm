@@ -46,6 +46,8 @@ type Payment = {
   kind?: PaymentKind;
   appliedUsd?: number;
   creditUsd?: number;
+  /** Servicios que cubre este pago (materializado en payment_allocations). */
+  allocations?: { purchaseId: string; serviceName: string; amountUsd: number }[];
 };
 
 type Receipt = {
@@ -475,6 +477,14 @@ const statusBadgeClass = (status: string) => {
                                 <p className="text-xs text-gray-500">
                                   Ref: {p.reference} · {fmtDate(p.paidAt)}
                                 </p>
+                                {p.allocations && p.allocations.length > 0 && (
+                                  <p className="text-xs text-gray-500">
+                                    Cubre:{" "}
+                                    {p.allocations
+                                      .map((a) => `${a.serviceName} $${a.amountUsd.toFixed(2)}`)
+                                      .join(" · ")}
+                                  </p>
+                                )}
                                 {p.notes && <p className="text-xs text-gray-400">{p.notes}</p>}
                               </div>
                               <div className="flex shrink-0 gap-2">

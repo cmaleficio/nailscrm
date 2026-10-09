@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { db, schema } from "./index";
 import { eq } from "drizzle-orm";
+import { recomputeFinancialStatus } from "@/lib/financial-status";
 
 const now = Math.floor(Date.now() / 1000);
 const DAY = 86400;
@@ -212,7 +213,7 @@ for (const a of appointments) {
       serviceDescription: a.service.description,
       servicePrice: a.service.price,
       serviceDurationMins: a.service.durationMins,
-      financialStatus: a.status === "completed" ? "paid" : "pending",
+      financialStatus: "pending",
       completionDate: a.status === "completed" ? startTime : null,
       createdAt: startTime - 3600,
     })
@@ -254,6 +255,10 @@ for (let i = 0; i < demoPayments.length && i < completedAppts.length; i++) {
     .run();
 }
 console.log(`✅ ${demoPayments.length} pagos demo registrados`);
+
+// Deriva `financial_status` y `payment_allocations` de los pagos y compras
+// recién sembrados, en vez de hardcodear estados por cita.
+recomputeFinancialStatus(userId!);
 
 const existingReceipts = db
   .select({ id: schema.paymentReceipts.id })

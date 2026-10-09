@@ -60,7 +60,39 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const withSplit = rows.map((r) => ({ ...r, ...(allocByPaymentId.get(r.id) ?? {}) }));
+  // Servicios que cubre cada pago (materializado en `payment_allocations`:
+  // qué pago pagó qué compra, no derivado al leer).
+  const allocRows = rows.length
+    ? db
+        .select({
+          paymentId: schema.paymentAllocations.paymentId,
+          purchaseId: schema.paymentAllocations.purchaseId,
+          amountUsd: schema.paymentAllocations.amountUsd,
+          serviceName: schema.servicePurchases.serviceName,
+        })
+        .from(schema.paymentAllocations)
+        .innerJoin(
+          schema.servicePurchases,
+          eq(schema.servicePurchases.id, schema.paymentAllocations.purchaseId)
+        )
+        .where(inArray(schema.paymentAllocations.paymentId, rows.map((r) => r.id)))
+        .all()
+    : [];
+  const allocByPayment = new Map<
+    string,
+    { purchaseId: string; serviceName: string; amountUsd: number }[]
+  >();
+  for (const a of allocRows) {
+    const list = allocByPayment.get(a.paymentId) ?? [];
+    list.push({ purchaseId: a.purchaseId, serviceName: a.serviceName, amountUsd: a.amountUsd });
+    allocByPayment.set(a.paymentId, list);
+  }
+
+  const withSplit = rows.map((r) => ({
+    ...r,
+    ...(allocByPaymentId.get(r.id) ?? {}),
+    allocations: allocByPayment.get(r.id) ?? [],
+  }));
 
   return NextResponse.json(withSplit);
 }

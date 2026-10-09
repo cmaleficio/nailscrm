@@ -184,6 +184,25 @@ export const payments = sqliteTable(
   ]
 );
 
+export const paymentAllocations = sqliteTable(
+  "payment_allocations",
+  {
+    id: text("id").primaryKey(),
+    paymentId: text("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    purchaseId: text("purchase_id")
+      .notNull()
+      .references(() => servicePurchases.id, { onDelete: "cascade" }),
+    amountUsd: real("amount_usd").notNull(),
+    createdAt: integer("created_at"),
+  },
+  (t) => [
+    uniqueIndex("payment_allocations_unique").on(t.paymentId, t.purchaseId),
+    index("payment_allocations_purchase_idx").on(t.purchaseId),
+  ]
+);
+
 export const exchangeRates = sqliteTable("exchange_rates", {
   id: text("id").primaryKey(),
   date: text("date").unique().notNull(),
