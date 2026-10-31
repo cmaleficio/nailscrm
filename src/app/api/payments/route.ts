@@ -90,6 +90,7 @@ export async function GET(req: NextRequest) {
 
   const withSplit = rows.map((r) => ({
     ...r,
+    coveredPurchaseIds: r.coveredPurchaseIds ? (typeof r.coveredPurchaseIds === "string" ? JSON.parse(r.coveredPurchaseIds) : r.coveredPurchaseIds) : null,
     ...(allocByPaymentId.get(r.id) ?? {}),
     allocations: allocByPayment.get(r.id) ?? [],
   }));
