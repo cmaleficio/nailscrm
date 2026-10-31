@@ -173,6 +173,7 @@ export const payments = sqliteTable(
     photoUrl: text("photo_url"),
     paidAt: integer("paid_at"),
     notes: text("notes"),
+    coveredPurchaseIds: text("covered_purchase_ids"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
