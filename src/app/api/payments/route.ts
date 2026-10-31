@@ -117,6 +117,21 @@ export async function POST(req: NextRequest) {
     photoUrl,
   } = body;
 
+  let coveredPurchaseIds: string[] | null = null;
+  if ("coveredPurchaseIds" in body) {
+    const val = body.coveredPurchaseIds;
+    if (val === null || val === undefined) {
+      coveredPurchaseIds = null;
+    } else if (Array.isArray(val)) {
+      if (!val.every((v) => typeof v === "string")) {
+        return NextResponse.json({ error: "coveredPurchaseIds debe ser un array de strings" }, { status: 400 });
+      }
+      coveredPurchaseIds = val;
+    } else {
+      return NextResponse.json({ error: "coveredPurchaseIds debe ser un array de strings" }, { status: 400 });
+    }
+  }
+
   if (!userId || typeof userId !== "string" || !userId.trim()) {
     return NextResponse.json({ error: "userId es requerido" }, { status: 400 });
   }
@@ -183,6 +198,7 @@ export async function POST(req: NextRequest) {
     photoUrl: typeof photoUrl === "string" && photoUrl.trim() ? photoUrl.trim() : null,
     paidAt: typeof paidAt === "number" ? paidAt : now,
     notes: typeof notes === "string" ? notes : null,
+    coveredPurchaseIds: coveredPurchaseIds ? JSON.stringify(coveredPurchaseIds) : null,
     createdBy: adminId,
     createdAt: now,
   };
@@ -212,10 +228,11 @@ export async function POST(req: NextRequest) {
         appliedUsd: split.appliedUsd,
         creditUsd: split.creditUsd,
         kind: split.kind,
+        coveredPurchaseIds: coveredPurchaseIds || null,
       },
       actorId: adminId,
       actorName: session?.user?.name ?? null,
     });
   }
-  return NextResponse.json({ ...payment, ...split });
+  return NextResponse.json({ ...payment, coveredPurchaseIds, ...split });
 }
