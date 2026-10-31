@@ -29,6 +29,8 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
   // pago con la deuda antes de guardarlo.
   const [account, setAccount] = useState<{ dueUsd: number; paidUsd: number } | null>(null);
   const [confirmCredit, setConfirmCredit] = useState(false);
+  const [appointmentId, setAppointmentId] = useState("");
+  const [appointments, setAppointments] = useState<{ id: string; label: string }[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -43,6 +45,55 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
       })
       .catch(() => {
         if (alive) setAccount(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [clientId]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/balances")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(async (data) => {
+        if (!alive || !data || !Array.isArray(data.clients)) return;
+        const row = data.clients.find((c: { clientId: string }) => c.clientId === clientId);
+        if (!row || !Array.isArray(row.items)) {
+          setAppointments([]);
+          return;
+        }
+        const seen = new Set<string>();
+        const unlinked: { id: string; label: string }[] = [];
+        for (const item of row.items as { appointmentId?: string; appointment_id?: string; serviceName?: string; service_name?: string; startTime?: number; completionDate?: number; start_time?: number; completion_date?: number }[]) {
+          const id = item.appointmentId || item.appointment_id;
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          const name = item.serviceName || item.service_name || "Servicio";
+          const rawTs = (item.startTime || item.completionDate || item.start_time || item.completion_date) as number | null | undefined;
+          const ts: number | null = typeof rawTs === "number" ? rawTs : null;
+          const dateStr = ts ? new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "America/Caracas" }).format(new Date(ts * 1000)) : "sin fecha";
+          unlinked.push({ id, label: `${name} · ${dateStr}` });
+        }
+        try {
+          const res = await fetch(`/api/payments?userId=${clientId}`);
+          const paymentsData = res.ok ? await res.json() : null;
+          if (alive && paymentsData) {
+            const paidIds = new Set<string>();
+            const paymentsArr = Array.isArray(paymentsData) ? paymentsData : (paymentsData.payments || []);
+            for (const p of paymentsArr as { appointment_id?: string; appointmentId?: string }[]) {
+              const pid = p.appointment_id || p.appointmentId;
+              if (pid) paidIds.add(pid);
+            }
+            setAppointments(unlinked.filter((u) => !paidIds.has(u.id)));
+          } else if (alive) {
+            setAppointments(unlinked);
+          }
+        } catch {
+          if (alive) setAppointments(unlinked);
+        }
+      })
+      .catch(() => {
+        if (alive) setAppointments([]);
       });
     return () => {
       alive = false;
@@ -114,6 +165,7 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
         notes,
       };
       if (photoUrl) body.photoUrl = photoUrl;
+      body.appointmentId = appointmentId ? appointmentId : null;
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,6 +197,20 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
             onChange={(e) => setPaidDate(e.target.value)}
             className={inputCls}
           />
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-xs font-medium text-gray-600">Cita asociada</label>
+          <select
+            value={appointmentId}
+            onChange={(e) => setAppointmentId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Sin cita</option>
+            {appointments.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-4">
