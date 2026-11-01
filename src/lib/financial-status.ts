@@ -78,6 +78,7 @@ export function recomputeFinancialStatus(userId: string): void {
       paidAt: schema.payments.paidAt,
       createdAt: schema.payments.createdAt,
       appointmentId: schema.payments.appointmentId,
+      coveredPurchaseIds: schema.payments.coveredPurchaseIds,
     })
     .from(schema.payments)
     .where(eq(schema.payments.userId, userId))
@@ -97,6 +98,7 @@ export function recomputeFinancialStatus(userId: string): void {
       paidAt: p.paidAt,
       createdAt: p.createdAt,
       appointmentId: p.appointmentId,
+      coveredPurchaseIds: p.coveredPurchaseIds ? JSON.parse(p.coveredPurchaseIds) : null,
     }))
   );
 
