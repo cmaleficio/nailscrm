@@ -104,8 +104,9 @@ export function BalancesContent() {
   const [addingFor, setAddingFor] = useState<BalanceClient | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"balances" | "receipts">("balances");
+  const [tab, setTab] = useState<"balances" | "receipts" | "admin-payments">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [adminPayments, setAdminPayments] = useState<Payment[]>([]);
   // El diálogo de edición se abre desde dos lugares: el historial de pagos de una
   // clienta y la pestaña de capturas aprobadas. `editing` guarda solo el pago, y
   // cada punto de entrada resuelve su clienta y sus citas.
@@ -134,6 +135,18 @@ export function BalancesContent() {
     }
   }, []);
 
+  const loadAdminPayments = useCallback(async () => {
+    try {
+      const res = await fetch("/api/payments");
+      if (res.ok) {
+        const data = await res.json();
+        setAdminPayments(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      setAdminPayments([]);
+    }
+  }, []);
+
   const loadReceipts = useCallback(async () => {
     const params = new URLSearchParams();
     if (receiptFilter !== "all") params.set("status", receiptFilter);
@@ -158,7 +171,8 @@ export function BalancesContent() {
 
   useEffect(() => {
     if (tab === "receipts") void loadReceipts();
-  }, [tab, loadReceipts]);
+    if (tab === "admin-payments") void loadAdminPayments();
+  }, [tab, loadReceipts, loadAdminPayments]);
 
   async function reviewReceipt(id: string, action: "approve" | "reject") {
     // Aprobar una captura que excede la deuda deja un anticipo. No es un error
@@ -318,7 +332,7 @@ const statusBadgeClass = (status: string) => {
       </div>
 
       <div className="mb-6 flex gap-2">
-        {(["balances", "receipts"] as const).map((t) => (
+        {(["balances", "receipts", "admin-payments"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -326,7 +340,11 @@ const statusBadgeClass = (status: string) => {
               tab === t ? "bg-pink-main text-gray-900" : "bg-gray-100 text-gray-600"
             }`}
           >
-            {t === "balances" ? "Cuentas por cobrar" : "Pagos recibidos"}
+            {t === "balances"
+              ? "Cuentas por cobrar"
+              : t === "receipts"
+                ? "Pagos recibidos"
+                : "Pagos cargados por admin"}
           </button>
         ))}
       </div>
@@ -643,6 +661,120 @@ const statusBadgeClass = (status: string) => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "admin-payments" && (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Pagos cargados por admin</h2>
+            <button
+              onClick={() => void loadAdminPayments()}
+              className="rounded-xl bg-pink-100 px-3 py-1.5 text-xs font-medium text-pink-700 hover:bg-pink-200 transition-colors"
+            >
+              Refrescar
+            </button>
+          </div>
+          {adminPayments.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+              <p className="text-gray-400">No hay pagos registrados</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Cliente</th>
+                    <th className="px-4 py-3 text-left">Monto USD</th>
+                    <th className="px-4 py-3 text-left">Moneda</th>
+                    <th className="px-4 py-3 text-left">Fecha</th>
+                    <th className="px-4 py-3 text-left">Reparto</th>
+                    <th className="px-4 py-3 text-left">Servicio(s)</th>
+                    <th className="px-4 py-3 text-left">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {adminPayments.map((p) => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{clients.find((c) => c.clientId === p.userId)?.name ?? p.userId}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">${p.amountUsd.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-gray-600">{p.currency}</td>
+                      <td className="px-4 py-3 text-gray-600">{fmtDate(p.paidAt)}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {p.kind ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                p.kind === "anticipo"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : p.kind === "completo"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
+                              {paymentKindLabel(p.kind)}
+                            </span>
+                            {p.appliedUsd !== undefined && <span className="text-xs text-gray-500">${p.appliedUsd.toFixed(2)}</span>}
+                            {p.creditUsd !== undefined && p.creditUsd > 0 && (
+                              <span className="text-xs text-amber-600">(+${p.creditUsd.toFixed(2)})</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {p.allocations && p.allocations.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {p.allocations.map((a) => (
+                              <span key={a.purchaseId} className="rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                                {a.serviceName} · ${a.amountUsd.toFixed(2)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">Sin servicio asociado</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditing(p);
+                              setEditingContext({
+                                clientId: p.userId,
+                                clientName: clients.find((c) => c.clientId === p.userId)?.name ?? p.userId,
+                                balanceUsd: null,
+                                appointments: [],
+                                lockAmount: false,
+                              });
+                            }}
+                            className="rounded-lg bg-pink-main px-2 py-1 text-xs font-medium text-white hover:bg-pink-dark"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm("¿Eliminar este pago cargado por admin?")) return;
+                              const res = await fetch(`/api/payments/${p.id}`, { method: "DELETE" });
+                              if (res.ok) {
+                                await loadAdminPayments();
+                              } else {
+                                window.alert("No se pudo eliminar el pago");
+                              }
+                            }}
+                            className="rounded-lg bg-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-300"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
