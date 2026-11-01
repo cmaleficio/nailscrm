@@ -16,6 +16,7 @@ export type AllocationPayment = {
   paidAt: number | null;
   createdAt: number | null;
   appointmentId: string | null;
+  coveredPurchaseIds?: string[] | null;
 };
 
 export type PurchaseAllocation = {
@@ -77,13 +78,23 @@ export function allocateToPurchases(
     let remaining = amount;
     let appliedThisPayment = 0;
 
-    const order =
-      payment.appointmentId != null
-        ? [
-            ...orderedPurchases.filter((x) => x.appointmentId === payment.appointmentId),
-            ...orderedPurchases.filter((x) => x.appointmentId !== payment.appointmentId),
-          ]
-        : orderedPurchases;
+    let order: AllocationPurchase[];
+    if (payment.coveredPurchaseIds != null) {
+      if (payment.coveredPurchaseIds.length === 0) {
+        order = [];
+      } else {
+        const coveredIds = new Set(payment.coveredPurchaseIds);
+        order = orderedPurchases.filter((x) => coveredIds.has(x.id));
+        order.sort(comparePurchases);
+      }
+    } else if (payment.appointmentId != null) {
+      order = [
+        ...orderedPurchases.filter((x) => x.appointmentId === payment.appointmentId),
+        ...orderedPurchases.filter((x) => x.appointmentId !== payment.appointmentId),
+      ];
+    } else {
+      order = orderedPurchases;
+    }
 
     for (const purchase of order) {
       if (remaining <= PAYMENT_EPS) break;

@@ -29,6 +29,7 @@ const pay = (
   paidAt: extra.paidAt === undefined ? 1 : extra.paidAt,
   createdAt: extra.createdAt === undefined ? 1 : extra.createdAt,
   appointmentId: extra.appointmentId ?? null,
+  coveredPurchaseIds: extra.coveredPurchaseIds ?? null,
 });
 
 describe("allocateToPurchases", () => {
@@ -105,6 +106,21 @@ describe("allocateToPurchases", () => {
       { paymentId: "p1", purchaseId: "a", amountUsd: 5 },
     ]);
     expect(byPayment.get("p1")).toEqual({ appliedUsd: 15, creditUsd: 0 });
+  });
+
+  it("coveredPurchaseIds filters to specific purchases", () => {
+    const purchases = [p("sp1", 18, { completionDate: 1 }), p("sp2", 18, { completionDate: 2 })];
+    const payments = [pay("pay1", 18, { coveredPurchaseIds: ["sp1"] })];
+    const { allocations } = allocateToPurchases(purchases, payments);
+    expect(allocations).toEqual([{ paymentId: "pay1", purchaseId: "sp1", amountUsd: 18 }]);
+  });
+
+  it("empty coveredPurchaseIds yields no allocations for that payment", () => {
+    const purchases = [p("sp1", 18, { completionDate: 1 })];
+    const payments = [pay("pay1", 18, { coveredPurchaseIds: [] })];
+    const { allocations, byPayment } = allocateToPurchases(purchases, payments);
+    expect(allocations).toEqual([]);
+    expect(byPayment.get("pay1")).toEqual({ appliedUsd: 0, creditUsd: 18 });
   });
 
   it("is deterministic on ties (purchase id, then payment id)", () => {

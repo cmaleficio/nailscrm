@@ -45,10 +45,11 @@ export default async function HomePage() {
             Plataforma de reservas y gestión para nail design
           </p>
           <p className="mt-3 max-w-2xl mx-auto text-gray-600">
-            Agenda tu cita en línea, descubre nuestro catálogo de servicios y
-            inspírate con diseños reales en nuestro muro. Desde tu perfil puedes
-            ver tu historial, fotos de referencia, pagos y mucho más — todo en un
-            solo lugar.
+            Agenda tu cita en línea, elige un servicio del catálogo e
+            inspírate con diseños de otros clientes en nuestro muro. 
+            Desde tu perfil puedes ver tu historial, fotos de referencia y mucho más.</p>
+          <p className="mt-3 max-w-2xl mx-auto text-gray-600">  
+            Todo en un solo lugar.
           </p>
         </div>
 
@@ -57,6 +58,51 @@ export default async function HomePage() {
             <ServiceCard key={s.id} {...s} photos={byService.get(s.id) ?? []} />
           ))}
         </div>
+      </section>
+
+      <section className="mb-16">
+        <h2 className="mb-6 text-2xl font-semibold text-gray-900">
+          Cómo funciona
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-pink-100 bg-pink-50 p-5">
+            <div className="mb-2 text-2xl font-bold text-pink-500">1</div>
+            <h3 className="mb-1 font-semibold text-gray-900">
+              Inspírate
+            </h3>
+            <p className="text-sm text-gray-600">
+              Explora el muro con diseños reales y el catálogo de servicios
+              para elegir tu próximo look.
+            </p>
+          </div>
+          <div className="rounded-xl border border-pink-100 bg-pink-50 p-5">
+            <div className="mb-2 text-2xl font-bold text-pink-500">2</div>
+            <h3 className="mb-1 font-semibold text-gray-900">
+              Reserva en línea
+            </h3>
+            <p className="text-sm text-gray-600">
+              Crea tu cuenta, elige servicio, día y hora disponible. Recibirás
+              la confirmación al instante.
+            </p>
+          </div>
+          <div className="rounded-xl border border-pink-100 bg-pink-50 p-5">
+            <div className="mb-2 text-2xl font-bold text-pink-500">3</div>
+            <h3 className="mb-1 font-semibold text-gray-900">
+              Disfruta tu visita
+            </h3>
+            <p className="text-sm text-gray-600">
+              Acude a tu cita y sigue tu historial, fotos y pagos desde tu
+              perfil. Te avisamos por WhatsApp.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-16">
+        <h2 className="mb-6 text-2xl font-semibold text-gray-900">
+          Muro de Inspiración
+        </h2>
+        <GalleryGrid />
       </section>
 
       <section className="mb-16">
@@ -176,44 +222,6 @@ export default async function HomePage() {
       </section>
 
       <section className="mb-16">
-        <h2 className="mb-6 text-2xl font-semibold text-gray-900">
-          Cómo funciona
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-pink-100 bg-pink-50 p-5">
-            <div className="mb-2 text-2xl font-bold text-pink-500">1</div>
-            <h3 className="mb-1 font-semibold text-gray-900">
-              Inspírate
-            </h3>
-            <p className="text-sm text-gray-600">
-              Explora el muro con diseños reales y el catálogo de servicios
-              para elegir tu próximo look.
-            </p>
-          </div>
-          <div className="rounded-xl border border-pink-100 bg-pink-50 p-5">
-            <div className="mb-2 text-2xl font-bold text-pink-500">2</div>
-            <h3 className="mb-1 font-semibold text-gray-900">
-              Reserva en línea
-            </h3>
-            <p className="text-sm text-gray-600">
-              Crea tu cuenta, elige servicio, día y hora disponible. Recibirás
-              la confirmación al instante.
-            </p>
-          </div>
-          <div className="rounded-xl border border-pink-100 bg-pink-50 p-5">
-            <div className="mb-2 text-2xl font-bold text-pink-500">3</div>
-            <h3 className="mb-1 font-semibold text-gray-900">
-              Disfruta tu visita
-            </h3>
-            <p className="text-sm text-gray-600">
-              Acude a tu cita y sigue tu historial, fotos y pagos desde tu
-              perfil. Te avisamos por WhatsApp.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mb-16">
         <h2 className="mb-3 text-2xl font-semibold text-gray-900">
           Qué información recopilamos y cómo la usamos
         </h2>
@@ -246,13 +254,6 @@ export default async function HomePage() {
           </a>
           .
         </p>
-      </section>
-
-      <section className="mb-16">
-        <h2 className="mb-6 text-2xl font-semibold text-gray-900">
-          Muro de Inspiración
-        </h2>
-        <GalleryGrid />
       </section>
 
       <footer className="mt-16 border-t border-gray-200 pt-8 text-center text-sm text-gray-500 space-y-2">

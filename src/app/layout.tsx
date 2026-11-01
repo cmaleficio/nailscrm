@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   // /dashboard y /profile declararan "/" como su versión canónica.
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${process.env.NEXT_PUBLIC_SALON_NAME || "Nails Salon"} — Reserva tu cita de nail design online`,
+    default: `${process.env.NEXT_PUBLIC_SALON_NAME || "Nails Salon"} — Reserva tu cita en nuestro Spa de uñas`,
     template: `%s | ${process.env.NEXT_PUBLIC_SALON_NAME || "Nails Salon"}`,
   },
   description:

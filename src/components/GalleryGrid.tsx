@@ -62,6 +62,14 @@ export function GalleryGrid() {
     [cursor, activeFilter, loading]
   );
 
+  const fetchItemsRef = useRef(fetchItems);
+  const hasMoreRef = useRef(hasMore);
+  const loadingRef = useRef(loading);
+
+  fetchItemsRef.current = fetchItems;
+  hasMoreRef.current = hasMore;
+  loadingRef.current = loading;
+
   useEffect(() => {
     setCursor(null);
     setHasMore(true);
@@ -76,15 +84,16 @@ export function GalleryGrid() {
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (entry?.isIntersecting && hasMore && !loading) {
-          void fetchItems(false);
+        if (entry?.isIntersecting && hasMoreRef.current && !loadingRef.current) {
+          void fetchItemsRef.current(false);
         }
       },
       { rootMargin: "200px" }
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [fetchItems, hasMore, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // El visor navega sobre un snapshot de lo cargado, así que abrir una foto
   // antes de que termine el scroll infinito no pierde la lista actual.
