@@ -113,7 +113,7 @@ export function BalancesContent() {
   const [addingFor, setAddingFor] = useState<BalanceClient | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("pending");
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"balances" | "receipts" | "admin-payments">("balances");
+  const [tab, setTab] = useState<"balances" | "balance-ok" | "receipts" | "admin-payments">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [adminPayments, setAdminPayments] = useState<Payment[]>([]);
   // El diálogo de edición se abre desde dos lugares: el historial de pagos de una
@@ -323,6 +323,8 @@ const statusBadgeClass = (status: string) => {
     if (c.phone && normalize(c.phone).includes(normalizedSearch)) return true;
     return c.items.some((i) => normalize(i.serviceName).includes(normalizedSearch));
   });
+  const debtClients = clients.filter((c) => c.balanceUsd > 0.004);
+  const debtSearched = searchedClients.filter((c) => c.balanceUsd > 0.004);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -342,7 +344,7 @@ const statusBadgeClass = (status: string) => {
       </div>
 
       <div className="mb-6 flex gap-2">
-        {(["balances", "receipts", "admin-payments"] as const).map((t) => (
+        {(["balances", "balance-ok", "receipts", "admin-payments"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -352,16 +354,17 @@ const statusBadgeClass = (status: string) => {
           >
             {t === "balances"
               ? "Cuentas por cobrar"
-              : t === "receipts"
-                ? "Pagos recibidos"
-                : "Pagos cargados por admin"}
+              : t === "balance-ok"
+                ? "Clientes al día / saldo a favor"
+                : t === "receipts"
+                  ? "Pagos recibidos"
+                  : "Pagos cargados por admin"}
           </button>
         ))}
       </div>
 
       {tab === "balances" && (
         <>
-          <div className="mb-3">
             <input
               type="search"
               value={searchTerm}
@@ -396,13 +399,13 @@ const statusBadgeClass = (status: string) => {
               </button>
             ))}
           </div>
-          {loading && clients.length === 0 ? (
+          {loading && debtClients.length === 0 ? (
             <p className="text-gray-400">Cargando...</p>
-          ) : clients.length === 0 ? (
+          ) : debtClients.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
               <p className="text-gray-400">No hay cuentas por cobrar pendientes</p>
             </div>
-          ) : searchedClients.length === 0 ? (
+          ) : debtSearched.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
               <p className="text-gray-400">
                 Ningún cliente coincide con «{trimmedSearch}»
@@ -416,7 +419,7 @@ const statusBadgeClass = (status: string) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {searchedClients.map((c) => (
+              {debtSearched.map((c) => (
                 <div key={c.clientId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <button onClick={() => void toggleClient(c.clientId)} className="min-w-0 flex-1 text-left">
@@ -578,6 +581,36 @@ const statusBadgeClass = (status: string) => {
               ))}
             </div>
           )}
+        </>
+      )}
+
+      {tab === "balance-ok" && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Clientes al día / con saldo a favor</h2>
+          <div className="space-y-3">
+            {(clients.filter((c) => c.balanceUsd <= 0.004).length === 0 ? (
+              <p className="text-gray-400">No hay clientes al día o con saldo a favor</p>
+            ) : (
+              clients.filter((c) => c.balanceUsd <= 0.004).map((c) => (
+                <div key={c.clientId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="font-medium text-gray-900">{c.name}</p>
+                      <p className="text-sm text-gray-500">{c.phone ?? "Sin teléfono"}</p>
+                      <p className="text-sm text-gray-500">{c.unpaidAppointments} cita(s) sin pagar</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      {c.balanceUsd < -0.004 ? (
+                        <p className="rounded-lg bg-amber-100 px-3 py-1.5 text-sm font-bold text-amber-800">Saldo a favor ${c.creditUsd.toFixed(2)}</p>
+                      ) : (
+                        <p className="rounded-lg bg-green-100 px-3 py-1.5 text-sm font-bold text-green-700">Al día</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ))}
+          </div>
         </>
       )}
 
