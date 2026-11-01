@@ -365,6 +365,7 @@ const statusBadgeClass = (status: string) => {
 
       {tab === "balances" && (
         <>
+          <div className="mb-3">
             <input
               type="search"
               value={searchTerm}
