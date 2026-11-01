@@ -7,7 +7,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), y 
 ## [Sin publicar]
 
 ### Corregido
-- **Cuentas por cobrar: filtro por mes, servicios futuros y corrección de conteo de citas sin pagar**. `GET /api/balances` acepta `?month=YYYY-MM` para filtrar por mes límite (`start_time`); devuelve `futureItems` (compras futuras dentro del cliente) y corrige `unpaidAppointments` con `DISTINCT appointment_id` (solo citas con cita asociada). El filtro por defecto pasa a `pending` con orden `pending` → `all` → `partial` → `paid`. `BalancesContent` muestra el bloque de servicios futuros por cliente.
+- **Cuentas por cobrar: filtro por mes, servicios futuros y corrección de conteo de citas sin pagar**. `GET /api/balances` acepta `?month=YYYY-MM` para filtrar por mes límite (`start_time`); devuelve `futureItems` (compras futuras dentro del cliente) y corrige `unpaidAppointments` con `DISTINCT appointment_id` (solo citas con cita asociada). El filtro por defecto pasa a `pending` con orden `pending` → `all` → `partial` → `paid`. `BalancesContent` muestra el bloque de servicios futuros por cliente y una **pestaña separada** `"Clientes al día / saldo a favor"` (`balance-ok`) con los clientes de `balanceUsd <= 0.004`.
 
 ### Nuevo
 - **Vinculación de pagos a servicios (`covered_purchase_ids`)**: `payments` ahora puede vincular un pago a compras específicas mediante `covered_purchase_ids` (JSON, opcional). `POST /api/payments` y `GET /api/payments` lo soportan; `allocateToPurchases` y `recomputeFinancialStatus` respetan la restricción; `RegisterPaymentDialog` muestra selector híbrido con checkboxes de servicios cubiertos; `BalancesContent` y `ProfileContent` muestran los servicios vinculados. (Enfoque C)
