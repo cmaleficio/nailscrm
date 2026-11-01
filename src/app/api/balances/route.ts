@@ -19,6 +19,15 @@ type BalanceRow = {
   /** max(0, paidUsd - dueUsd): lo que el salón guarda de más. */
   creditUsd: number;
   unpaidAppointments: number;
+  futureItems: {
+    id: string;
+    serviceName: string;
+    price: number;
+    financialStatus: string;
+    completionDate: number | null;
+    startTime: number | null;
+    appointmentId: string | null;
+  }[];
   items: {
     id: string;
     serviceName: string;
@@ -44,22 +53,39 @@ type BalanceRow = {
  * El orden agrupa: primero quien debe (mayor deuda), luego al día, y al final
  * los saldos a favor con el crédito más grande arriba.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!(await hasPermission(session, "balances"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const dueRows = db
+  const url = new URL(req.url);
+  const monthParam = url.searchParams.get("month"); // YYYY-MM
+  let endOfMonth: number | null = null;
+  if (monthParam) {
+    const [y, m] = monthParam.split("-").map(Number);
+    if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+      endOfMonth = Math.round(Date.UTC(y, m, 1) / 1000) - 1; // último segundo del mes
+    }
+  }
+
+  const dueQuery = db
     .select({
       userId: schema.servicePurchases.userId,
       due: sql<number>`sum(${schema.servicePurchases.servicePrice})`,
-      unpaid: sql<number>`count(*)`,
+      unpaid: sql<number>`count(distinct ${schema.servicePurchases.appointmentId})`,
     })
     .from(schema.servicePurchases)
-    .where(ne(schema.servicePurchases.financialStatus, "void"))
+    .leftJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
+    .where(
+      and(
+        ne(schema.servicePurchases.financialStatus, "void"),
+        ...(endOfMonth !== null ? [sql`${schema.appointments.startTime} <= ${endOfMonth}`] : []),
+      )
+    )
     .groupBy(schema.servicePurchases.userId)
     .all();
+  const dueRows = dueQuery;
 
   const paidRows = db
     .select({
@@ -105,7 +131,44 @@ export async function GET() {
         })
         .from(schema.servicePurchases)
         .leftJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
-        .where(and(eq(schema.servicePurchases.userId, userId), ne(schema.servicePurchases.financialStatus, "void")))
+        .where(
+          and(
+            eq(schema.servicePurchases.userId, userId),
+            ne(schema.servicePurchases.financialStatus, "void"),
+            ...(endOfMonth !== null ? [sql`${schema.appointments.startTime} <= ${endOfMonth}`] : []),
+          )
+        )
+        .orderBy(schema.servicePurchases.createdAt)
+        .all()
+    );
+  }
+
+  const futureItemsByUser = new Map<string, BalanceRow["futureItems"]>();
+  for (const userId of ids) {
+    const filterCondition = endOfMonth !== null
+      ? sql`${schema.appointments.startTime} > ${endOfMonth}`
+      : sql`${schema.appointments.startTime} > ${Math.round(Date.now() / 1000)}`;
+    futureItemsByUser.set(
+      userId,
+      db
+        .select({
+          id: schema.servicePurchases.id,
+          serviceName: schema.servicePurchases.serviceName,
+          price: schema.servicePurchases.servicePrice,
+          financialStatus: schema.servicePurchases.financialStatus,
+          completionDate: schema.servicePurchases.completionDate,
+          startTime: schema.appointments.startTime,
+          appointmentId: schema.servicePurchases.appointmentId,
+        })
+        .from(schema.servicePurchases)
+        .leftJoin(schema.appointments, eq(schema.appointments.id, schema.servicePurchases.appointmentId))
+        .where(
+          and(
+            eq(schema.servicePurchases.userId, userId),
+            ne(schema.servicePurchases.financialStatus, "void"),
+            filterCondition,
+          )
+        )
         .orderBy(schema.servicePurchases.createdAt)
         .all()
     );
@@ -134,6 +197,7 @@ export async function GET() {
       creditUsd,
       unpaidAppointments: dueMap.get(userId)?.unpaid ?? 0,
       items: itemsByUser.get(userId) ?? [],
+      futureItems: futureItemsByUser.get(userId) ?? [],
     });
 
     if (balanceUsd > 0.004) totalUsd = round2(totalUsd + balanceUsd);
