@@ -31,6 +31,8 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
   const [confirmCredit, setConfirmCredit] = useState(false);
   const [appointmentId, setAppointmentId] = useState("");
   const [appointments, setAppointments] = useState<{ id: string; label: string }[]>([]);
+  const [purchaseOptions, setPurchaseOptions] = useState<{ id: string; label: string; isPrimary: boolean }[]>([]);
+  const [coveredPurchaseIds, setCoveredPurchaseIds] = useState<string[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -100,6 +102,53 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
     };
   }, [clientId]);
 
+  useEffect(() => {
+    if (!appointmentId) {
+      setPurchaseOptions([]);
+      setCoveredPurchaseIds([]);
+      return;
+    }
+    let alive = true;
+    fetch("/api/balances")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data || !Array.isArray(data.clients)) return;
+        const row = data.clients.find((c: { clientId: string }) => c.clientId === clientId);
+        if (!row || !Array.isArray(row.items)) {
+          setPurchaseOptions([]);
+          setCoveredPurchaseIds([]);
+          return;
+        }
+        const filtered = (row.items as { appointmentId?: string; appointment_id?: string; id?: string; servicePurchaseId?: string; service_purchase_id?: string; serviceName?: string; service_name?: string; isPrimary?: boolean; is_primary?: boolean }[]).filter((item) => {
+          const id = item.appointmentId || item.appointment_id;
+          return id === appointmentId;
+        });
+        const options = filtered.map((item) => {
+          const purchaseId = item.id || item.servicePurchaseId || item.service_purchase_id || "";
+          const serviceName = item.serviceName || item.service_name || "Servicio";
+          const isPrimary = !!(item.isPrimary ?? item.is_primary ?? false);
+          return {
+            id: purchaseId,
+            label: `${serviceName}${isPrimary ? " (principal)" : " (complementario)"}`,
+            isPrimary,
+          };
+        });
+        if (alive) {
+          setPurchaseOptions(options);
+          setCoveredPurchaseIds(options.map((o) => o.id));
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setPurchaseOptions([]);
+          setCoveredPurchaseIds([]);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [appointmentId, clientId]);
+
   const ves = parseFloat(amountVes);
   const rate = dateRate.rate !== null ? dateRate.rate : parseFloat(manualRate);
   const amountUsd =
@@ -166,6 +215,7 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
       };
       if (photoUrl) body.photoUrl = photoUrl;
       body.appointmentId = appointmentId ? appointmentId : null;
+      body.coveredPurchaseIds = coveredPurchaseIds.length > 0 ? coveredPurchaseIds : null;
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,6 +262,28 @@ export function RegisterPaymentDialog({ clientId, clientName, onClose, onSaved }
             ))}
           </select>
         </div>
+
+        {purchaseOptions.length > 0 && (
+          <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50/50">
+            <p className="mb-2 text-xs font-semibold text-gray-700">Servicios cubiertos por este pago</p>
+            <div className="space-y-1.5">
+              {purchaseOptions.map((p) => (
+                <label key={p.id} className="flex items-center gap-2.5 text-sm text-gray-700 cursor-pointer hover:text-gray-900">
+                  <input
+                    type="checkbox"
+                    checked={coveredPurchaseIds.includes(p.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setCoveredPurchaseIds([...coveredPurchaseIds, p.id]);
+                      else setCoveredPurchaseIds(coveredPurchaseIds.filter((id) => id !== p.id));
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-pink-main focus:ring-pink-main/20"
+                  />
+                  <span className="font-medium">{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-4">
           <label className="mb-1 block text-xs font-medium text-gray-600">Monto en Bs</label>
