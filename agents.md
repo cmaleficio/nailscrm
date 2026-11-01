@@ -234,6 +234,7 @@ Detalles que no se deben romper:
 - **La deuda (due) tiene UNA definición** en `clientDueUsd()` (`src/lib/payment-split-db.ts`): `Σ service_price` de purchases `financial_status != 'void'`, sin importar si la cita ya se completó. La usan `/api/balances`, `/api/payments`, el reparto y (desde esta fase) también `GET /api/clients/[id]` y `/profile`. Si una pantalla muestra "cuánto debe" con un criterio distinto, es un bug.
 - `GET /api/payments` adjunta el reparto a cada fila (`appliedUsd`, `creditUsd`, `kind`) **y** las asignaciones `allocations: [{ purchaseId, serviceName, amountUsd }]` (los servicios que ese pago cubre, materializados en `payment_allocations`); `POST`/`PATCH /api/payments` y aprobar una captura también devuelven el reparto y lo guardan en `metadata` de `logActivity` (queda en auditoría qué se acreditó como anticipo).
 - `photo_url` (opcional): captura de la transferencia al registrar un pago de cliente. Es **media privada**: su valor es `/api/media/payment/<uuid>.<ext>`, no `/uploads/...` (ver "Media privada").
+- `covered_purchase_ids` (`TEXT`, JSON opcional): vincula el pago a compras específicas; si es `null` es un pago general, si es `[]` indica explícitamente sin servicios vinculados, y con IDs restringe el reparto FIFO (`allocateToPurchases`) a esas compras.
 
 ### Tabla: payment_allocations (qué pago cubrió qué servicio)
 - id: text, primary key
