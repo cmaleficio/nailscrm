@@ -46,6 +46,8 @@ type Payment = {
   kind?: PaymentKind;
   appliedUsd?: number;
   creditUsd?: number;
+  coveredPurchaseIds?: string[] | null;
+  allocations?: { purchaseId: string; serviceName: string; amountUsd: number }[];
 };
 
 type Receipt = {
@@ -476,6 +478,17 @@ const statusBadgeClass = (status: string) => {
                                   Ref: {p.reference} · {fmtDate(p.paidAt)}
                                 </p>
                                 {p.notes && <p className="text-xs text-gray-400">{p.notes}</p>}
+                                {p.coveredPurchaseIds && p.coveredPurchaseIds.length > 0 ? (
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    Cubre:{" "}
+                                    {p.coveredPurchaseIds.map((id) => {
+                                      const alloc = p.allocations?.find((a) => a.purchaseId === id);
+                                      return alloc ? alloc.serviceName : id;
+                                    }).join(", ")}
+                                  </p>
+                                ) : p.coveredPurchaseIds !== null && p.coveredPurchaseIds !== undefined && p.coveredPurchaseIds.length === 0 ? (
+                                  <p className="text-xs text-gray-400 mt-0.5">Pago general (sin servicios específicos)</p>
+                                ) : null}
                               </div>
                               <div className="flex shrink-0 gap-2">
                                 <button

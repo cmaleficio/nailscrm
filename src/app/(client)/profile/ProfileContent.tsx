@@ -89,6 +89,7 @@ type Receipt = {
   paymentAmountUsd: number | null;
   paymentAmountVes: number | null;
   paymentRate: number | null;
+  coveredPurchaseIds?: string[] | null;
 };
 
 export function ProfileContent({ user, appointments, upcomingAppointments, balanceUsd, statementItems, duplicateCandidates = [] }: Props) {
@@ -587,6 +588,13 @@ export function ProfileContent({ user, appointments, upcomingAppointments, balan
                         que reportaste. Si no corresponde, escríbenos.
                       </p>
                     )}
+                  {r.coveredPurchaseIds && r.coveredPurchaseIds.length > 0 ? (
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Cubre: {r.coveredPurchaseIds.join(", ")}
+                    </p>
+                  ) : r.coveredPurchaseIds !== null && r.coveredPurchaseIds !== undefined && r.coveredPurchaseIds.length === 0 ? (
+                    <p className="mt-0.5 text-xs text-gray-400">Pago general (sin servicios específicos)</p>
+                  ) : null}
                 </div>
                 <span
                   className={`rounded-lg px-2 py-1 text-xs font-medium ${
