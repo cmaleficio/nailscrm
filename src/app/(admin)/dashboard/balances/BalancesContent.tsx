@@ -28,6 +28,15 @@ type BalanceClient = {
   /** max(0, paidUsd - dueUsd): sobrepago, se muestra como saldo a favor. */
   creditUsd: number;
   unpaidAppointments: number;
+  futureItems?: {
+    id: string;
+    serviceName: string;
+    price: number;
+    financialStatus: string;
+    completionDate: number | null;
+    startTime: number | null;
+    appointmentId: string | null;
+  }[];
   items: BalanceItem[];
 };
 
@@ -102,7 +111,7 @@ export function BalancesContent() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [registering, setRegistering] = useState<BalanceClient | null>(null);
   const [addingFor, setAddingFor] = useState<BalanceClient | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("pending");
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"balances" | "receipts" | "admin-payments">("balances");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -121,11 +130,12 @@ export function BalancesContent() {
   const [receiptFilter, setReceiptFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
   const lightbox = usePhotoLightbox();
   const [searchTerm, setSearchTerm] = useState("");
+  const [monthFilter, setMonthFilter] = useState<string>("");
 
   const loadBalances = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/balances");
+      const res = await fetch(`/api/balances${monthFilter ? `?month=${encodeURIComponent(monthFilter)}` : ""}`);
       const data = await res.json();
       setTotalUsd(data.totalUsd ?? 0);
       setTotalCreditUsd(data.totalCreditUsd ?? 0);
@@ -360,8 +370,21 @@ const statusBadgeClass = (status: string) => {
               className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-pink-main focus:outline-none focus:ring-2 focus:ring-pink-100"
             />
           </div>
-          <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
-            {(["all", "pending", "partial", "paid"] as const).map((s) => (
+          <div className="mb-4 flex flex-wrap gap-2">
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-pink-main focus:outline-none focus:ring-2 focus:ring-pink-100"
+        >
+          <option value="">Todos los meses</option>
+          <option value="2026-10">Octubre 2026</option>
+          <option value="2026-09">Septiembre 2026</option>
+          <option value="2026-08">Agosto 2026</option>
+        </select>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
+            {(["pending", "all", "partial", "paid"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
@@ -461,6 +484,20 @@ const statusBadgeClass = (status: string) => {
                       </div>
                     )}
                   </div>
+
+                  {c.futureItems && c.futureItems.length > 0 && (
+                    <div className="mt-3 border-t border-dashed border-amber-200 pt-3">
+                      <p className="text-xs font-semibold text-amber-700">Servicios futuros</p>
+                      <div className="space-y-1">
+                        {c.futureItems.map((i) => (
+                          <div key={i.id} className="flex justify-between text-xs text-gray-600">
+                            <span>{i.serviceName}</span>
+                            <span>{fmtDate(i.startTime)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {expanded === c.clientId && (
                     <div className="mt-4 border-t border-gray-100 pt-3">
